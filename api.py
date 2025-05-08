@@ -200,6 +200,39 @@ def get_alle_personen(user_id, username):
         close_db(mydb)
 
 
+@app.route('/transaktionen', methods=['DELETE'])
+@api_key_required
+def reset_transaktionen(user_id, username):
+    """
+    Löscht die Transaktionen für alle hinterlegten Personen (nur für authentifizierte Benutzer).
+
+    Args:
+        user_id (int): Die ID des authentifizierten Benutzers.
+        username (str): Der Benutzername des authentifizierten Benutzers.
+
+    Returns:
+        flask.Response: Eine JSON-Antwort mit einer Erfolgsmeldung oder einem Fehler.
+    """
+
+    print(f"authenticated user {user_id} - {username}")
+    mydb = get_db()
+    if not mydb:
+        return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
+    cursor = mydb.cursor()
+    try:
+        sql = "TRUNCATE TABLE transactions;"
+        cursor.execute(sql)
+        mydb.commit()
+        if cursor.rowcount >= 0:
+            return jsonify({'message': 'Kontostand für alle Personen auf 0 gesetzt.'}), 200
+    except mysql.connector.Error as err:
+        mydb.rollback()
+        return jsonify({'error': f'Fehler beim Leeren der Tabelle transactions: {err}.'}), 500
+    finally:
+        cursor.close()
+        close_db(mydb)
+
+
 @app.route('/person', methods=['POST'])
 @api_key_required
 def create_person(user_id, username):
@@ -240,39 +273,6 @@ def create_person(user_id, username):
     except mysql.connector.Error as err:
         mydb.rollback()
         return jsonify({'error': f'Fehler beim Hinzufügen der Person: {err}.'}), 500
-    finally:
-        cursor.close()
-        close_db(mydb)
-
-
-@app.route('/transaktionen', methods=['DELETE'])
-@api_key_required
-def reset_transaktionen(user_id, username):
-    """
-    Löscht die Transaktionen für alle hinterlegten Personen (nur für authentifizierte Benutzer).
-
-    Args:
-        user_id (int): Die ID des authentifizierten Benutzers.
-        username (str): Der Benutzername des authentifizierten Benutzers.
-
-    Returns:
-        flask.Response: Eine JSON-Antwort mit einer Erfolgsmeldung oder einem Fehler.
-    """
-
-    print(f"authenticated user {user_id} - {username}")
-    mydb = get_db()
-    if not mydb:
-        return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
-    cursor = mydb.cursor()
-    try:
-        sql = "TRUNCATE TABLE transactions;"
-        cursor.execute(sql)
-        mydb.commit()
-        if cursor.rowcount >= 0:
-            return jsonify({'message': 'Kontostand für alle Personen auf 0 gesetzt.'}), 200
-    except mysql.connector.Error as err:
-        mydb.rollback()
-        return jsonify({'error': f'Fehler beim Leeren der Tabelle transactions: {err}.'}), 500
     finally:
         cursor.close()
         close_db(mydb)
@@ -339,7 +339,6 @@ def person_exists_by_code(user_id, username, code):
         cursor.execute("SELECT name FROM users WHERE code = %s", (code,))
         person = cursor.fetchone()
         if person:
-            print(jsonify(person))
             return jsonify(person)
         return jsonify({'error': 'Person nicht gefunden.'}), 200
     except mysql.connector.Error as err:
