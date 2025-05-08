@@ -1,4 +1,4 @@
-"""Dieses Modul ist eine API middleware für den Feuerwehr-Versorgungs-Butler"""
+"""Dieses Modul ist eine API Middleware für den Feuerwehr-Versorgungs-Helfer"""
 
 import os
 import sys
