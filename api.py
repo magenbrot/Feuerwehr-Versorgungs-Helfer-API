@@ -422,8 +422,7 @@ def person_bearbeiten(user_id, username, code):
             cursor.execute(sql_transaktion, werte_transaktion)
             mydb.commit()
             return jsonify({'message': 'Transaktion erfolgreich erstellt.'}), 201
-        else:
-            return jsonify({'error': 'Person mit diesem Code nicht gefunden.'}), 404
+        return jsonify({'error': 'Person mit diesem Code nicht gefunden.'}), 404
     except mysql.connector.Error as err:
         mydb.rollback()
         return jsonify({'error': f'Fehler beim Bearbeiten der Person oder Erstellen der Transaktion: {err}.'}), 500
