@@ -305,8 +305,7 @@ def delete_person(user_id, username, code):
         mydb.commit()
         if cursor.rowcount > 0:
             return jsonify({'message': f'Person mit Code {code} erfolgreich gelöscht.'}), 200
-        else:
-            return jsonify({'error': f'Keine Person mit dem Code {code} gefunden.'}), 404
+        return jsonify({'error': f'Keine Person mit dem Code {code} gefunden.'}), 404
     except mysql.connector.Error as err:
         mydb.rollback()
         return jsonify({'error': f'Fehler beim Löschen der Person: {err}.'}), 500
