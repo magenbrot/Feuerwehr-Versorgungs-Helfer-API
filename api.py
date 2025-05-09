@@ -223,8 +223,7 @@ def reset_transaktionen(user_id, username):
         sql = "TRUNCATE TABLE transactions;"
         cursor.execute(sql)
         mydb.commit()
-        if cursor.rowcount >= 0:
-            return jsonify({'message': 'Kontostand für alle Personen auf 0 gesetzt.'}), 200
+        return jsonify({'message': 'Kontostand für alle Personen auf 0 gesetzt.'}), 200
     except mysql.connector.Error as err:
         mydb.rollback()
         return jsonify({'error': f'Fehler beim Leeren der Tabelle transactions: {err}.'}), 500
