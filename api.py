@@ -6,6 +6,7 @@ from functools import wraps
 from dotenv import load_dotenv
 import mysql.connector
 from flask import Flask, jsonify, request
+from werkzeug.security import generate_password_hash
 
 load_dotenv()
 app = Flask(__name__)
@@ -31,7 +32,7 @@ if not app.config['MYSQL_DB']:
     print("Fehler: MYSQL_DB ist nicht in den Umgebungsvariablen definiert.")
     sys.exit(1)
 
-def get_db():
+def get_db_connection():
     """
     Stellt eine Verbindung zur MySQL-Datenbank her.
 
@@ -50,7 +51,7 @@ def get_db():
         return None
 
 
-def close_db(mydb):
+def close_db_connection(mydb):
     """
     Schließt die Datenbankverbindung.
 
@@ -73,7 +74,7 @@ def get_user_by_api_key(api_key):
         tuple or None: Ein Tupel mit (user_id, username) oder None, falls kein Benutzer gefunden wird oder ein Fehler auftritt.
     """
 
-    mydb = get_db()
+    mydb = get_db_connection()
     if not mydb:
         return None, None
     cursor = mydb.cursor()
@@ -91,7 +92,7 @@ def get_user_by_api_key(api_key):
         return None, None
     finally:
         cursor.close()
-        close_db(mydb)
+        close_db_connection(mydb)
 
 
 def api_key_required(f):
@@ -132,7 +133,7 @@ def health_protected_route(user_id, username):
     """
 
     print(f"authenticated user {user_id} - {username}")
-    mydb = get_db()
+    mydb = get_db_connection()
     if not mydb:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
     return jsonify({'message': f'Healthcheck OK! Authentifizierter Benutzer ID {user_id} ({username}).'})
@@ -153,7 +154,7 @@ def get_alle_summe(user_id, username):
     """
 
     print(f"authenticated user {user_id} - {username}.")
-    mydb = get_db()
+    mydb = get_db_connection()
     if not mydb:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
     cursor = mydb.cursor(dictionary=True)
@@ -166,7 +167,7 @@ def get_alle_summe(user_id, username):
         return jsonify({'error': f'Fehler beim Lesen der Daten: {err}.'}), 500
     finally:
         cursor.close()
-        close_db(mydb)
+        close_db_connection(mydb)
 
 
 @app.route('/transaktionen', methods=['GET'])
@@ -184,7 +185,7 @@ def get_alle_personen(user_id, username):
     """
 
     print(f"authenticated user {user_id} - {username}")
-    mydb = get_db()
+    mydb = get_db_connection()
     if not mydb:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
     cursor = mydb.cursor(dictionary=True)
@@ -197,7 +198,7 @@ def get_alle_personen(user_id, username):
         return jsonify({'error': f'Fehler beim Lesen der Daten: {err}.'}), 500
     finally:
         cursor.close()
-        close_db(mydb)
+        close_db_connection(mydb)
 
 
 @app.route('/transaktionen', methods=['DELETE'])
@@ -215,7 +216,7 @@ def reset_transaktionen(user_id, username):
     """
 
     print(f"authenticated user {user_id} - {username}")
-    mydb = get_db()
+    mydb = get_db_connection()
     if not mydb:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
     cursor = mydb.cursor()
@@ -229,7 +230,7 @@ def reset_transaktionen(user_id, username):
         return jsonify({'error': f'Fehler beim Leeren der Tabelle transactions: {err}.'}), 500
     finally:
         cursor.close()
-        close_db(mydb)
+        close_db_connection(mydb)
 
 
 @app.route('/person', methods=['POST'])
@@ -253,19 +254,20 @@ def create_person(user_id, username):
 
     code = daten['code']
     name = daten['name']
+    password = daten['password']
 
     if not isinstance(code, str) or len(code) != 10 or not code.isdigit():
         return jsonify({'error': 'Der Code muss ein 10-stelliger Zahlencode sein.'}), 400
     if not isinstance(name, str) or not name.strip():
         return jsonify({'error': 'Der Name darf nicht leer sein.'}), 400
 
-    mydb = get_db()
+    mydb = get_db_connection()
     if not mydb:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
     cursor = mydb.cursor()
     try:
-        sql = "INSERT IGNORE INTO users (code, name) VALUES (%s, %s)"
-        werte = (code, name)
+        sql = "INSERT IGNORE INTO users (code, name, password) VALUES (%s, %s, %s)"
+        werte = (code, name, password)
         cursor.execute(sql, werte)
         mydb.commit()
         return jsonify({'message': f'Person mit Code {code} erfolgreich hinzugefügt.'}), 201
@@ -274,7 +276,7 @@ def create_person(user_id, username):
         return jsonify({'error': f'Fehler beim Hinzufügen der Person: {err}.'}), 500
     finally:
         cursor.close()
-        close_db(mydb)
+        close_db_connection(mydb)
 
 
 @app.route('/person/<string:code>', methods=['DELETE'])
@@ -293,7 +295,7 @@ def delete_person(user_id, username, code):
     """
 
     print(f"authenticated user {user_id} - {username}")
-    mydb = get_db()
+    mydb = get_db_connection()
     if not mydb:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
     cursor = mydb.cursor()
@@ -310,7 +312,7 @@ def delete_person(user_id, username, code):
         return jsonify({'error': f'Fehler beim Löschen der Person: {err}.'}), 500
     finally:
         cursor.close()
-        close_db(mydb)
+        close_db_connection(mydb)
 
 
 @app.route('/person/existent/<string:code>', methods=['GET'])
@@ -329,7 +331,7 @@ def person_exists_by_code(user_id, username, code):
     """
 
     print(f"authenticated user {user_id} - {username}")
-    mydb = get_db()
+    mydb = get_db_connection()
     if not mydb:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
     cursor = mydb.cursor(dictionary=True)
@@ -343,7 +345,7 @@ def person_exists_by_code(user_id, username, code):
         return jsonify({'error': f'Fehler beim Lesen der Daten: {err}.'}), 500
     finally:
         cursor.close()
-        close_db(mydb)
+        close_db_connection(mydb)
 
 
 @app.route('/person/<string:code>', methods=['GET'])
@@ -362,7 +364,7 @@ def get_person_by_code(user_id, username, code):
     """
 
     print(f"authenticated user {user_id} - {username}")
-    mydb = get_db()
+    mydb = get_db_connection()
     if not mydb:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
     cursor = mydb.cursor(dictionary=True)
@@ -381,7 +383,7 @@ def get_person_by_code(user_id, username, code):
         return jsonify({'error': f'Fehler beim Lesen der Daten: {err}.'}), 500
     finally:
         cursor.close()
-        close_db(mydb)
+        close_db_connection(mydb)
 
 
 @app.route('/person/<string:code>', methods=['PUT'])
@@ -400,7 +402,7 @@ def person_bearbeiten(user_id, username, code):
     """
 
     print(f"authenticated user {user_id} - {username}")
-    mydb = get_db()
+    mydb = get_db_connection()
     if not mydb:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
     cursor = mydb.cursor()
@@ -428,7 +430,7 @@ def person_bearbeiten(user_id, username, code):
         return jsonify({'error': f'Fehler beim Bearbeiten der Person oder Erstellen der Transaktion: {err}.'}), 500
     finally:
         cursor.close()
-        close_db(mydb)
+        close_db_connection(mydb)
 
 
 @app.route('/person/transaktionen/<string:code>', methods=['DELETE'])
@@ -447,7 +449,7 @@ def person_transaktionen_loeschen(user_id, username, code):
     """
 
     print(f"authenticated user {user_id} - {username}")
-    mydb = get_db()
+    mydb = get_db_connection()
     if not mydb:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
     cursor = mydb.cursor()
@@ -472,7 +474,7 @@ def person_transaktionen_loeschen(user_id, username, code):
         return jsonify({'error': f'Fehler beim Löschen der Transaktion: {err}.'}), 500
     finally:
         cursor.close()
-        close_db(mydb)
+        close_db_connection(mydb)
 
 
 if __name__ == '__main__':
