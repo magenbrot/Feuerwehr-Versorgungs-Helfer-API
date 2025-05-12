@@ -6,7 +6,6 @@ from functools import wraps
 from dotenv import load_dotenv
 import mysql.connector
 from flask import Flask, jsonify, request
-from werkzeug.security import generate_password_hash
 
 load_dotenv()
 app = Flask(__name__)
