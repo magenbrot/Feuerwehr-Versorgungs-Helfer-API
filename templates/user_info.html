@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Benutzerinformationen</title>
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <h2>Hallo, {{ user.name }}!</h2>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <ul class="flashes">
+        {% for category, message in messages %}
+          <li class="{{ category }}">{{ message }}</li>
+        {% endfor %}
+        </ul>
+      {% endif %}
+    {% endwith %}
+
+    <p>Dein Benutzer-Code ist: <strong>{{ user.code }}</strong></p>
+
+    <h3>Gesamte Credits: {{ total_credits }}</h3>
+
+    <h3>Deine Transaktionen:</h3>
+    {% if transactions %}
+    <table>
+        <thead>
+            <tr>
+                <th>Artikel</th>
+                <th>Credits</th>
+                <th>Zeitpunkt</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for transaction in transactions %}
+            <tr>
+                <td>{{ transaction.article }}</td>
+                <td>{{ transaction.credits }}</td>
+                <td>{{ transaction.timestamp }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>Noch keine Transaktionen vorhanden.</p>
+    {% endif %}
+
+    <hr>
+
+    <h3>Passwort ändern:</h3>
+    <form method="POST" name="change_password" class="password-form">
+        <input type="hidden" name="change_password" value="true">
+        <div>
+            <label for="current_password">Aktuelles Passwort:</label>
+            <input type="password" id="current_password" name="current_password" required>
+        </div>
+        <div>
+            <label for="new_password">Neues Passwort:</label>
+            <input type="password" id="new_password" name="new_password" required>
+        </div>
+        <div>
+            <label for="confirm_new_password">Neues Passwort bestätigen:</label>
+            <input type="password" id="confirm_new_password" name="confirm_new_password" required>
+        </div>
+        <button type="submit">Passwort ändern</button>
+    </form>
+
+    {% if user.is_admin %}
+        <p class="admin-link"><a href="{{ url_for('admin_dashboard') }}">Zum Admin-Dashboard</a></p>
+    {% endif %}
+
+    <p><a href="{{ url_for('logout') }}">Abmelden</a></p>
+  </body>
+</html>

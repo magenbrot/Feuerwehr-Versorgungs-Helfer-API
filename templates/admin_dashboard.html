@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin Dashboard</title>
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <h2>Willkommen im Admin-Bereich, {{ user.name }}!</h2>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <ul class="flashes">
+        {% for category, message in messages %}
+          <li class="{{ category }}">{{ message }}</li>
+        {% endfor %}
+        </ul>
+      {% endif %}
+    {% endwith %}
+
+    <h3>Übersicht der Benutzer:</h3>
+    {% if users %}
+    <table>
+        <thead>
+            <tr>
+                <th>Code</th>
+                <th>Name</th>
+                <th>Admin</th>
+                <th>Gesamte Credits</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for u in users %}
+            <tr>
+                <td><a href="{{ url_for('admin_user_transactions', user_id=u.id) }}">{{ u.code }}</a></td>
+                <td>{{ u.name }}</td>
+                <td>{% if u.is_admin %}Ja{% else %}Nein{% endif %}</td>
+                <td>{{ credits_by_user.get(u.id, 0) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>Keine Benutzer vorhanden.</p>
+    {% endif %}
+    <p class="admin-link"><a href="{{ url_for('user_info') }}">Zur eigenen Benutzeransicht</a></p>
+    <p><a href="{{ url_for('logout') }}">Abmelden</a></p>
+</body>
+</html>

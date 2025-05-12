@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Transaktionen für {{ user.name }}</title>
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <h2>Transaktionen für {{ user.name }} ({{ user.code }}) - Aktuelle Credits: {{ total_credits }}</h2>
+    <p class="admin-link"><a href="{{ url_for('admin_dashboard') }}">Zurück zur Benutzerübersicht</a></p>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <ul class="flashes">
+        {% for category, message in messages %}
+          <li class="{{ category }}">{{ message }}</li>
+        {% endfor %}
+        </ul>
+      {% endif %}
+    {% endwith %}
+
+    <h3>Transaktionen:</h3>
+    {% if transactions %}
+    <table>
+        <thead>
+            <tr>
+                <th>Artikel</th>
+                <th>Credits</th>
+                <th>Zeitpunkt</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for transaction in transactions %}
+            <tr>
+                <td>{{ transaction.article }}</td>
+                <td>{{ transaction.credits }}</td>
+                <td>{{ transaction.timestamp }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>Keine Transaktionen für diesen Benutzer vorhanden.</p>
+    {% endif %}
+
+    <form method="POST" onsubmit="return confirm('Möchtest du wirklich ALLE Transaktionen dieses Benutzers löschen?');">
+        <input type="hidden" name="delete_transactions" value="true">
+        <button type="submit">Alle Transaktionen löschen</button>
+    </form>
+
+    <h3>Neue Transaktion hinzufügen:</h3>
+    <form method="POST" name="add_transaction">
+        <div>
+            <label for="article">Artikel:</label>
+            <input type="text" id="article" name="article" value="Admin-Eintrag" required>
+        </div>
+        <div>
+            <label for="credits">Credits:</label>
+            <input type="number" id="credits" name="credits" value="1" required>
+        </div>
+        <button type="submit" name="add_transaction">Hinzufügen</button>
+    </form>
+
+    <form method="POST" onsubmit="return confirm('ACHTUNG: Möchtest du diesen Benutzer WIRKLICH löschen? Alle zugehörigen Daten gehen verloren!');">
+        <input type="hidden" name="delete_user" value="true">
+        <button type="submit" class="delete-button">Benutzer löschen</button>
+    </form>
+</body>
+</html>
