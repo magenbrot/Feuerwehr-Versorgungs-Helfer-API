@@ -16,6 +16,9 @@ app.config['MYSQL_USER'] = os.getenv("MYSQL_USER")
 app.config['MYSQL_PASSWORD'] = os.getenv("MYSQL_PASSWORD")
 app.config['MYSQL_DB'] = os.getenv("MYSQL_DB")
 
+static_url_prefix = os.environ.get('STATIC_URL_PREFIX', '/static')
+app.static_url_path = static_url_prefix
+
 
 def get_db_connection():
     """
