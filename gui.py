@@ -8,9 +8,18 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 load_dotenv()
 
-app = Flask(__name__, static_url_path=os.environ.get('STATIC_URL_PREFIX', '/static'))
-app.config['SECRET_KEY'] = os.urandom(24)
+if "STATIC_URL_PREFIX" in os.environ:
+    app = Flask(__name__, static_url_path=os.environ.get('STATIC_URL_PREFIX', '/static'))
+else:
+    app = Flask(__name__)
 
+if "BASE_URL" in os.environ:
+    BASE_URL = os.environ.get('BASE_URL', '/')
+    print(f"BASE_URL: {BASE_URL}")
+else:
+    BASE_URL=""
+
+app.config['SECRET_KEY'] = os.urandom(24)
 app.config['MYSQL_HOST'] = os.getenv("MYSQL_HOST")
 app.config['MYSQL_USER'] = os.getenv("MYSQL_USER")
 app.config['MYSQL_PASSWORD'] = os.getenv("MYSQL_PASSWORD")
@@ -318,7 +327,8 @@ def login():
         user = fetch_user(code)
         if user and check_password_hash(user['password'], password):
             session['user_id'] = user['id']
-            return redirect(url_for('user_info'))
+            print("Redirecting: " + (BASE_URL + url_for('user_info')))
+            return redirect(BASE_URL + url_for('user_info'))
         else:
             return render_template('login.html', error='Ungültiger Benutzername oder Passwort')
     return render_template('login.html')
@@ -339,7 +349,7 @@ def user_info():
 
     user_id = session.get('user_id')
     if not user_id:
-        return redirect(url_for('login'))
+        return redirect(BASE_URL + url_for('login'))
 
     user = get_user_by_id(user_id)
     transactions = get_user_transactions(user_id)
@@ -364,7 +374,7 @@ def user_info():
                 new_password_hash = generate_password_hash(new_password)
                 if update_password(user_id, new_password_hash):
                     flash('Passwort erfolgreich geändert.', 'success')
-                    return redirect(url_for('user_info'))
+                    return redirect(BASE_URL + url_for('user_info'))
                 else:
                     flash('Fehler beim Ändern des Passworts.', 'error')
 
@@ -390,7 +400,7 @@ def admin_dashboard():
             users = get_all_users()
             credits_by_user = get_total_credits_by_user()
             return render_template('admin_dashboard.html', user=admin_user, users=users, credits_by_user=credits_by_user)
-    return redirect(url_for('login'))
+    return redirect(BASE_URL + url_for('login'))
 
 
 @app.route('/admin/user/<int:user_id>/transactions', methods=['GET', 'POST'])
@@ -409,7 +419,7 @@ def admin_user_transactions(user_id):
 
     logged_in_user_id = session.get('user_id')
     if not logged_in_user_id or not get_user_by_id(logged_in_user_id)['is_admin']:
-        return redirect(url_for('login'))
+        return redirect(BASE_URL + url_for('login'))
 
     target_user = get_user_by_id(user_id)
     transactions = get_user_transactions(user_id)
@@ -419,7 +429,7 @@ def admin_user_transactions(user_id):
         if 'delete_transactions' in request.form:
             if delete_all_transactions(user_id):
                 flash('Alle Transaktionen für diesen Benutzer wurden gelöscht.', 'success')
-                return redirect(url_for('admin_user_transactions', user_id=user_id))
+                return redirect(BASE_URL + url_for('admin_user_transactions', user_id=user_id))
             else:
                 flash('Fehler beim Löschen der Transaktionen.', 'error')
         elif 'add_transaction' in request.form:
@@ -427,11 +437,11 @@ def admin_user_transactions(user_id):
             credits_change = int(request.form['credits'])
             if add_transaction(user_id, article, credits_change):
                 flash('Transaktion erfolgreich hinzugefügt.', 'success')
-                return redirect(url_for('admin_user_transactions', user_id=user_id))
+                return redirect(BASE_URL + url_for('admin_user_transactions', user_id=user_id))
         elif 'delete_user' in request.form:
             if delete_user(user_id):
                 flash(f'Benutzer "{target_user["name"]}" (ID {user_id}) wurde gelöscht.', 'success')
-                return redirect(url_for('admin_dashboard')) # Zurück zur Benutzerübersicht
+                return redirect(BASE_URL + url_for('admin_dashboard')) # Zurück zur Benutzerübersicht
             else:
                 flash(f'Fehler beim Löschen des Benutzers "{target_user["name"]}" (ID {user_id}).', 'error')
 
@@ -448,7 +458,7 @@ def logout():
     """
 
     session.pop('user_id', None)
-    return redirect(url_for('login'))
+    return redirect(BASE_URL + url_for('login'))
 
 
 if __name__ == '__main__':
