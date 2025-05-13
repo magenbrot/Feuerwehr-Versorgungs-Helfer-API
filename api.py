@@ -1,5 +1,6 @@
 """Dieses Modul ist eine API Middleware für den Feuerwehr-Versorgungs-Helfer"""
 
+import base64
 import os
 import sys
 from functools import wraps
@@ -92,12 +93,12 @@ def api_key_required(f):
     return decorated
 
 
-def finde_benutzer_zu_nfc_uid(uid):
+def finde_benutzer_zu_nfc_uid(uid_base64):
     """
-    Findet einen Benutzer in der Datenbank anhand der NFC-UID (nur für authentifizierte Benutzer).
+    Findet einen Benutzer in der Datenbank anhand der Base64-kodierten NFC-UID.
 
     Args:
-        uid (str): Die NFC-UID des Tokens.
+        uid_base64 (str): Die Base64-kodierte NFC-UID des Tokens.
 
     Returns:
         int or None: Die ID des Benutzers oder None, falls kein Benutzer gefunden wird.
@@ -110,7 +111,8 @@ def finde_benutzer_zu_nfc_uid(uid):
         return None
     cursor = mydb.cursor()
     try:
-        cursor.execute("SELECT id FROM users WHERE nfc_uid = %s", (uid,))  # Annahme: UID wird im Feld 'code' gespeichert
+        uid_bytes = base64.b64decode(uid_base64)
+        cursor.execute("SELECT id FROM users WHERE nfc_uid = %s", (uid_bytes,))
         user = cursor.fetchone()
         if user:
             print(f"Benutzer gefunden: {user[0]}")
@@ -118,6 +120,9 @@ def finde_benutzer_zu_nfc_uid(uid):
         return None
     except mydb.mysql.connector.Error as err:
         print(f"Fehler beim Suchen des Benutzers anhand der UID: {err}")
+        return None
+    except base64.binascii.Error:
+        print(f"Fehler: Ungültiger Base64-String: {uid_base64}")
         return None
     finally:
         cursor.close()
