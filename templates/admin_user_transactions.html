@@ -60,6 +60,22 @@
         <button type="submit" name="add_transaction">Hinzufügen</button>
     </form>
 
+    <h3>NFC-Token:</h3>
+    {% if user.nfc_uid %}
+        <p>{{ user.nfc_uid.hex() }}</p>
+    {% else %}
+        <p>Kein NFC-Token für diesen Benutzer vorhanden.</p>
+    {% endif %}
+
+    <h3>NFC-Token aktualisieren:</h3>
+    <form method="POST" name="add_nfc_token">
+        <div>
+            <label for="nfc_uid">NFC-UID (hexadezimal):</label>
+            <input type="text" id="nfc_uid" name="nfc_uid" required pattern="[0-9A-Fa-f]{2,}" title="Bitte gib eine Hexadezimalzahl mit mindestens 2 Zeichen ein.">
+        </div>
+        <button type="submit" name="add_nfc_token">NFC-Token aktualisieren</button>
+    </form>
+
     <form method="POST" onsubmit="return confirm('ACHTUNG: Möchtest du diesen Benutzer WIRKLICH löschen? Alle zugehörigen Daten gehen verloren!');">
         <input type="hidden" name="delete_user" value="true">
         <button type="submit" class="delete-button">Benutzer löschen</button>

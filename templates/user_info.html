@@ -45,6 +45,12 @@
     <p>Noch keine Transaktionen vorhanden.</p>
     {% endif %}
 
+    {% if user.nfc_uid %}
+        <p>NFC-UID: {{ user.nfc_uid.hex() }}</p>
+    {% else %}
+        <p>Keine NFC-UID zugewiesen</p>
+    {% endif %}
+
     <hr>
 
     <h3>Passwort ändern:</h3>

@@ -1,6 +1,7 @@
 """WebGUI für den Feuerwehr-Versorgungs-Helfer"""
 
 import os
+import binascii
 from dotenv import load_dotenv
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -24,6 +25,69 @@ app.config['MYSQL_HOST'] = os.getenv("MYSQL_HOST")
 app.config['MYSQL_USER'] = os.getenv("MYSQL_USER")
 app.config['MYSQL_PASSWORD'] = os.getenv("MYSQL_PASSWORD")
 app.config['MYSQL_DB'] = os.getenv("MYSQL_DB")
+
+
+def hex_to_binary(hex_string):
+    """
+    Konvertiert einen Hexadezimalstring in Binärdaten.
+
+    Diese Funktion nimmt einen Hexadezimalstring entgegen und wandelt ihn in die entsprechende
+    Binärdarstellung um.  Sie wird typischerweise verwendet, um NFC-UIDs zu verarbeiten,
+    die oft als Hexadezimalstrings dargestellt werden.
+
+    Args:
+        hex_string (str): Der Hexadezimalstring, der konvertiert werden soll.
+
+    Returns:
+        bytes: Die Binärdaten, die dem Hexadezimalstring entsprechen. Gibt None zurück,
+               wenn die Konvertierung aufgrund eines ungültigen Hexadezimalstrings oder Typs fehlschlägt.
+    """
+    try:
+        return binascii.unhexlify(hex_string)
+    except binascii.Error:
+        print(f"Fehler bei der Hexadezimal-Konvertierung: Ungültiger Hexadezimalstring '{hex_string}'")
+        return None
+    except TypeError:
+        print(f"Fehler bei der Hexadezimal-Konvertierung: Ungültiger Typ für Hexadezimalstring: {type(hex_string)}")
+        return None
+
+
+def update_user_nfc_uid(user_id, hex_uid):
+    """
+    Aktualisiert die NFC-UID eines Benutzers in der Datenbank.
+
+    Args:
+        user_id (int): Die ID des Benutzers.
+        hex_uid (str): Die Hexadezimaldarstellung der NFC-UID.
+
+    Returns:
+        bool: True bei Erfolg, False bei Fehler (z.B. ungültige UID, Datenbankfehler).
+    """
+    conn = db_connection.get_db_connection(app.config['MYSQL_HOST'],
+                                   app.config['MYSQL_USER'],
+                                   app.config['MYSQL_PASSWORD'],
+                                   app.config['MYSQL_DB'])
+    if conn:
+        cursor = conn.cursor()
+        binary_uid = hex_to_binary(hex_uid)
+        if binary_uid:
+            try:
+                query = "UPDATE users SET nfc_uid = %s WHERE id = %s"
+                cursor.execute(query, (binary_uid, user_id))
+                conn.commit()
+                cursor.close()
+                conn.close()
+                return True
+            except conn.mysql.connector.Error as err:
+                print(f"Fehler beim Aktualisieren der NFC-UID: {err}")
+                conn.rollback()
+                cursor.close()
+                conn.close()
+                return False
+        else:
+            flash('Ungültige NFC-UID. Bitte überprüfe die Eingabe.', 'error')
+            return False
+    return False
 
 
 def delete_user(user_id):
@@ -87,13 +151,14 @@ def fetch_user(code):
 
 def get_user_by_id(user_id):
     """
-    Ruft einen Benutzer aus der Datenbank anhand seiner ID ab.
+    Ruft einen Benutzer anhand seiner ID ab und holt die zugehörige NFC-UID.
 
     Args:
         user_id (int): Die ID des Benutzers.
 
     Returns:
-        dict: Ein Dictionary mit den Benutzerdaten (id, code, name, is_admin, password) oder None, falls kein Benutzer gefunden wird.
+        dict: Ein Dictionary mit den Benutzerdaten (id, code, name, is_admin, password, nfc_uid)
+              oder None, falls kein Benutzer gefunden wird.
     """
 
     conn = db_connection.get_db_connection(app.config['MYSQL_HOST'],
@@ -102,7 +167,11 @@ def get_user_by_id(user_id):
                                    app.config['MYSQL_DB'])
     if conn:
         cursor = conn.cursor(dictionary=True)
-        query = "SELECT id, code, name, is_admin, password FROM users WHERE id = %s"
+        query = """
+            SELECT id, code, name, is_admin, password, nfc_uid
+            FROM users
+            WHERE id = %s
+        """
         cursor.execute(query, (user_id,))
         user = cursor.fetchone()
         cursor.close()
@@ -168,11 +237,11 @@ def get_total_credits_by_user():
 
 def get_all_users():
     """
-    Ruft alle Benutzer aus der Datenbank ab, sortiert nach Namen.
+    Ruft alle Benutzer aus der Datenbank ab, sortiert nach Namen, und holt die zugehörige NFC-UID.
 
     Returns:
         list: Eine Liste von Dictionaries, wobei jedes Dictionary einen Benutzer repräsentiert
-              (id, code, name, is_admin).
+              (id, code, name, is_admin, nfc_uid).
     """
 
     conn = db_connection.get_db_connection(app.config['MYSQL_HOST'],
@@ -181,7 +250,11 @@ def get_all_users():
                                    app.config['MYSQL_DB'])
     if conn:
         cursor = conn.cursor(dictionary=True)
-        query = "SELECT id, code, name, is_admin FROM users ORDER BY name"
+        query = """
+            SELECT id, code, name, is_admin, nfc_uid
+            FROM users
+            ORDER BY name
+        """
         cursor.execute(query)
         users = cursor.fetchall()
         cursor.close()
@@ -451,6 +524,13 @@ def admin_user_transactions(user_id):
                 flash(f'Benutzer "{target_user["name"]}" (ID {user_id}) wurde gelöscht.', 'success')
                 return redirect(BASE_URL + url_for('admin_dashboard')) # Zurück zur Benutzerübersicht
             flash(f'Fehler beim Löschen des Benutzers "{target_user["name"]}" (ID {user_id}).', 'error')
+        elif 'add_nfc_token' in request.form:
+            nfc_uid = request.form['nfc_uid']
+            if update_user_nfc_uid(user_id, nfc_uid):
+                flash('NFC-Token erfolgreich aktualisiert.', 'success')
+                return redirect(BASE_URL + url_for('admin_user_transactions', user_id=user_id))
+            else:
+                flash('Fehler beim Aktualisieren des NFC-Tokens.', 'error')
 
     return render_template('admin_user_transactions.html', user=target_user, transactions=transactions, total_credits=total_credits)
 
