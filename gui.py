@@ -3,8 +3,8 @@
 import os
 from dotenv import load_dotenv
 from flask import Flask, render_template, request, redirect, url_for, session, flash
-import mysql.connector
 from werkzeug.security import check_password_hash, generate_password_hash
+import db_connection
 
 load_dotenv()
 
@@ -26,25 +26,6 @@ app.config['MYSQL_PASSWORD'] = os.getenv("MYSQL_PASSWORD")
 app.config['MYSQL_DB'] = os.getenv("MYSQL_DB")
 
 
-def get_db_connection():
-    """
-    Stellt eine Verbindung zur MySQL-Datenbank her.
-
-    Returns:
-        mysql.connector.MySQLConnection or None: Das Datenbankverbindungsobjekt oder None bei einem Fehler.
-    """
-
-    try:
-        mydb = mysql.connector.connect(host=app.config['MYSQL_HOST'],
-                                       user=app.config['MYSQL_USER'],
-                                       password=app.config['MYSQL_PASSWORD'],
-                                       database=app.config['MYSQL_DB'])
-        return mydb
-    except mysql.connector.Error as err:
-        print(f"Fehler bei der Verbindung zur Datenbank: {err}")
-        return None
-
-
 def delete_user(user_id):
     """
     Löscht einen Benutzer anhand seiner ID.
@@ -56,7 +37,10 @@ def delete_user(user_id):
         bool: True bei Erfolg, False bei Fehler.
     """
 
-    conn = get_db_connection()
+    conn = db_connection.get_db_connection(app.config['MYSQL_HOST'],
+                                   app.config['MYSQL_USER'],
+                                   app.config['MYSQL_PASSWORD'],
+                                   app.config['MYSQL_DB'])
     if conn:
         cursor = conn.cursor()
         try:
@@ -66,7 +50,7 @@ def delete_user(user_id):
             cursor.close()
             conn.close()
             return True
-        except mysql.connector.Error as err:
+        except conn.mysql.connector.Error as err:
             print(f"Fehler beim Löschen des Benutzers: {err}")
             conn.rollback()
             cursor.close()
@@ -86,7 +70,10 @@ def fetch_user(code):
         dict: Ein Dictionary mit den Benutzerdaten (id, code, name, password, is_admin) oder None, falls kein Benutzer gefunden wird.
     """
 
-    conn = get_db_connection()
+    conn = db_connection.get_db_connection(app.config['MYSQL_HOST'],
+                                   app.config['MYSQL_USER'],
+                                   app.config['MYSQL_PASSWORD'],
+                                   app.config['MYSQL_DB'])
     if conn:
         cursor = conn.cursor(dictionary=True)
         query = "SELECT id, code, name, password, is_admin FROM users WHERE code = %s"
@@ -109,7 +96,10 @@ def get_user_by_id(user_id):
         dict: Ein Dictionary mit den Benutzerdaten (id, code, name, is_admin, password) oder None, falls kein Benutzer gefunden wird.
     """
 
-    conn = get_db_connection()
+    conn = db_connection.get_db_connection(app.config['MYSQL_HOST'],
+                                   app.config['MYSQL_USER'],
+                                   app.config['MYSQL_PASSWORD'],
+                                   app.config['MYSQL_DB'])
     if conn:
         cursor = conn.cursor(dictionary=True)
         query = "SELECT id, code, name, is_admin, password FROM users WHERE id = %s"
@@ -132,7 +122,10 @@ def get_total_credits_for_user(user_id):
         int: Die Summe der Credits oder 0, falls kein Benutzer gefunden wird.
     """
 
-    conn = get_db_connection()
+    conn = db_connection.get_db_connection(app.config['MYSQL_HOST'],
+                                   app.config['MYSQL_USER'],
+                                   app.config['MYSQL_PASSWORD'],
+                                   app.config['MYSQL_DB'])
     if conn:
         cursor = conn.cursor()
         query = "SELECT SUM(credits) FROM transactions WHERE user_id = %s"
@@ -153,7 +146,10 @@ def get_total_credits_by_user():
               Enthält alle Benutzer, auch solche ohne Transaktionen (Wert dann 0).
     """
 
-    conn = get_db_connection()
+    conn = db_connection.get_db_connection(app.config['MYSQL_HOST'],
+                                   app.config['MYSQL_USER'],
+                                   app.config['MYSQL_PASSWORD'],
+                                   app.config['MYSQL_DB'])
     if conn:
         cursor = conn.cursor(dictionary=True)
         query = """
@@ -179,7 +175,10 @@ def get_all_users():
               (id, code, name, is_admin).
     """
 
-    conn = get_db_connection()
+    conn = db_connection.get_db_connection(app.config['MYSQL_HOST'],
+                                   app.config['MYSQL_USER'],
+                                   app.config['MYSQL_PASSWORD'],
+                                   app.config['MYSQL_DB'])
     if conn:
         cursor = conn.cursor(dictionary=True)
         query = "SELECT id, code, name, is_admin FROM users ORDER BY name"
@@ -203,7 +202,10 @@ def get_user_transactions(user_id):
               (id, article, credits, timestamp). Gibt None zurück, falls ein Fehler auftritt.
     """
 
-    conn = get_db_connection()
+    conn = db_connection.get_db_connection(app.config['MYSQL_HOST'],
+                                   app.config['MYSQL_USER'],
+                                   app.config['MYSQL_PASSWORD'],
+                                   app.config['MYSQL_DB'])
     if conn:
         cursor = conn.cursor(dictionary=True)
         query = "SELECT id, article, credits, timestamp FROM transactions WHERE user_id = %s ORDER BY timestamp DESC"
@@ -228,7 +230,10 @@ def add_transaction(user_id, article, credits_change):
         bool: True bei Erfolg, False bei Fehler.
     """
 
-    conn = get_db_connection()
+    conn = db_connection.get_db_connection(app.config['MYSQL_HOST'],
+                                   app.config['MYSQL_USER'],
+                                   app.config['MYSQL_PASSWORD'],
+                                   app.config['MYSQL_DB'])
     if conn:
         cursor = conn.cursor()
         query = "INSERT INTO transactions (user_id, article, credits) VALUES (%s, %s, %s)"
@@ -238,7 +243,7 @@ def add_transaction(user_id, article, credits_change):
             cursor.close()
             conn.close()
             return True
-        except mysql.connector.Error as err:
+        except conn.mysql.connector.Error as err:
             print(f"Fehler beim Hinzufügen der Transaktion: {err}")
             conn.rollback()
             cursor.close()
@@ -258,7 +263,10 @@ def delete_all_transactions(user_id):
         bool: True bei Erfolg, False bei Fehler.
     """
 
-    conn = get_db_connection()
+    conn = db_connection.get_db_connection(app.config['MYSQL_HOST'],
+                                   app.config['MYSQL_USER'],
+                                   app.config['MYSQL_PASSWORD'],
+                                   app.config['MYSQL_DB'])
     if conn:
         cursor = conn.cursor()
         query = "DELETE FROM transactions WHERE user_id = %s"
@@ -268,7 +276,7 @@ def delete_all_transactions(user_id):
             cursor.close()
             conn.close()
             return True
-        except mysql.connector.Error as err:
+        except conn.mysql.connector.Error as err:
             print(f"Fehler beim Löschen der Transaktionen: {err}")
             conn.rollback()
             cursor.close()
@@ -289,7 +297,10 @@ def update_password(user_id, new_password_hash):
         bool: True bei Erfolg, False bei Fehler.
     """
 
-    conn = get_db_connection()
+    conn = db_connection.get_db_connection(app.config['MYSQL_HOST'],
+                                   app.config['MYSQL_USER'],
+                                   app.config['MYSQL_PASSWORD'],
+                                   app.config['MYSQL_DB'])
     if conn:
         cursor = conn.cursor()
         try:
@@ -299,7 +310,7 @@ def update_password(user_id, new_password_hash):
             cursor.close()
             conn.close()
             return True
-        except mysql.connector.Error as err:
+        except conn.mysql.connector.Error as err:
             print(f"Fehler beim Aktualisieren des Passworts: {err}")
             conn.rollback()
             cursor.close()
@@ -329,8 +340,7 @@ def login():
             session['user_id'] = user['id']
             print("Redirecting: " + (BASE_URL + url_for('user_info')))
             return redirect(BASE_URL + url_for('user_info'))
-        else:
-            return render_template('login.html', error='Ungültiger Benutzername oder Passwort')
+        return render_template('login.html', error='Ungültiger Benutzername oder Passwort')
     return render_template('login.html')
 
 
@@ -375,8 +385,7 @@ def user_info():
                 if update_password(user_id, new_password_hash):
                     flash('Passwort erfolgreich geändert.', 'success')
                     return redirect(BASE_URL + url_for('user_info'))
-                else:
-                    flash('Fehler beim Ändern des Passworts.', 'error')
+                flash('Fehler beim Ändern des Passworts.', 'error')
 
     return render_template('user_info.html', user=user, transactions=transactions, total_credits=total_credits)
 
@@ -430,8 +439,7 @@ def admin_user_transactions(user_id):
             if delete_all_transactions(user_id):
                 flash('Alle Transaktionen für diesen Benutzer wurden gelöscht.', 'success')
                 return redirect(BASE_URL + url_for('admin_user_transactions', user_id=user_id))
-            else:
-                flash('Fehler beim Löschen der Transaktionen.', 'error')
+            flash('Fehler beim Löschen der Transaktionen.', 'error')
         elif 'add_transaction' in request.form:
             article = request.form['article']
             credits_change = int(request.form['credits'])
@@ -442,8 +450,7 @@ def admin_user_transactions(user_id):
             if delete_user(user_id):
                 flash(f'Benutzer "{target_user["name"]}" (ID {user_id}) wurde gelöscht.', 'success')
                 return redirect(BASE_URL + url_for('admin_dashboard')) # Zurück zur Benutzerübersicht
-            else:
-                flash(f'Fehler beim Löschen des Benutzers "{target_user["name"]}" (ID {user_id}).', 'error')
+            flash(f'Fehler beim Löschen des Benutzers "{target_user["name"]}" (ID {user_id}).', 'error')
 
     return render_template('admin_user_transactions.html', user=target_user, transactions=transactions, total_credits=total_credits)
 
