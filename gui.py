@@ -529,8 +529,7 @@ def admin_user_transactions(user_id):
             if update_user_nfc_uid(user_id, nfc_uid):
                 flash('NFC-Token erfolgreich aktualisiert.', 'success')
                 return redirect(BASE_URL + url_for('admin_user_transactions', user_id=user_id))
-            else:
-                flash('Fehler beim Aktualisieren des NFC-Tokens.', 'error')
+            flash('Fehler beim Aktualisieren des NFC-Tokens.', 'error')
 
     return render_template('admin_user_transactions.html', user=target_user, transactions=transactions, total_credits=total_credits)
 
