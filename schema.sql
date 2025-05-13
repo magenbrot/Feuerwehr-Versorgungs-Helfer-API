@@ -16,14 +16,17 @@ CREATE TABLE transactions (
   id int NOT NULL,
   user_id int NOT NULL,
   article varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  credits int UNSIGNED NOT NULL DEFAULT '1',
+  credits int NOT NULL DEFAULT '1',
   timestamp datetime NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE users (
   id int NOT NULL,
   code varchar(10) COLLATE utf8mb4_unicode_ci NOT NULL,
-  name varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL
+  nfc_uid varchar(12) COLLATE utf8mb4_unicode_ci NOT NULL,
+  name varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  password varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  is_admin tinyint(1) NOT NULL DEFAULT '0'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
@@ -62,4 +65,4 @@ ALTER TABLE api_keys
   ADD CONSTRAINT api_keys_ibfk_1 FOREIGN KEY (user_id) REFERENCES api_users (id);
 
 ALTER TABLE transactions
-  ADD CONSTRAINT transactions_ibfk_1 FOREIGN KEY (user_id) REFERENCES users (id);
+  ADD CONSTRAINT transactions_ibfk_1 FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE RESTRICT;
