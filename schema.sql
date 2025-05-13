@@ -23,10 +23,10 @@ CREATE TABLE transactions (
 CREATE TABLE users (
   id int NOT NULL,
   code varchar(10) COLLATE utf8mb4_unicode_ci NOT NULL,
-  nfc_uid varchar(12) COLLATE utf8mb4_unicode_ci NOT NULL,
   name varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   password varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  is_admin tinyint(1) NOT NULL DEFAULT '0'
+  is_admin tinyint(1) NOT NULL DEFAULT '0',
+  nfc_uid varbinary(20) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
@@ -45,7 +45,8 @@ ALTER TABLE transactions
 
 ALTER TABLE users
   ADD PRIMARY KEY (id),
-  ADD UNIQUE KEY code (code);
+  ADD UNIQUE KEY code (code),
+  ADD UNIQUE KEY nfc_uid (nfc_uid);
 
 
 ALTER TABLE api_keys
