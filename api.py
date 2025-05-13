@@ -4,8 +4,8 @@ import os
 import sys
 from functools import wraps
 from dotenv import load_dotenv
-import mysql.connector
 from flask import Flask, jsonify, request
+import db_connection
 
 load_dotenv()
 app = Flask(__name__)
@@ -31,38 +31,6 @@ if not app.config['MYSQL_DB']:
     print("Fehler: MYSQL_DB ist nicht in den Umgebungsvariablen definiert.")
     sys.exit(1)
 
-def get_db_connection():
-    """
-    Stellt eine Verbindung zur MySQL-Datenbank her.
-
-    Returns:
-        mysql.connector.MySQLConnection or None: Das Datenbankverbindungsobjekt oder None bei einem Fehler.
-    """
-
-    try:
-        mydb = mysql.connector.connect(host=app.config['MYSQL_HOST'],
-                                       user=app.config['MYSQL_USER'],
-                                       password=app.config['MYSQL_PASSWORD'],
-                                       database=app.config['MYSQL_DB'])
-        print("Datenbankverbindung hergestellt")
-        return mydb
-    except mysql.connector.Error as err:
-        print(f"Fehler bei der Verbindung zur Datenbank: {err}")
-        return None
-
-
-def close_db_connection(mydb):
-    """
-    Schließt die Datenbankverbindung.
-
-    Args:
-        mydb (mysql.connector.MySQLConnection): Das Datenbankverbindungsobjekt.
-    """
-
-    if mydb and mydb.is_connected():
-        print("Datenbankverbindung geschlossen")
-        mydb.close()
-
 
 def get_user_by_api_key(api_key):
     """
@@ -75,7 +43,10 @@ def get_user_by_api_key(api_key):
         tuple or None: Ein Tupel mit (user_id, username) oder None, falls kein Benutzer gefunden wird oder ein Fehler auftritt.
     """
 
-    mydb = get_db_connection()
+    mydb = db_connection.get_db_connection(app.config['MYSQL_HOST'],
+                                   app.config['MYSQL_USER'],
+                                   app.config['MYSQL_PASSWORD'],
+                                   app.config['MYSQL_DB'])
     if not mydb:
         return None, None
     cursor = mydb.cursor()
@@ -87,13 +58,13 @@ def get_user_by_api_key(api_key):
         if user:
             return user[0], user[1]  # user_id, username
         return None, None
-    except mysql.connector.Error as err:
+    except mydb.mysql.connector.Error as err:
         print(
             f"Fehler beim Abrufen des Benutzers anhand des API-Schlüssels: {err}.")
         return None, None
     finally:
         cursor.close()
-        close_db_connection(mydb)
+        db_connection.close_db_connection(mydb)
 
 
 def api_key_required(f):
@@ -131,7 +102,10 @@ def finde_benutzer_zu_nfc_uid(uid):
     Returns:
         int or None: Die ID des Benutzers oder None, falls kein Benutzer gefunden wird.
     """
-    mydb = get_db_connection()
+    mydb = db_connection.get_db_connection(app.config['MYSQL_HOST'],
+                                   app.config['MYSQL_USER'],
+                                   app.config['MYSQL_PASSWORD'],
+                                   app.config['MYSQL_DB'])
     if not mydb:
         return None
     cursor = mydb.cursor()
@@ -142,12 +116,12 @@ def finde_benutzer_zu_nfc_uid(uid):
             print(f"Benutzer gefunden: {user[0]}")
             return user[0]
         return None
-    except mysql.connector.Error as err:
+    except mydb.mysql.connector.Error as err:
         print(f"Fehler beim Suchen des Benutzers anhand der UID: {err}")
         return None
     finally:
         cursor.close()
-        close_db_connection(mydb)
+        db_connection.close_db_connection(mydb)
 
 
 @app.route('/health-protected', methods=['GET'])
@@ -165,7 +139,10 @@ def health_protected_route(user_id, username):
     """
 
     print(f"Benutzer authentifiziert {user_id} - {username}")
-    mydb = get_db_connection()
+    mydb = db_connection.get_db_connection(app.config['MYSQL_HOST'],
+                                   app.config['MYSQL_USER'],
+                                   app.config['MYSQL_PASSWORD'],
+                                   app.config['MYSQL_DB'])
     if not mydb:
         print("Datenbankverbindung fehlgeschlagen")
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
@@ -188,7 +165,10 @@ def get_alle_summe(user_id, username):
     """
 
     print(f"Benutzer authentifiziert {user_id} - {username}.")
-    mydb = get_db_connection()
+    mydb = db_connection.get_db_connection(app.config['MYSQL_HOST'],
+                                   app.config['MYSQL_USER'],
+                                   app.config['MYSQL_PASSWORD'],
+                                   app.config['MYSQL_DB'])
     if not mydb:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
     cursor = mydb.cursor(dictionary=True)
@@ -198,11 +178,11 @@ def get_alle_summe(user_id, username):
         personen = cursor.fetchall()
         print("Die Creditsumme aller Personen wurde ermittelt.")
         return jsonify(personen)
-    except mysql.connector.Error as err:
+    except mydb.mysql.connector.Error as err:
         return jsonify({'error': f'Fehler beim Lesen der Daten: {err}.'}), 500
     finally:
         cursor.close()
-        close_db_connection(mydb)
+        db_connection.close_db_connection(mydb)
 
 
 @app.route('/nfc-transaction', methods=['PUT'])
@@ -229,7 +209,10 @@ def process_nfc_transaction(user_id, username):
     benutzer_id = finde_benutzer_zu_nfc_uid(nfc_uid)
 
     if benutzer_id:
-        mydb = get_db_connection()
+        mydb = db_connection.get_db_connection(app.config['MYSQL_HOST'],
+                                   app.config['MYSQL_USER'],
+                                   app.config['MYSQL_PASSWORD'],
+                                   app.config['MYSQL_DB'])
         if not mydb:
             return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
         cursor = mydb.cursor()
@@ -242,13 +225,13 @@ def process_nfc_transaction(user_id, username):
             mydb.commit()
             print(f'Transaktion für Benutzer-ID {benutzer_id} erfolgreich erstellt (+1 Credit).')
             return jsonify({'message': f'Transaktion für Benutzer-ID {benutzer_id} erfolgreich erstellt (+1 Credit).'}), 200
-        except mysql.connector.Error as err:
+        except mydb.mysql.connector.Error as err:
             mydb.rollback()
             print(f"Fehler beim Erstellen der Transaktion: {err}")
             return jsonify({'error': f'Fehler beim Erstellen der Transaktion: {err}.'}), 500
         finally:
             cursor.close()
-            close_db_connection(mydb)
+            db_connection.close_db_connection(mydb)
     else:
         return jsonify({'error': f'Kein Benutzer mit der UID {nfc_uid} gefunden.'}), 404
 
@@ -268,7 +251,10 @@ def get_alle_personen(user_id, username):
     """
 
     print(f"Benutzer authentifiziert {user_id} - {username}")
-    mydb = get_db_connection()
+    mydb = db_connection.get_db_connection(app.config['MYSQL_HOST'],
+                                   app.config['MYSQL_USER'],
+                                   app.config['MYSQL_PASSWORD'],
+                                   app.config['MYSQL_DB'])
     if not mydb:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
     cursor = mydb.cursor(dictionary=True)
@@ -278,11 +264,11 @@ def get_alle_personen(user_id, username):
         personen = cursor.fetchall()
         print("Transaktionen wurden ermittelt.")
         return jsonify(personen)
-    except mysql.connector.Error as err:
+    except mydb.mysql.connector.Error as err:
         return jsonify({'error': f'Fehler beim Lesen der Daten: {err}.'}), 500
     finally:
         cursor.close()
-        close_db_connection(mydb)
+        db_connection.close_db_connection(mydb)
 
 
 @app.route('/transaktionen', methods=['DELETE'])
@@ -300,7 +286,10 @@ def reset_transaktionen(user_id, username):
     """
 
     print(f"Benutzer authentifiziert {user_id} - {username}")
-    mydb = get_db_connection()
+    mydb = db_connection.get_db_connection(app.config['MYSQL_HOST'],
+                                   app.config['MYSQL_USER'],
+                                   app.config['MYSQL_PASSWORD'],
+                                   app.config['MYSQL_DB'])
     if not mydb:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
     cursor = mydb.cursor()
@@ -310,13 +299,13 @@ def reset_transaktionen(user_id, username):
         mydb.commit()
         print("Alle Transaktionen wurden gelöscht.")
         return jsonify({'message': 'Alle Transaktionen wurden gelöscht.'}), 200
-    except mysql.connector.Error as err:
+    except mydb.mysql.connector.Error as err:
         mydb.rollback()
         print(f"Fehler beim Leeren der Tabelle transactions: {err}")
         return jsonify({'error': f'Fehler beim Leeren der Tabelle transactions: {err}.'}), 500
     finally:
         cursor.close()
-        close_db_connection(mydb)
+        db_connection.close_db_connection(mydb)
 
 
 @app.route('/person', methods=['POST'])
@@ -347,7 +336,10 @@ def create_person(user_id, username):
     if not isinstance(name, str) or not name.strip():
         return jsonify({'error': 'Der Name darf nicht leer sein.'}), 400
 
-    mydb = get_db_connection()
+    mydb = db_connection.get_db_connection(app.config['MYSQL_HOST'],
+                                   app.config['MYSQL_USER'],
+                                   app.config['MYSQL_PASSWORD'],
+                                   app.config['MYSQL_DB'])
     if not mydb:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
     cursor = mydb.cursor()
@@ -358,13 +350,13 @@ def create_person(user_id, username):
         mydb.commit()
         print(f"Person mit Code {code} erfolgreich hinzugefügt.")
         return jsonify({'message': f'Person mit Code {code} erfolgreich hinzugefügt.'}), 201
-    except mysql.connector.Error as err:
+    except mydb.mysql.connector.Error as err:
         mydb.rollback()
         print(f"Fehler beim Hinzufügen der Person: {err}")
         return jsonify({'error': f'Fehler beim Hinzufügen der Person: {err}.'}), 500
     finally:
         cursor.close()
-        close_db_connection(mydb)
+        db_connection.close_db_connection(mydb)
 
 
 @app.route('/person/<string:code>', methods=['DELETE'])
@@ -383,7 +375,10 @@ def delete_person(user_id, username, code):
     """
 
     print(f"Benutzer authentifiziert {user_id} - {username}")
-    mydb = get_db_connection()
+    mydb = db_connection.get_db_connection(app.config['MYSQL_HOST'],
+                                   app.config['MYSQL_USER'],
+                                   app.config['MYSQL_PASSWORD'],
+                                   app.config['MYSQL_DB'])
     if not mydb:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
     cursor = mydb.cursor()
@@ -396,13 +391,13 @@ def delete_person(user_id, username, code):
             print(f"Person mit Code {code} erfolgreich gelöscht.")
             return jsonify({'message': f'Person mit Code {code} erfolgreich gelöscht.'}), 200
         return jsonify({'error': f'Keine Person mit dem Code {code} gefunden.'}), 404
-    except mysql.connector.Error as err:
+    except mydb.mysql.connector.Error as err:
         mydb.rollback()
         print(f"Fehler beim Löschen der Person: {err}")
         return jsonify({'error': f'Fehler beim Löschen der Person: {err}.'}), 500
     finally:
         cursor.close()
-        close_db_connection(mydb)
+        db_connection.close_db_connection(mydb)
 
 
 @app.route('/person/existent/<string:code>', methods=['GET'])
@@ -421,7 +416,10 @@ def person_exists_by_code(user_id, username, code):
     """
 
     print(f"Benutzer authentifiziert {user_id} - {username}")
-    mydb = get_db_connection()
+    mydb = db_connection.get_db_connection(app.config['MYSQL_HOST'],
+                                   app.config['MYSQL_USER'],
+                                   app.config['MYSQL_PASSWORD'],
+                                   app.config['MYSQL_DB'])
     if not mydb:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
     cursor = mydb.cursor(dictionary=True)
@@ -432,12 +430,12 @@ def person_exists_by_code(user_id, username, code):
             print(f"Person mit Code {code} gefunden: {person['name']}")
             return jsonify(person)
         return jsonify({'error': 'Person nicht gefunden.'}), 200
-    except mysql.connector.Error as err:
+    except mydb.mysql.connector.Error as err:
         print(f"Fehler beim Lesen der Daten: {err}")
         return jsonify({'error': f'Fehler beim Lesen der Daten: {err}.'}), 500
     finally:
         cursor.close()
-        close_db_connection(mydb)
+        db_connection.close_db_connection(mydb)
 
 
 @app.route('/person/<string:code>', methods=['GET'])
@@ -456,7 +454,10 @@ def get_person_by_code(user_id, username, code):
     """
 
     print(f"Benutzer authentifiziert {user_id} - {username}")
-    mydb = get_db_connection()
+    mydb = db_connection.get_db_connection(app.config['MYSQL_HOST'],
+                                   app.config['MYSQL_USER'],
+                                   app.config['MYSQL_PASSWORD'],
+                                   app.config['MYSQL_DB'])
     if not mydb:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
     cursor = mydb.cursor(dictionary=True)
@@ -474,12 +475,12 @@ def get_person_by_code(user_id, username, code):
             return jsonify({'error': 'Person hat noch keine Transaktionen durchgeführt.'}), 200
         print(f"Person mit Code {code} nicht gefunden.")
         return jsonify({'error': 'Person nicht gefunden.'}), 200
-    except mysql.connector.Error as err:
+    except mydb.mysql.connector.Error as err:
         print(f"Fehler beim Lesen der Daten: {err}")
         return jsonify({'error': f'Fehler beim Lesen der Daten: {err}.'}), 500
     finally:
         cursor.close()
-        close_db_connection(mydb)
+        db_connection.close_db_connection(mydb)
 
 
 @app.route('/person/<string:code>', methods=['PUT'])
@@ -498,7 +499,10 @@ def person_bearbeiten(user_id, username, code):
     """
 
     print(f"Benutzer authentifiziert {user_id} - {username}")
-    mydb = get_db_connection()
+    mydb = db_connection.get_db_connection(app.config['MYSQL_HOST'],
+                                   app.config['MYSQL_USER'],
+                                   app.config['MYSQL_PASSWORD'],
+                                   app.config['MYSQL_DB'])
     if not mydb:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
     cursor = mydb.cursor()
@@ -524,13 +528,13 @@ def person_bearbeiten(user_id, username, code):
             return jsonify({'message': 'Transaktion erfolgreich erstellt.'}), 201
         print(f"Person mit diesem Code nicht gefunden: {code}")
         return jsonify({'error': 'Person mit diesem Code nicht gefunden.'}), 404
-    except mysql.connector.Error as err:
+    except mydb.mysql.connector.Error as err:
         mydb.rollback()
         print(f"Fehler beim Bearbeiten der Person oder Erstellen der Transaktion: {err}")
         return jsonify({'error': f'Fehler beim Bearbeiten der Person oder Erstellen der Transaktion: {err}.'}), 500
     finally:
         cursor.close()
-        close_db_connection(mydb)
+        db_connection.close_db_connection(mydb)
 
 
 @app.route('/person/transaktionen/<string:code>', methods=['DELETE'])
@@ -549,7 +553,10 @@ def person_transaktionen_loeschen(user_id, username, code):
     """
 
     print(f"Benutzer authentifiziert {user_id} - {username}")
-    mydb = get_db_connection()
+    mydb = db_connection.get_db_connection(app.config['MYSQL_HOST'],
+                                   app.config['MYSQL_USER'],
+                                   app.config['MYSQL_PASSWORD'],
+                                   app.config['MYSQL_DB'])
     if not mydb:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
     cursor = mydb.cursor()
@@ -572,13 +579,13 @@ def person_transaktionen_loeschen(user_id, username, code):
             return jsonify({'message': 'Transaktionen erfolgreich gelöscht.'}), 201
         print(f"Person mit diesem Code nicht gefunden: {code}")
         return jsonify({'error': 'Person mit diesem Code nicht gefunden.'}), 404
-    except mysql.connector.Error as err:
+    except mydb.mysql.connector.Error as err:
         mydb.rollback()
         print(f"Fehler beim Löschen der Transaktion: {err}")
         return jsonify({'error': f'Fehler beim Löschen der Transaktion: {err}.'}), 500
     finally:
         cursor.close()
-        close_db_connection(mydb)
+        db_connection.close_db_connection(mydb)
 
 
 if __name__ == '__main__':
