@@ -117,6 +117,34 @@ def api_key_required(f):
     return decorated
 
 
+def finde_benutzer_zu_nfc_uid(uid):
+    """
+    Findet einen Benutzer in der Datenbank anhand der NFC-UID.
+
+    Args:
+        uid (str): Die NFC-UID des Tokens.
+
+    Returns:
+        int or None: Die ID des Benutzers oder None, falls kein Benutzer gefunden wird.
+    """
+    mydb = get_db_connection()
+    if not mydb:
+        return None
+    cursor = mydb.cursor()
+    try:
+        cursor.execute("SELECT id FROM users WHERE nfc_uid = %s", (uid,))  # Annahme: UID wird im Feld 'code' gespeichert
+        user = cursor.fetchone()
+        if user:
+            return user[0]
+        return None
+    except mysql.connector.Error as err:
+        print(f"Fehler beim Suchen des Benutzers anhand der UID: {err}")
+        return None
+    finally:
+        cursor.close()
+        close_db_connection(mydb)
+
+
 @app.route('/health-protected', methods=['GET'])
 @api_key_required
 def health_protected_route(user_id, username):
@@ -167,6 +195,52 @@ def get_alle_summe(user_id, username):
     finally:
         cursor.close()
         close_db_connection(mydb)
+
+
+@app.route('/nfc-transaction', methods=['PUT'])
+@api_key_required
+def process_nfc_transaction(user_id, username):
+    """
+    Verarbeitet eine NFC-Transaktion, indem die übermittelte UID einem Benutzer zugeordnet
+    und eine Gutschrift von 1 Credit in der Datenbank vermerkt wird.
+
+    Args:
+        user_id (int): Die ID des authentifizierten API-Benutzers.
+        username (str): Der Benutzername des authentifizierten API-Benutzers.
+
+    Returns:
+        flask.Response: Eine JSON-Antwort mit einer Erfolgsmeldung oder einem Fehler.
+    """
+
+    print(f"authenticated user {user_id} - {username}.")
+    daten = request.get_json()
+    if not daten or 'uid' not in daten:
+        return jsonify({'error': 'Ungültige Anfrage. Die UID des NFC-Tokens fehlt.'}), 400
+
+    nfc_uid = daten['uid']
+    benutzer_id = finde_benutzer_zu_nfc_uid(nfc_uid)
+
+    if benutzer_id:
+        mydb = get_db_connection()
+        if not mydb:
+            return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
+        cursor = mydb.cursor()
+        try:
+            artikel = "NFC-Scan"  # Beschreibung der Transaktion
+            add_credits = 1
+            sql_transaktion = "INSERT INTO transactions (user_id, article, credits) VALUES (%s, %s, %s)"
+            werte_transaktion = (benutzer_id, artikel, add_credits)
+            cursor.execute(sql_transaktion, werte_transaktion)
+            mydb.commit()
+            return jsonify({'message': f'Transaktion für Benutzer-ID {benutzer_id} erfolgreich erstellt (+1 Credit).'}), 200
+        except mysql.connector.Error as err:
+            mydb.rollback()
+            return jsonify({'error': f'Fehler beim Erstellen der Transaktion: {err}.'}), 500
+        finally:
+            cursor.close()
+            close_db_connection(mydb)
+    else:
+        return jsonify({'error': f'Kein Benutzer mit der UID {nfc_uid} gefunden.'}), 404
 
 
 @app.route('/transaktionen', methods=['GET'])
