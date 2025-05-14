@@ -5,6 +5,7 @@ on: [push]
 jobs:
   deploy:
     runs-on: self-hosted
+    environment: loki
 
     steps:
       # - name: Checkout Repository
