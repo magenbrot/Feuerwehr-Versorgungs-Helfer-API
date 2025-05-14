@@ -1,33 +1,16 @@
 """Dieses Modul ist eine API Middleware für den Feuerwehr-Versorgungs-Helfer"""
 
 import base64
-import os
-import sys
 from functools import wraps
-from dotenv import load_dotenv
 from flask import Flask, jsonify, request # pigar: required-packages=uWSGI
-import db_utils
 from mysql.connector import Error
+import config
+import db_utils
 
-load_dotenv()
 app = Flask(__name__)
 
 app.json.ensure_ascii = False
 app.json.mimetype = "application/json; charset=utf-8"
-
-db_config = {
-    'host': os.getenv("MYSQL_HOST"),
-    'user': os.getenv("MYSQL_USER"),
-    'password': os.getenv("MYSQL_PASSWORD"),
-    'database': os.getenv("MYSQL_DB"),
-}
-
-# Initialisiere den Pool einmal beim Start deiner Anwendung
-try:
-    db_utils.DatabaseConnectionPool.initialize_pool(db_config)
-except Error:
-    print("Fehler beim Starten der Datenbankverbindung.")
-    sys.exit(1)
 
 
 def get_user_by_api_key(api_key):
@@ -41,7 +24,7 @@ def get_user_by_api_key(api_key):
         tuple or None: Ein Tupel mit (user_id, username) oder None, falls kein Benutzer gefunden wird oder ein Fehler auftritt.
     """
 
-    cnx = db_utils.DatabaseConnectionPool.get_connection()
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if not cnx:
         return None, None
     cursor = cnx.cursor()
@@ -99,7 +82,7 @@ def finde_benutzer_zu_nfc_uid(uid_base64):
         int or None: Die ID des Benutzers oder None, falls kein Benutzer gefunden wird.
     """
 
-    cnx = db_utils.DatabaseConnectionPool.get_connection()
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if not cnx:
         return None, None
     cursor = cnx.cursor()
@@ -138,7 +121,7 @@ def health_protected_route(user_id, username):
     """
 
     print(f"Benutzer authentifiziert {user_id} - {username}")
-    cnx = db_utils.DatabaseConnectionPool.get_connection()
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if not cnx:
         print("Datenbankverbindung fehlgeschlagen")
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
@@ -164,7 +147,7 @@ def get_alle_summe(user_id, username):
     """
 
     print(f"Benutzer authentifiziert {user_id} - {username}.")
-    cnx = db_utils.DatabaseConnectionPool.get_connection()
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if not cnx:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
     cursor = cnx.cursor(dictionary=True)
@@ -207,7 +190,7 @@ def process_nfc_transaction(user_id, username):
     benutzer_id = finde_benutzer_zu_nfc_uid(nfc_uid)
 
     if benutzer_id:
-        cnx = db_utils.DatabaseConnectionPool.get_connection()
+        cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
         if not cnx:
             return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
         cursor = cnx.cursor()
@@ -246,7 +229,7 @@ def get_alle_personen(user_id, username):
     """
 
     print(f"Benutzer authentifiziert {user_id} - {username}")
-    cnx = db_utils.DatabaseConnectionPool.get_connection()
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if not cnx:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
     cursor = cnx.cursor(dictionary=True)
@@ -279,7 +262,7 @@ def reset_transaktionen(user_id, username):
     """
 
     print(f"Benutzer authentifiziert {user_id} - {username}")
-    cnx = db_utils.DatabaseConnectionPool.get_connection()
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if not cnx:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
     cursor = cnx.cursor()
@@ -326,7 +309,7 @@ def create_person(user_id, username):
     if not isinstance(name, str) or not name.strip():
         return jsonify({'error': 'Der Name darf nicht leer sein.'}), 400
 
-    cnx = db_utils.DatabaseConnectionPool.get_connection()
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if not cnx:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
     cursor = cnx.cursor()
@@ -362,7 +345,7 @@ def delete_person(user_id, username, code):
     """
 
     print(f"Benutzer authentifiziert {user_id} - {username}")
-    cnx = db_utils.DatabaseConnectionPool.get_connection()
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if not cnx:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
     cursor = cnx.cursor
@@ -400,7 +383,7 @@ def person_exists_by_code(user_id, username, code):
     """
 
     print(f"Benutzer authentifiziert {user_id} - {username}")
-    cnx = db_utils.DatabaseConnectionPool.get_connection()
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if not cnx:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
     cursor = cnx.cursor(dictionary=True)
@@ -435,7 +418,7 @@ def get_person_by_code(user_id, username, code):
     """
 
     print(f"Benutzer authentifiziert {user_id} - {username}")
-    cnx = db_utils.DatabaseConnectionPool.get_connection()
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if not cnx:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
     cursor = cnx.cursor(dictionary=True)
@@ -477,7 +460,7 @@ def person_bearbeiten(user_id, username, code):
     """
 
     print(f"Benutzer authentifiziert {user_id} - {username}")
-    cnx = db_utils.DatabaseConnectionPool.get_connection()
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if not cnx:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
     cursor = cnx.cursor()
@@ -528,7 +511,7 @@ def person_transaktionen_loeschen(user_id, username, code):
     """
 
     print(f"Benutzer authentifiziert {user_id} - {username}")
-    cnx = db_utils.DatabaseConnectionPool.get_connection()
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if not cnx:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
     cursor = cnx.cursor()
