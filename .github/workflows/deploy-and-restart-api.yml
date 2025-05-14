@@ -12,6 +12,7 @@ jobs:
 
       - name: Deploy to my server
         run: |
+          cd $PROJECT_HOME
           git pull origin main
           whoami
           echo "funktioniert das?"
@@ -20,3 +21,5 @@ jobs:
           source .venv/bin/activate
           pip list
           #pip install -r requirements.txt
+        env:
+          PROJECT_HOME: ${{ vars.PROJECT_HOME }}
