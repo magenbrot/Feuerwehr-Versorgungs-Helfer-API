@@ -5,7 +5,7 @@ import os
 import sys
 from functools import wraps
 from dotenv import load_dotenv
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request # pigar: required-packages=uWSGI
 import db_connection
 
 load_dotenv()
