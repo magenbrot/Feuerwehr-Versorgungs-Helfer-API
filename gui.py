@@ -6,8 +6,9 @@ import sys
 from dotenv import load_dotenv
 from flask import Flask, render_template, request, redirect, url_for, session, flash # pigar: required-packages=uWSGI
 from werkzeug.security import check_password_hash, generate_password_hash
-import db_utils
 from mysql.connector import Error
+import config
+import db_utils
 
 load_dotenv()
 
@@ -24,16 +25,9 @@ else:
 
 app.config['SECRET_KEY'] = os.urandom(24)
 
-db_config = {
-    'host': os.getenv("MYSQL_HOST"),
-    'user': os.getenv("MYSQL_USER"),
-    'password': os.getenv("MYSQL_PASSWORD"),
-    'database': os.getenv("MYSQL_DB"),
-}
-
 # Initialisiere den Pool einmal beim Start deiner Anwendung
 try:
-    db_utils.DatabaseConnectionPool.initialize_pool(db_config)
+    db_utils.DatabaseConnectionPool.initialize_pool(config.db_config)
 except Error:
     print("Fehler beim Starten der Datenbankverbindung.")
     sys.exit(1)
@@ -75,7 +69,7 @@ def update_user_nfc_uid(user_id, hex_uid):
     Returns:
         bool: True bei Erfolg, False bei Fehler (z.B. ungültige UID, Datenbankfehler).
     """
-    cnx = db_utils.DatabaseConnectionPool.get_connection()
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if cnx:
         cursor = cnx.cursor()
         binary_uid = hex_to_binary(hex_uid)
@@ -109,7 +103,7 @@ def delete_user(user_id):
         bool: True bei Erfolg, False bei Fehler.
     """
 
-    cnx = db_utils.DatabaseConnectionPool.get_connection()
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if cnx:
         cursor = cnx.cursor()
         try:
@@ -138,7 +132,7 @@ def fetch_user(code):
         dict: Ein Dictionary mit den Benutzerdaten (id, code, name, password, is_admin) oder None, falls kein Benutzer gefunden wird.
     """
 
-    cnx = db_utils.DatabaseConnectionPool.get_connection()
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if cnx:
         cursor = cnx.cursor(dictionary=True)
         try:
@@ -168,7 +162,7 @@ def get_user_by_id(user_id):
               oder None, falls kein Benutzer gefunden wird.
     """
 
-    cnx = db_utils.DatabaseConnectionPool.get_connection()
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if cnx:
         cursor = cnx.cursor(dictionary=True)
         try:
@@ -201,7 +195,7 @@ def get_total_credits_for_user(user_id):
         int: Die Summe der Credits oder 0, falls kein Benutzer gefunden wird.
     """
 
-    cnx = db_utils.DatabaseConnectionPool.get_connection()
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if cnx:
         cursor = cnx.cursor()
         try:
@@ -228,7 +222,7 @@ def get_total_credits_by_user():
               Enthält alle Benutzer, auch solche ohne Transaktionen (Wert dann 0).
     """
 
-    cnx = db_utils.DatabaseConnectionPool.get_connection()
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if cnx:
         cursor = cnx.cursor(dictionary=True)
         try:
@@ -260,7 +254,7 @@ def get_all_users():
               (id, code, name, is_admin, nfc_uid).
     """
 
-    cnx = db_utils.DatabaseConnectionPool.get_connection()
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if cnx:
         cursor = cnx.cursor(dictionary=True)
         try:
@@ -294,7 +288,7 @@ def get_user_transactions(user_id):
               (id, article, credits, timestamp). Gibt None zurück, falls ein Fehler auftritt.
     """
 
-    cnx = db_utils.DatabaseConnectionPool.get_connection()
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if cnx:
         cursor = cnx.cursor(dictionary=True)
         try:
@@ -325,7 +319,7 @@ def add_transaction(user_id, article, credits_change):
         bool: True bei Erfolg, False bei Fehler.
     """
 
-    cnx = db_utils.DatabaseConnectionPool.get_connection()
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if cnx:
         cursor = cnx.cursor()
         try:
@@ -355,7 +349,7 @@ def delete_all_transactions(user_id):
         bool: True bei Erfolg, False bei Fehler.
     """
 
-    cnx = db_utils.DatabaseConnectionPool.get_connection()
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if cnx:
         cursor = cnx.cursor()
         try:
@@ -386,7 +380,7 @@ def update_password(user_id, new_password_hash):
         bool: True bei Erfolg, False bei Fehler.
     """
 
-    cnx = db_utils.DatabaseConnectionPool.get_connection()
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if cnx:
         cursor = cnx.cursor()
         try:

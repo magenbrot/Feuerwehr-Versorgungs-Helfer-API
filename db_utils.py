@@ -1,6 +1,8 @@
 """Verwaltet den Datenbankverbindungspool für die Anwendung."""
+import sys
 import mysql.connector
-from mysql.connector import pooling
+from mysql.connector import pooling, Error  # Error hier importiert
+
 
 class DatabaseConnectionPool:
     """
@@ -14,9 +16,8 @@ class DatabaseConnectionPool:
 
     _connection_pool = None  # Klassenvariable zur Speicherung des Verbindungspools
 
-
     @classmethod
-    def initialize_pool(cls, db_config):
+    def initialize_pool(cls, database_config):
         """
         Initialisiert den Datenbankverbindungspool.
 
@@ -25,16 +26,17 @@ class DatabaseConnectionPool:
         werden.
 
         Args:
-            db_config (dict): Ein Dictionary, das die Konfigurationsparameter für die
+            database_config (dict): Ein Dictionary, das die Konfigurationsparameter für die
                              Datenbankverbindung enthält (z.B. host, user, password, database).
 
         Raises:
             mysql.connector.Error: Wenn beim Initialisieren des Pools ein Fehler auftritt.
         """
+
         if cls._connection_pool is None:
             try:
                 cls._connection_pool = pooling.MySQLConnectionPool(
-                    pool_name="dbpool", pool_size=5, **db_config
+                    pool_name="dbpool", pool_size=5, **database_config
                 )
                 print("Datenbankverbindungspool erfolgreich initialisiert (db_utils).")
             except mysql.connector.Error as e:
@@ -45,23 +47,41 @@ class DatabaseConnectionPool:
 
 
     @classmethod
-    def get_connection(cls):
+    def get_connection(cls, database_config=None):
         """
         Ruft eine Datenbankverbindung aus dem Pool ab.
+        Initialisiert den Pool bei Bedarf.
 
         Diese Klassenmethode ruft eine freie Datenbankverbindung aus dem Pool ab.
-        Wenn der Pool noch nicht initialisiert wurde, wird eine Exception ausgelöst.
+        Wenn der Pool noch nicht initialisiert wurde, wird er initialisiert, falls eine
+        Datenbankkonfiguration übergeben wird.
+
+        Args:
+            database_config (dict, optional): Ein Dictionary mit den Datenbankkonfigurationsparametern.
+                                        Wird benötigt, um den Pool zu initialisieren, wenn er noch nicht
+                                        initialisiert ist. Defaults to None.
 
         Returns:
             mysql.connector.connection_cext.CMySQLConnection: Eine Datenbankverbindung,
-                                                            falls erfolgreich.
+                                                            falls erfolgreich. None, falls kein Pool initialisiert
+                                                            werden konnte und auch keine Verbindung abgerufen werden konnte.
 
         Raises:
-            RuntimeError: Wenn der Datenbankverbindungspool nicht initialisiert wurde.
+            RuntimeError: Wenn der Datenbankverbindungspool nicht initialisiert wurde und kein
+                          database_config übergeben wurde.
             mysql.connector.Error: Wenn beim Abrufen einer Verbindung ein Fehler auftritt.
         """
+
+        if cls._connection_pool is None and database_config:
+            try:
+                cls.initialize_pool(database_config)
+            except Error:  # Hier Error verwenden
+                print("Fehler beim Initialisieren des Pools in get_connection")
+                sys.exit(1)  # Kritischer Fehler: Anwendung beenden
         if cls._connection_pool is None:
-            raise RuntimeError("Datenbankverbindungspool wurde nicht initialisiert.")  # Verwende RuntimeError
+            raise RuntimeError(
+                "Datenbankverbindungspool wurde nicht initialisiert."
+            )  # Fehler, wenn Pool nicht initialisiert
         try:
             cnx = cls._connection_pool.get_connection()
             return cnx
@@ -87,3 +107,31 @@ class DatabaseConnectionPool:
         """
         if cnx:
             cnx.close()
+
+
+if __name__ == "__main__":
+    # Beispielhafte Verwendung (zum Testen des Moduls)
+    db_config = {
+        "host": "localhost",  # Ersetze durch deinen Host
+        "user": "youruser",  # Ersetze durch deinen Datenbankbenutzer
+        "password": "yourpassword",  # Ersetze durch dein Datenbankpasswort
+        "database": "yourdatabase",  # Ersetze durch deinen Datenbanknamen
+    }
+
+    try:
+        conn = DatabaseConnectionPool.get_connection(
+            db_config
+        )
+        if conn:
+            print("Verbindung erfolgreich hergestellt!")
+            conn.cursor().execute("SELECT 1")
+            print(conn.cursor().fetchone())
+            DatabaseConnectionPool.close_connection(conn)
+        else:
+            print("Konnte keine Verbindung aus dem Pool abrufen.")
+    except (mysql.connector.Error, RuntimeError) as e:  # Spezifischere Exceptions fangen
+        print(f"Ein Datenbank- oder Laufzeitfehler ist aufgetreten: {e}")
+        sys.exit(1)
+    except Exception as e: # pylint: disable=W0718
+        print(f"Ein unerwarteter Fehler ist aufgetreten: {e}")
+        sys.exit(1)
