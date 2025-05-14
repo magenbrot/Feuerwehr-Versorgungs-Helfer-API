@@ -1,6 +1,7 @@
 name: Deploy on github actions runner
 
-on: [push]
+on:
+  workflow_call:
 
 jobs:
   deploy:
@@ -17,7 +18,8 @@ jobs:
           git pull origin main
           echo "Deploy to $(pwd)"
           source venv/bin/activate
-          pip list
-          #pip install -r requirements.txt
+          pip install -r requirements.txt
+          sudo /bin/systemctl restart fvh-api.service
+          sudo /bin/systemctl restart fvh-gui.service
         env:
           PROJECT_HOME: ${{ vars.PROJECT_HOME }}
