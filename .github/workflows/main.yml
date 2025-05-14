@@ -1,0 +1,22 @@
+name: Main Workflow
+
+on: [push]
+
+permissions:
+  contents: read
+
+jobs:
+  run_codeql:
+    uses: ./.github/workflows/codeql.yml
+
+  run_pylint:
+    needs: run_codeql
+    uses: ./.github/workflows/pylint.yml
+
+  run_bandit:
+    needs: run_pylint
+    uses: ./.github/workflows/bandit.yml
+
+  deploy_application:
+    needs: run_bandit
+    uses: ./.github/workflows/deploy-and-restart-api.yml
