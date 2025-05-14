@@ -184,7 +184,8 @@ def get_alle_summe(user_id, username):
         print("Die Creditsumme aller Personen wurde ermittelt.")
         return jsonify(personen)
     except mydb.mysql.connector.Error as err:
-        return jsonify({'error': f'Fehler beim Lesen der Daten: {err}.'}), 500
+        print(f'Fehler beim Lesen der Daten: {err}.')
+        return jsonify({'error': 'Fehler beim Lesen der Daten.'}), 500
     finally:
         cursor.close()
         db_connection.close_db_connection(mydb)
@@ -233,7 +234,7 @@ def process_nfc_transaction(user_id, username):
         except mydb.mysql.connector.Error as err:
             mydb.rollback()
             print(f"Fehler beim Erstellen der Transaktion: {err}")
-            return jsonify({'error': f'Fehler beim Erstellen der Transaktion: {err}.'}), 500
+            return jsonify({'error': 'Fehler beim Erstellen der Transaktion.'}), 500
         finally:
             cursor.close()
             db_connection.close_db_connection(mydb)
@@ -270,7 +271,8 @@ def get_alle_personen(user_id, username):
         print("Transaktionen wurden ermittelt.")
         return jsonify(personen)
     except mydb.mysql.connector.Error as err:
-        return jsonify({'error': f'Fehler beim Lesen der Daten: {err}.'}), 500
+        print(f'Fehler beim Lesen der Daten: {err}.')
+        return jsonify({'error': 'Fehler beim Lesen der Daten.'}), 500
     finally:
         cursor.close()
         db_connection.close_db_connection(mydb)
@@ -307,7 +309,7 @@ def reset_transaktionen(user_id, username):
     except mydb.mysql.connector.Error as err:
         mydb.rollback()
         print(f"Fehler beim Leeren der Tabelle transactions: {err}")
-        return jsonify({'error': f'Fehler beim Leeren der Tabelle transactions: {err}.'}), 500
+        return jsonify({'error': 'Fehler beim Leeren der Tabelle transactions.'}), 500
     finally:
         cursor.close()
         db_connection.close_db_connection(mydb)
@@ -358,7 +360,7 @@ def create_person(user_id, username):
     except mydb.mysql.connector.Error as err:
         mydb.rollback()
         print(f"Fehler beim Hinzufügen der Person: {err}")
-        return jsonify({'error': f'Fehler beim Hinzufügen der Person: {err}.'}), 500
+        return jsonify({'error': 'Fehler beim Hinzufügen der Person.'}), 500
     finally:
         cursor.close()
         db_connection.close_db_connection(mydb)
@@ -399,7 +401,7 @@ def delete_person(user_id, username, code):
     except mydb.mysql.connector.Error as err:
         mydb.rollback()
         print(f"Fehler beim Löschen der Person: {err}")
-        return jsonify({'error': f'Fehler beim Löschen der Person: {err}.'}), 500
+        return jsonify({'error': 'Fehler beim Löschen der Person.'}), 500
     finally:
         cursor.close()
         db_connection.close_db_connection(mydb)
@@ -437,7 +439,7 @@ def person_exists_by_code(user_id, username, code):
         return jsonify({'error': 'Person nicht gefunden.'}), 200
     except mydb.mysql.connector.Error as err:
         print(f"Fehler beim Lesen der Daten: {err}")
-        return jsonify({'error': f'Fehler beim Lesen der Daten: {err}.'}), 500
+        return jsonify({'error': 'Fehler beim Lesen der Daten.'}), 500
     finally:
         cursor.close()
         db_connection.close_db_connection(mydb)
@@ -482,7 +484,7 @@ def get_person_by_code(user_id, username, code):
         return jsonify({'error': 'Person nicht gefunden.'}), 200
     except mydb.mysql.connector.Error as err:
         print(f"Fehler beim Lesen der Daten: {err}")
-        return jsonify({'error': f'Fehler beim Lesen der Daten: {err}.'}), 500
+        return jsonify({'error': 'Fehler beim Lesen der Daten.'}), 500
     finally:
         cursor.close()
         db_connection.close_db_connection(mydb)
@@ -536,7 +538,7 @@ def person_bearbeiten(user_id, username, code):
     except mydb.mysql.connector.Error as err:
         mydb.rollback()
         print(f"Fehler beim Bearbeiten der Person oder Erstellen der Transaktion: {err}")
-        return jsonify({'error': f'Fehler beim Bearbeiten der Person oder Erstellen der Transaktion: {err}.'}), 500
+        return jsonify({'error': 'Fehler beim Bearbeiten der Person oder Erstellen der Transaktion.'}), 500
     finally:
         cursor.close()
         db_connection.close_db_connection(mydb)
@@ -587,7 +589,7 @@ def person_transaktionen_loeschen(user_id, username, code):
     except mydb.mysql.connector.Error as err:
         mydb.rollback()
         print(f"Fehler beim Löschen der Transaktion: {err}")
-        return jsonify({'error': f'Fehler beim Löschen der Transaktion: {err}.'}), 500
+        return jsonify({'error': 'Fehler beim Löschen der Transaktion.'}), 500
     finally:
         cursor.close()
         db_connection.close_db_connection(mydb)
