@@ -7,8 +7,8 @@ jobs:
     runs-on: self-hosted
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      # - name: Checkout Repository
+      #   uses: actions/checkout@v4
 
       - name: Deploy to my server
         run: |
@@ -17,5 +17,6 @@ jobs:
           echo "funktioniert das?"
           pwd
           ls -la
-          source venv/bin/activate
+          source .venv/bin/activate
+          pip list
           #pip install -r requirements.txt
