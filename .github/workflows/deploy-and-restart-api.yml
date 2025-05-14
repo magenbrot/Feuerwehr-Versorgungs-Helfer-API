@@ -1,0 +1,21 @@
+name: Deploy on github actions runner
+
+on: [push]
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Deploy to my server
+        run: |
+          git pull origin main
+          whoami
+          echo "funktioniert das?"
+          pwd
+          ls -la
+          source venv/bin/activate
+          #pip install -r requirements.txt
