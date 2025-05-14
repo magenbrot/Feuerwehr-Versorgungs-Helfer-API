@@ -17,9 +17,9 @@ jobs:
           cd $PROJECT_HOME
           git pull origin main
           echo "Deploy to $(pwd)"
-          source venv/bin/activate
-          which python
-          python -m pip install --upgrade pip
+          source venv/bin/activate && \
+          which python && \
+          pip install --upgrade pip && \
           pip install -r requirements.txt
           sudo /bin/systemctl restart fvh-api.service
           sudo /bin/systemctl restart fvh-gui.service
