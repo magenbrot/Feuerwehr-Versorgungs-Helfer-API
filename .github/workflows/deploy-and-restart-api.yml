@@ -14,18 +14,13 @@ jobs:
           cd $PROJECT_HOME
           git pull origin main
           echo "Deploy to $(pwd)"
-          ls venv/bin/activate
           source venv/bin/activate
-          echo "VENV Activated?"
           which python
           which pip
           python --version
           pip --version
-          echo "--- Versuch mit expliziten Pfaden ---"
-          "$PROJECT_HOME/venv/bin/python" --version
-          "$PROJECT_HOME/venv/bin/pip" --version
-          "$PROJECT_HOME/venv/bin/pip" install --upgrade pip
-          "$PROJECT_HOME/venv/bin/pip" install -r requirements.txt
+          pip install --upgrade pip
+          pip install -r requirements.txt
           sudo /bin/systemctl restart fvh-api.service
           sudo /bin/systemctl restart fvh-gui.service
         env:
