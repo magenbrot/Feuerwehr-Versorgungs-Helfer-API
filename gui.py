@@ -445,7 +445,7 @@ def user_info():
             new_password = request.form['new_password']
             confirm_new_password = request.form['confirm_new_password']
 
-            print(f"Aktuell: {current_password}, Neu: {new_password}, Bestätigung: {confirm_new_password}") # Debug-Ausgabe
+            print("Passwortänderungsformular wurde abgeschickt.") # Debug-Ausgabe
 
             if not check_password_hash(user['password'], current_password):
                 flash('Falsches aktuelles Passwort.', 'error')
