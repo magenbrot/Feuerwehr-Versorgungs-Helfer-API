@@ -19,7 +19,11 @@ jobs:
           echo "Deploy to $(pwd)"
           ls venv/bin/activate
           source venv/bin/activate
+          echo "VENV Activated?"
           which python
+          which pip
+          python --version
+          pip --version
           #pip install --upgrade pip
           #pip install -r requirements.txt
           sudo /bin/systemctl restart fvh-api.service
