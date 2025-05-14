@@ -6,8 +6,8 @@ import sys
 from dotenv import load_dotenv
 from flask import Flask, render_template, request, redirect, url_for, session, flash # pigar: required-packages=uWSGI
 from werkzeug.security import check_password_hash, generate_password_hash
-import mysql.connector
-from mysql.connector import pooling
+import db_utils
+from mysql.connector import Error
 
 load_dotenv()
 
@@ -23,63 +23,20 @@ else:
     BASE_URL=""
 
 app.config['SECRET_KEY'] = os.urandom(24)
-app.config['MYSQL_HOST'] = os.getenv("MYSQL_HOST")
-app.config['MYSQL_USER'] = os.getenv("MYSQL_USER")
-app.config['MYSQL_PASSWORD'] = os.getenv("MYSQL_PASSWORD")
-app.config['MYSQL_DB'] = os.getenv("MYSQL_DB")
 
-# Globaler Connection Pool
+db_config = {
+    'host': os.getenv("MYSQL_HOST"),
+    'user': os.getenv("MYSQL_USER"),
+    'password': os.getenv("MYSQL_PASSWORD"),
+    'database': os.getenv("MYSQL_DB"),
+}
+
+# Initialisiere den Pool einmal beim Start deiner Anwendung
 try:
-    db_config = {
-        'host': app.config['MYSQL_HOST'],
-        'user': app.config['MYSQL_USER'],
-        'password': app.config['MYSQL_PASSWORD'],
-        'database': app.config['MYSQL_DB'],
-    }
-    cnxpool = pooling.MySQLConnectionPool(pool_name="guipool", pool_size=3, **db_config)  # Pool initialisieren
-    print("GUI Connection Pool erfolgreich initialisiert.")
-except mysql.connector.Error as e:
-    print(f"Fehler beim Initialisieren des GUI Connection Pools: {e}")
+    db_utils.DatabaseConnectionPool.initialize_pool(db_config)
+except Error:
+    print("Fehler beim Starten der Datenbankverbindung.")
     sys.exit(1)
-
-
-def get_db_connection():
-    """
-    Ruft eine Datenbankverbindung aus dem Pool ab.
-
-    Diese Funktion versucht, eine freie Verbindung aus dem globalen Verbindungspool abzurufen.
-    Bei Erfolg wird die Verbindung zur Verwendung zurückgegeben.  Falls keine Verbindung
-    verfügbar ist, wird eine Fehlermeldung ausgegeben.
-
-    Returns:
-        mysql.connector.connection_cext.CMySQLConnection: Eine Datenbankverbindung, falls erfolgreich;
-                                                         None, falls kein Verbindung verfügbar ist oder ein Fehler auftritt.
-    """
-    try:
-        cnx = cnxpool.get_connection()
-        return cnx
-    except mysql.connector.Error as e:
-        print(f"Fehler beim Abrufen einer Verbindung aus dem Pool: {e}")
-        return None
-
-
-def close_db_connection(cnx):
-    """
-    Gibt eine Datenbankverbindung an den Pool zurück.
-
-    Diese Funktion gibt eine zuvor abgerufene Datenbankverbindung an den globalen Verbindungspool zurück.
-    Es ist wichtig, diese Funktion aufzurufen, wenn die Verbindung nicht mehr benötigt wird,
-    um sicherzustellen, dass sie von anderen Teilen der Anwendung wiederverwendet werden kann
-    und keine Ressourcenlecks entstehen.
-
-    Args:
-        cnx (mysql.connector.connection_cext.CMySQLConnection): Die Datenbankverbindung, die an den Pool
-                                                               zurückgegeben werden soll.  Wenn None übergeben wird,
-                                                               wird die Funktion beendet, ohne zu versuchen,
-                                                               die Verbindung zu schließen.
-    """
-    if cnx:
-        cnx.close()
 
 
 def hex_to_binary(hex_string):
@@ -118,7 +75,7 @@ def update_user_nfc_uid(user_id, hex_uid):
     Returns:
         bool: True bei Erfolg, False bei Fehler (z.B. ungültige UID, Datenbankfehler).
     """
-    cnx = get_db_connection()
+    cnx = db_utils.DatabaseConnectionPool.get_connection()
     if cnx:
         cursor = cnx.cursor()
         binary_uid = hex_to_binary(hex_uid)
@@ -128,13 +85,13 @@ def update_user_nfc_uid(user_id, hex_uid):
                 cursor.execute(query, (binary_uid, user_id))
                 cnx.commit()
                 return True
-            except mysql.connector.Error as err:
+            except Error as err:
                 print(f"Fehler beim Aktualisieren der NFC-UID: {err}")
                 cnx.rollback()
                 return False
             finally:
                 cursor.close()
-                close_db_connection(cnx)
+                db_utils.DatabaseConnectionPool.close_connection(cnx)
         else:
             flash('Ungültige NFC-UID. Bitte überprüfe die Eingabe.', 'error')
             return False
@@ -152,7 +109,7 @@ def delete_user(user_id):
         bool: True bei Erfolg, False bei Fehler.
     """
 
-    cnx = get_db_connection()
+    cnx = db_utils.DatabaseConnectionPool.get_connection()
     if cnx:
         cursor = cnx.cursor()
         try:
@@ -160,13 +117,13 @@ def delete_user(user_id):
             cursor.execute(query, (user_id,))
             cnx.commit()
             return True
-        except mysql.connector.Error as err:
+        except Error as err:
             print(f"Fehler beim Löschen des Benutzers: {err}")
             cnx.rollback()
             return False
         finally:
             cursor.close()
-            close_db_connection(cnx)
+            db_utils.DatabaseConnectionPool.close_connection(cnx)
     return False
 
 
@@ -181,7 +138,7 @@ def fetch_user(code):
         dict: Ein Dictionary mit den Benutzerdaten (id, code, name, password, is_admin) oder None, falls kein Benutzer gefunden wird.
     """
 
-    cnx = get_db_connection()
+    cnx = db_utils.DatabaseConnectionPool.get_connection()
     if cnx:
         cursor = cnx.cursor(dictionary=True)
         try:
@@ -189,13 +146,13 @@ def fetch_user(code):
             cursor.execute(query, (code,))
             user = cursor.fetchone()
             return user
-        except mysql.connector.Error as err:
+        except Error as err:
             print(f"Datenbankfehler beim Abrufen des Benutzers: {err}")
             return None
         finally:
             if cursor:
                 cursor.close()
-            close_db_connection(cnx)
+            db_utils.DatabaseConnectionPool.close_connection(cnx)
     return None
 
 
@@ -211,7 +168,7 @@ def get_user_by_id(user_id):
               oder None, falls kein Benutzer gefunden wird.
     """
 
-    cnx = get_db_connection()
+    cnx = db_utils.DatabaseConnectionPool.get_connection()
     if cnx:
         cursor = cnx.cursor(dictionary=True)
         try:
@@ -223,13 +180,13 @@ def get_user_by_id(user_id):
             cursor.execute(query, (user_id,))
             user = cursor.fetchone()
             return user
-        except mysql.connector.Error as err:
+        except Error as err:
             print(f"Datenbankfehler beim Abrufen des Benutzers: {err}")
             return None
         finally:
             if cursor:
                 cursor.close()
-            close_db_connection(cnx)
+            db_utils.DatabaseConnectionPool.close_connection(cnx)
     return None
 
 
@@ -244,7 +201,7 @@ def get_total_credits_for_user(user_id):
         int: Die Summe der Credits oder 0, falls kein Benutzer gefunden wird.
     """
 
-    cnx = get_db_connection()
+    cnx = db_utils.DatabaseConnectionPool.get_connection()
     if cnx:
         cursor = cnx.cursor()
         try:
@@ -252,13 +209,13 @@ def get_total_credits_for_user(user_id):
             cursor.execute(query, (user_id,))
             total_credits = cursor.fetchone()[0] or 0
             return total_credits
-        except mysql.connector.Error as err:
+        except Error as err:
             print(f"Datenbankfehler beim Abrufen der Gesamtcredits: {err}")
             return 0
         finally:
             if cursor:
                 cursor.close()
-            close_db_connection(cnx)
+            db_utils.DatabaseConnectionPool.close_connection(cnx)
     return 0
 
 
@@ -271,7 +228,7 @@ def get_total_credits_by_user():
               Enthält alle Benutzer, auch solche ohne Transaktionen (Wert dann 0).
     """
 
-    cnx = get_db_connection()
+    cnx = db_utils.DatabaseConnectionPool.get_connection()
     if cnx:
         cursor = cnx.cursor(dictionary=True)
         try:
@@ -284,13 +241,13 @@ def get_total_credits_by_user():
             cursor.execute(query)
             credits_by_user = {row['id']: row['total_credits'] or 0 for row in cursor.fetchall()}
             return credits_by_user
-        except mysql.connector.Error as err:
+        except Error as err:
             print(f"Datenbankfehler beim Abrufen der Credits pro Benutzer: {err}")
             return {}
         finally:
             if cursor:
                 cursor.close()
-            close_db_connection(cnx)
+            db_utils.DatabaseConnectionPool.close_connection(cnx)
     return {}
 
 
@@ -303,7 +260,7 @@ def get_all_users():
               (id, code, name, is_admin, nfc_uid).
     """
 
-    cnx = get_db_connection()
+    cnx = db_utils.DatabaseConnectionPool.get_connection()
     if cnx:
         cursor = cnx.cursor(dictionary=True)
         try:
@@ -315,13 +272,13 @@ def get_all_users():
             cursor.execute(query)
             users = cursor.fetchall()
             return users
-        except mysql.connector.Error as err:
+        except Error as err:
             print(f"Datenbankfehler beim Abrufen aller Benutzer: {err}")
             return []
         finally:
             if cursor:
                 cursor.close()
-            close_db_connection(cnx)
+            db_utils.DatabaseConnectionPool.close_connection(cnx)
     return []
 
 
@@ -337,7 +294,7 @@ def get_user_transactions(user_id):
               (id, article, credits, timestamp). Gibt None zurück, falls ein Fehler auftritt.
     """
 
-    cnx = get_db_connection()
+    cnx = db_utils.DatabaseConnectionPool.get_connection()
     if cnx:
         cursor = cnx.cursor(dictionary=True)
         try:
@@ -345,13 +302,13 @@ def get_user_transactions(user_id):
             cursor.execute(query, (user_id,))
             transactions = cursor.fetchall()
             return transactions
-        except mysql.connector.Error as err:
+        except Error as err:
             print(f"Datenbankfehler beim Abrufen der Benutzertransaktionen: {err}")
             return None
         finally:
             if cursor:
                 cursor.close()
-            close_db_connection(cnx)
+            db_utils.DatabaseConnectionPool.close_connection(cnx)
     return None
 
 
@@ -368,7 +325,7 @@ def add_transaction(user_id, article, credits_change):
         bool: True bei Erfolg, False bei Fehler.
     """
 
-    cnx = get_db_connection()
+    cnx = db_utils.DatabaseConnectionPool.get_connection()
     if cnx:
         cursor = cnx.cursor()
         try:
@@ -376,14 +333,14 @@ def add_transaction(user_id, article, credits_change):
             cursor.execute(query, (user_id, article, credits_change))
             cnx.commit()
             return True
-        except mysql.connector.Error as err:
+        except Error as err:
             print(f"Fehler beim Hinzufügen der Transaktion: {err}")
             cnx.rollback()
             return False
         finally:
             if cursor:
                 cursor.close()
-            close_db_connection(cnx)
+            db_utils.DatabaseConnectionPool.close_connection(cnx)
     return False
 
 
@@ -398,7 +355,7 @@ def delete_all_transactions(user_id):
         bool: True bei Erfolg, False bei Fehler.
     """
 
-    cnx = get_db_connection()
+    cnx = db_utils.DatabaseConnectionPool.get_connection()
     if cnx:
         cursor = cnx.cursor()
         try:
@@ -406,14 +363,14 @@ def delete_all_transactions(user_id):
             cursor.execute(query, (user_id,))
             cnx.commit()
             return True
-        except mysql.connector.Error as err:
+        except Error as err:
             print(f"Fehler beim Löschen der Transaktionen: {err}")
             cnx.rollback()
             return False
         finally:
             if cursor:
                 cursor.close()
-            close_db_connection(cnx)
+            db_utils.DatabaseConnectionPool.close_connection(cnx)
     return False
 
 
@@ -429,7 +386,7 @@ def update_password(user_id, new_password_hash):
         bool: True bei Erfolg, False bei Fehler.
     """
 
-    cnx = get_db_connection()
+    cnx = db_utils.DatabaseConnectionPool.get_connection()
     if cnx:
         cursor = cnx.cursor()
         try:
@@ -437,14 +394,14 @@ def update_password(user_id, new_password_hash):
             cursor.execute(query, (new_password_hash, user_id))
             cnx.commit()
             return True
-        except mysql.connector.Error as err:
+        except Error as err:
             print(f"Fehler beim Aktualisieren des Passworts: {err}")
             cnx.rollback()
             return False
         finally:
             if cursor:
                 cursor.close()
-            close_db_connection(cnx)
+            db_utils.DatabaseConnectionPool.close_connection(cnx)
     return False
 
 

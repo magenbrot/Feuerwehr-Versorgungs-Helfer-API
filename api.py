@@ -6,85 +6,28 @@ import sys
 from functools import wraps
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request # pigar: required-packages=uWSGI
-import mysql.connector
-from mysql.connector import pooling
+import db_utils
+from mysql.connector import Error
 
 load_dotenv()
 app = Flask(__name__)
 
-app.config['MYSQL_HOST'] = os.getenv("MYSQL_HOST")
-app.config['MYSQL_USER'] = os.getenv("MYSQL_USER")
-app.config['MYSQL_PASSWORD'] = os.getenv("MYSQL_PASSWORD")
-app.config['MYSQL_DB'] = os.getenv("MYSQL_DB")
-
 app.json.ensure_ascii = False
 app.json.mimetype = "application/json; charset=utf-8"
 
-if not app.config['MYSQL_HOST']:
-    print("Fehler: MYSQL_HOST ist nicht in den Umgebungsvariablen definiert.")
-    sys.exit(1)
-if not app.config['MYSQL_USER']:
-    print("Fehler: MYSQL_USER ist nicht in den Umgebungsvariablen definiert.")
-    sys.exit(1)
-if not app.config['MYSQL_PASSWORD']:
-    print("Fehler: MYSQL_PASSWORD ist nicht in den Umgebungsvariablen definiert.")
-    sys.exit(1)
-if not app.config['MYSQL_DB']:
-    print("Fehler: MYSQL_DB ist nicht in den Umgebungsvariablen definiert.")
-    sys.exit(1)
+db_config = {
+    'host': os.getenv("MYSQL_HOST"),
+    'user': os.getenv("MYSQL_USER"),
+    'password': os.getenv("MYSQL_PASSWORD"),
+    'database': os.getenv("MYSQL_DB"),
+}
 
-# Globaler Connection Pool
+# Initialisiere den Pool einmal beim Start deiner Anwendung
 try:
-    db_config = {
-        'host': app.config['MYSQL_HOST'],
-        'user': app.config['MYSQL_USER'],
-        'password': app.config['MYSQL_PASSWORD'],
-        'database': app.config['MYSQL_DB'],
-    }
-    cnxpool = pooling.MySQLConnectionPool(pool_name="mypool", pool_size=3, **db_config)  # Pool initialisieren
-    print("Connection Pool erfolgreich initialisiert.")
-except mysql.connector.Error as e:
-    print(f"Fehler beim Initialisieren des Connection Pools: {e}")
+    db_utils.DatabaseConnectionPool.initialize_pool(db_config)
+except Error:
+    print("Fehler beim Starten der Datenbankverbindung.")
     sys.exit(1)
-
-
-def get_db_connection():
-    """
-    Ruft eine Datenbankverbindung aus dem Pool ab.
-
-    Diese Funktion versucht, eine freie Verbindung aus dem globalen Verbindungspool abzurufen.
-    Bei Erfolg wird die Verbindung zur Verwendung zurückgegeben.  Falls keine Verbindung
-    verfügbar ist, wird eine Fehlermeldung ausgegeben.
-
-    Returns:
-        mysql.connector.connection_cext.CMySQLConnection: Eine Datenbankverbindung, falls erfolgreich;
-                                                         None, falls kein Verbindung verfügbar ist oder ein Fehler auftritt.
-    """
-    try:
-        cnx = cnxpool.get_connection()
-        return cnx
-    except mysql.connector.Error as e:
-        print(f"Fehler beim Abrufen einer Verbindung aus dem Pool: {e}")
-        return None
-
-
-def close_db_connection(cnx):
-    """
-    Gibt eine Datenbankverbindung an den Pool zurück.
-
-    Diese Funktion gibt eine zuvor abgerufene Datenbankverbindung an den globalen Verbindungspool zurück.
-    Es ist wichtig, diese Funktion aufzurufen, wenn die Verbindung nicht mehr benötigt wird,
-    um sicherzustellen, dass sie von anderen Teilen der Anwendung wiederverwendet werden kann
-    und keine Ressourcenlecks entstehen.
-
-    Args:
-        cnx (mysql.connector.connection_cext.CMySQLConnection): Die Datenbankverbindung, die an den Pool
-                                                               zurückgegeben werden soll.  Wenn None übergeben wird,
-                                                               wird die Funktion beendet, ohne zu versuchen,
-                                                               die Verbindung zu schließen.
-    """
-    if cnx:
-        cnx.close()
 
 
 def get_user_by_api_key(api_key):
@@ -98,7 +41,7 @@ def get_user_by_api_key(api_key):
         tuple or None: Ein Tupel mit (user_id, username) oder None, falls kein Benutzer gefunden wird oder ein Fehler auftritt.
     """
 
-    cnx = get_db_connection()
+    cnx = db_utils.DatabaseConnectionPool.get_connection()
     if not cnx:
         return None, None
     cursor = cnx.cursor()
@@ -111,13 +54,13 @@ def get_user_by_api_key(api_key):
         if user:
             return user[0], user[1]  # user_id, username
         return None, None
-    except mysql.connector.Error as err:
+    except Error as err:
         print(
             f"Fehler beim Abrufen des Benutzers anhand des API-Schlüssels: {err}.")
         return None, None
     finally:
         cursor.close()
-        close_db_connection(cnx)
+        db_utils.DatabaseConnectionPool.close_connection(cnx)
 
 
 def api_key_required(f):
@@ -156,7 +99,7 @@ def finde_benutzer_zu_nfc_uid(uid_base64):
         int or None: Die ID des Benutzers oder None, falls kein Benutzer gefunden wird.
     """
 
-    cnx = get_db_connection()
+    cnx = db_utils.DatabaseConnectionPool.get_connection()
     if not cnx:
         return None, None
     cursor = cnx.cursor()
@@ -169,7 +112,7 @@ def finde_benutzer_zu_nfc_uid(uid_base64):
             print(f"Benutzer gefunden: {user[0]}")
             return user[0]
         return None
-    except mysql.connector.Error as err:
+    except Error as err:
         print(f"Fehler beim Suchen des Benutzers anhand der UID: {err}")
         return None
     except base64.binascii.Error:
@@ -177,7 +120,7 @@ def finde_benutzer_zu_nfc_uid(uid_base64):
         return None
     finally:
         cursor.close()
-        close_db_connection(cnx)
+        db_utils.DatabaseConnectionPool.close_connection(cnx)
 
 
 @app.route('/health-protected', methods=['GET'])
@@ -195,7 +138,7 @@ def health_protected_route(user_id, username):
     """
 
     print(f"Benutzer authentifiziert {user_id} - {username}")
-    cnx = get_db_connection()
+    cnx = db_utils.DatabaseConnectionPool.get_connection()
     if not cnx:
         print("Datenbankverbindung fehlgeschlagen")
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
@@ -203,7 +146,7 @@ def health_protected_route(user_id, username):
     try:
         return jsonify({'message': f'Healthcheck OK! Authentifizierter Benutzer ID {user_id} ({username}).'})
     finally:
-        close_db_connection(cnx)
+        db_utils.DatabaseConnectionPool.close_connection(cnx)
 
 
 @app.route('/credits-total', methods=['GET'])
@@ -221,7 +164,7 @@ def get_alle_summe(user_id, username):
     """
 
     print(f"Benutzer authentifiziert {user_id} - {username}.")
-    cnx = get_db_connection()
+    cnx = db_utils.DatabaseConnectionPool.get_connection()
     if not cnx:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
     cursor = cnx.cursor(dictionary=True)
@@ -232,12 +175,12 @@ def get_alle_summe(user_id, username):
         personen = cursor.fetchall()
         print("Die Creditsumme aller Personen wurde ermittelt.")
         return jsonify(personen)
-    except mysql.connector.Error as err:
+    except Error as err:
         print(f'Fehler beim Lesen der Daten: {err}.')
         return jsonify({'error': 'Fehler beim Lesen der Daten.'}), 500
     finally:
         cursor.close()
-        close_db_connection(cnx)
+        db_utils.DatabaseConnectionPool.close_connection(cnx)
 
 
 @app.route('/nfc-transaction', methods=['PUT'])
@@ -264,7 +207,7 @@ def process_nfc_transaction(user_id, username):
     benutzer_id = finde_benutzer_zu_nfc_uid(nfc_uid)
 
     if benutzer_id:
-        cnx = get_db_connection()
+        cnx = db_utils.DatabaseConnectionPool.get_connection()
         if not cnx:
             return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
         cursor = cnx.cursor()
@@ -277,13 +220,13 @@ def process_nfc_transaction(user_id, username):
             cnx.commit()
             print(f'Transaktion für Benutzer-ID {benutzer_id} erfolgreich erstellt (+1 Credit).')
             return jsonify({'message': f'Transaktion für Benutzer-ID {benutzer_id} erfolgreich erstellt (+1 Credit).'}), 200
-        except mysql.connector.Error as err:
+        except Error as err:
             cnx.rollback()
             print(f"Fehler beim Erstellen der Transaktion: {err}")
             return jsonify({'error': 'Fehler beim Erstellen der Transaktion.'}), 500
         finally:
             cursor.close()
-            close_db_connection(cnx)
+            db_utils.DatabaseConnectionPool.close_connection(cnx)
     else:
         return jsonify({'error': f'Kein Benutzer mit der UID {nfc_uid} gefunden.'}), 404
 
@@ -303,7 +246,7 @@ def get_alle_personen(user_id, username):
     """
 
     print(f"Benutzer authentifiziert {user_id} - {username}")
-    cnx = get_db_connection()
+    cnx = db_utils.DatabaseConnectionPool.get_connection()
     if not cnx:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
     cursor = cnx.cursor(dictionary=True)
@@ -313,12 +256,12 @@ def get_alle_personen(user_id, username):
         personen = cursor.fetchall()
         print("Transaktionen wurden ermittelt.")
         return jsonify(personen)
-    except mysql.connector.Error as err:
+    except Error as err:
         print(f'Fehler beim Lesen der Daten: {err}.')
         return jsonify({'error': 'Fehler beim Lesen der Daten.'}), 500
     finally:
         cursor.close()
-        close_db_connection(cnx)
+        db_utils.DatabaseConnectionPool.close_connection(cnx)
 
 
 @app.route('/transaktionen', methods=['DELETE'])
@@ -336,7 +279,7 @@ def reset_transaktionen(user_id, username):
     """
 
     print(f"Benutzer authentifiziert {user_id} - {username}")
-    cnx = get_db_connection()
+    cnx = db_utils.DatabaseConnectionPool.get_connection()
     if not cnx:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
     cursor = cnx.cursor()
@@ -346,13 +289,13 @@ def reset_transaktionen(user_id, username):
         cnx.commit()
         print("Alle Transaktionen wurden gelöscht.")
         return jsonify({'message': 'Alle Transaktionen wurden gelöscht.'}), 200
-    except mysql.connector.Error as err:
+    except Error as err:
         cnx.rollback()
         print(f"Fehler beim Leeren der Tabelle transactions: {err}")
         return jsonify({'error': 'Fehler beim Leeren der Tabelle transactions.'}), 500
     finally:
         cursor.close()
-        close_db_connection(cnx)
+        db_utils.DatabaseConnectionPool.close_connection(cnx)
 
 
 @app.route('/person', methods=['POST'])
@@ -383,7 +326,7 @@ def create_person(user_id, username):
     if not isinstance(name, str) or not name.strip():
         return jsonify({'error': 'Der Name darf nicht leer sein.'}), 400
 
-    cnx = get_db_connection()
+    cnx = db_utils.DatabaseConnectionPool.get_connection()
     if not cnx:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
     cursor = cnx.cursor()
@@ -394,13 +337,13 @@ def create_person(user_id, username):
         cnx.commit()
         print(f"Person mit Code {code} erfolgreich hinzugefügt.")
         return jsonify({'message': f'Person mit Code {code} erfolgreich hinzugefügt.'}), 201
-    except mysql.connector.Error as err:
+    except Error as err:
         cnx.rollback()
         print(f"Fehler beim Hinzufügen der Person: {err}")
         return jsonify({'error': 'Fehler beim Hinzufügen der Person.'}), 500
     finally:
         cursor.close()
-        close_db_connection(cnx)
+        db_utils.DatabaseConnectionPool.close_connection(cnx)
 
 
 @app.route('/person/<string:code>', methods=['DELETE'])
@@ -419,7 +362,7 @@ def delete_person(user_id, username, code):
     """
 
     print(f"Benutzer authentifiziert {user_id} - {username}")
-    cnx = get_db_connection()
+    cnx = db_utils.DatabaseConnectionPool.get_connection()
     if not cnx:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
     cursor = cnx.cursor
@@ -432,13 +375,13 @@ def delete_person(user_id, username, code):
             print(f"Person mit Code {code} erfolgreich gelöscht.")
             return jsonify({'message': f'Person mit Code {code} erfolgreich gelöscht.'}), 200
         return jsonify({'error': f'Keine Person mit dem Code {code} gefunden.'}), 404
-    except mysql.connector.Error as err:
+    except Error as err:
         cnx.rollback()
         print(f"Fehler beim Löschen der Person: {err}")
         return jsonify({'error': 'Fehler beim Löschen der Person.'}), 500
     finally:
         cursor.close()
-        close_db_connection(cnx)
+        db_utils.DatabaseConnectionPool.close_connection(cnx)
 
 
 @app.route('/person/existent/<string:code>', methods=['GET'])
@@ -457,7 +400,7 @@ def person_exists_by_code(user_id, username, code):
     """
 
     print(f"Benutzer authentifiziert {user_id} - {username}")
-    cnx = get_db_connection()
+    cnx = db_utils.DatabaseConnectionPool.get_connection()
     if not cnx:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
     cursor = cnx.cursor(dictionary=True)
@@ -468,12 +411,12 @@ def person_exists_by_code(user_id, username, code):
             print(f"Person mit Code {code} gefunden: {person['name']}")
             return jsonify(person)
         return jsonify({'error': 'Person nicht gefunden.'}), 200
-    except mysql.connector.Error as err:
+    except Error as err:
         print(f"Fehler beim Lesen der Daten: {err}")
         return jsonify({'error': 'Fehler beim Lesen der Daten.'}), 500
     finally:
         cursor.close()
-        close_db_connection(cnx)
+        db_utils.DatabaseConnectionPool.close_connection(cnx)
 
 
 @app.route('/person/<string:code>', methods=['GET'])
@@ -492,7 +435,7 @@ def get_person_by_code(user_id, username, code):
     """
 
     print(f"Benutzer authentifiziert {user_id} - {username}")
-    cnx = get_db_connection()
+    cnx = db_utils.DatabaseConnectionPool.get_connection()
     if not cnx:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
     cursor = cnx.cursor(dictionary=True)
@@ -510,12 +453,12 @@ def get_person_by_code(user_id, username, code):
             return jsonify({'error': 'Person hat noch keine Transaktionen durchgeführt.'}), 200
         print(f"Person mit Code {code} nicht gefunden.")
         return jsonify({'error': 'Person nicht gefunden.'}), 200
-    except mysql.connector.Error as err:
+    except Error as err:
         print(f"Fehler beim Lesen der Daten: {err}")
         return jsonify({'error': 'Fehler beim Lesen der Daten.'}), 500
     finally:
         cursor.close()
-        close_db_connection(cnx)
+        db_utils.DatabaseConnectionPool.close_connection(cnx)
 
 
 @app.route('/person/<string:code>', methods=['PUT'])
@@ -534,7 +477,7 @@ def person_bearbeiten(user_id, username, code):
     """
 
     print(f"Benutzer authentifiziert {user_id} - {username}")
-    cnx = get_db_connection()
+    cnx = db_utils.DatabaseConnectionPool.get_connection()
     if not cnx:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
     cursor = cnx.cursor()
@@ -560,13 +503,13 @@ def person_bearbeiten(user_id, username, code):
             return jsonify({'message': 'Transaktion erfolgreich erstellt.'}), 201
         print(f"Person mit diesem Code nicht gefunden: {code}")
         return jsonify({'error': 'Person mit diesem Code nicht gefunden.'}), 404
-    except mysql.connector.Error as err:
+    except Error as err:
         cnx.rollback()
         print(f"Fehler beim Bearbeiten der Person oder Erstellen der Transaktion: {err}")
         return jsonify({'error': 'Fehler beim Bearbeiten der Person oder Erstellen der Transaktion.'}), 500
     finally:
         cursor.close()
-        close_db_connection(cnx)
+        db_utils.DatabaseConnectionPool.close_connection(cnx)
 
 
 @app.route('/person/transaktionen/<string:code>', methods=['DELETE'])
@@ -585,7 +528,7 @@ def person_transaktionen_loeschen(user_id, username, code):
     """
 
     print(f"Benutzer authentifiziert {user_id} - {username}")
-    cnx = get_db_connection()
+    cnx = db_utils.DatabaseConnectionPool.get_connection()
     if not cnx:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
     cursor = cnx.cursor()
@@ -608,13 +551,13 @@ def person_transaktionen_loeschen(user_id, username, code):
             return jsonify({'message': 'Transaktionen erfolgreich gelöscht.'}), 201
         print(f"Person mit diesem Code nicht gefunden: {code}")
         return jsonify({'error': 'Person mit diesem Code nicht gefunden.'}), 404
-    except mysql.connector.Error as err:
+    except Error as err:
         cnx.rollback()
         print(f"Fehler beim Löschen der Transaktion: {err}")
         return jsonify({'error': 'Fehler beim Löschen der Transaktion.'}), 500
     finally:
         cursor.close()
-        close_db_connection(cnx)
+        db_utils.DatabaseConnectionPool.close_connection(cnx)
 
 
 if __name__ == '__main__':
