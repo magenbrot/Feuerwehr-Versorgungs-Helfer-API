@@ -3,6 +3,9 @@ name: Deploy on github actions runner
 on:
   workflow_call:
 
+permissions:
+  contents: read
+
 jobs:
   deploy:
     runs-on: self-hosted
