@@ -89,11 +89,11 @@ def finde_benutzer_zu_nfc_uid(uid_base64):
 
     try:
         uid_bytes = base64.b64decode(uid_base64)
-        cursor.execute("SELECT id FROM users WHERE nfc_uid = %s", (uid_bytes,))
+        cursor.execute("SELECT id, name FROM users WHERE nfc_uid = %s", (uid_bytes,))
         user = cursor.fetchone()
         if user:
-            print(f"Benutzer gefunden: {user[0]}")
-            return user[0]
+            print(f"Benutzer gefunden: {user[0]} - {user[1]}")
+            return user[0], user[1]
         return None
     except Error as err:
         print(f"Fehler beim Suchen des Benutzers anhand der UID: {err}")
@@ -187,7 +187,7 @@ def process_nfc_transaction(user_id, username):
         return jsonify({'error': 'Ungültige Anfrage. Die UID des NFC-Tokens fehlt.'}), 400
 
     nfc_uid = daten['uid']
-    benutzer_id = finde_benutzer_zu_nfc_uid(nfc_uid)
+    benutzer_id, benutzer_name = finde_benutzer_zu_nfc_uid(nfc_uid)
 
     if benutzer_id:
         cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
@@ -201,8 +201,8 @@ def process_nfc_transaction(user_id, username):
             werte_transaktion = (benutzer_id, artikel, add_credits)
             cursor.execute(sql_transaktion, werte_transaktion)
             cnx.commit()
-            print(f'Transaktion für Benutzer-ID {benutzer_id} erfolgreich erstellt (+1 Credit).')
-            return jsonify({'message': f'Transaktion für Benutzer-ID {benutzer_id} erfolgreich erstellt (+1 Credit).'}), 200
+            print(f'Transaktion für Benutzer-ID {benutzer_id} - {benutzer_name} erfolgreich erstellt (+1 Credit).')
+            return jsonify({'message': f'Transaktion für {benutzer_name} erfolgreich erstellt (+1 Credit).'}), 200
         except Error as err:
             cnx.rollback()
             print(f"Fehler beim Erstellen der Transaktion: {err}")
