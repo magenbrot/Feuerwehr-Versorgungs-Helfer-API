@@ -13,8 +13,6 @@
 name: Bandit
 on:
   workflow_call:
-  pull_request:
-    branches: [ "main" ]
   schedule:
     - cron: '33 23 * * 6'
 
