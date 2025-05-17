@@ -1,3 +1,5 @@
 [messages control]
 disable=
-    C0301
+    C0301,
+    R0911,
+    R0912
