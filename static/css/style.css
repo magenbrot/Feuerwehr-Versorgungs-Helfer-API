@@ -27,6 +27,11 @@ h2 {
     margin-bottom: 20px;
 }
 
+.hinweis {
+    color: red;
+    margin-bottom: 10px;
+}
+
 .error {
     color: red;
     margin-bottom: 10px;
@@ -161,7 +166,7 @@ form button[type="submit"]:hover {
 }
 
 /* Stil für den Benutzer löschen Button */
-form button.delete-button {
+form button.red-button {
     background-color: #dc3545;
     color: white;
     margin-top: 10px;
@@ -174,7 +179,7 @@ form button.delete-button {
     box-sizing: border-box;
 }
 
-form button.delete-button:hover {
+form button.red-button:hover {
     background-color: #c82333;
 }
 

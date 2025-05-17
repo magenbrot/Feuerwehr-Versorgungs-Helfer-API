@@ -121,6 +121,39 @@ def delete_user(user_id):
     return False
 
 
+def toggle_user_lock(user_id, lock_state):
+    """
+    Sperrt einen Benutzer anhand seiner ID.
+
+    Args:
+        user_id (int): Die ID des zu sperrenden Benutzers.
+        lock_state (bool): True == Sperren, False == Entsperren.
+
+    Returns:
+        bool: True bei Erfolg, False bei Fehler.
+    """
+
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
+    if cnx:
+        cursor = cnx.cursor()
+        try:
+            if lock_state:
+                query = "UPDATE users SET is_locked = 1 WHERE id = %s"
+            else:
+                query = "UPDATE users SET is_locked = 0 WHERE id = %s"
+            cursor.execute(query, (user_id,))
+            cnx.commit()
+            return True
+        except Error as err:
+            print(f"Fehler beim Ändern des Locks für den Benutzers: {err}")
+            cnx.rollback()
+            return False
+        finally:
+            cursor.close()
+            db_utils.DatabaseConnectionPool.close_connection(cnx)
+    return False
+
+
 def fetch_user(code):
     """
     Ruft einen Benutzer aus der Datenbank anhand seines Codes ab.
@@ -167,7 +200,7 @@ def get_user_by_id(user_id):
         cursor = cnx.cursor(dictionary=True)
         try:
             query = """
-                SELECT id, code, name, is_admin, password, nfc_uid
+                SELECT id, code, name, is_locked, is_admin, password, nfc_uid
                 FROM users
                 WHERE id = %s
             """
@@ -259,7 +292,7 @@ def get_all_users():
         cursor = cnx.cursor(dictionary=True)
         try:
             query = """
-                SELECT id, code, name, is_admin, nfc_uid
+                SELECT id, code, name, is_locked, is_admin, nfc_uid
                 FROM users
                 ORDER BY name
             """
@@ -526,6 +559,16 @@ def admin_user_transactions(user_id):
             if add_transaction(user_id, article, credits_change):
                 flash('Transaktion erfolgreich hinzugefügt.', 'success')
                 return redirect(BASE_URL + url_for('admin_user_transactions', user_id=user_id))
+        elif 'lock_user' in request.form:
+            if toggle_user_lock(user_id, True):
+                flash(f'Benutzer "{target_user["name"]}" (ID {user_id}) wurde gesperrt.', 'success')
+                return redirect(BASE_URL + url_for('admin_user_transactions', user_id=user_id))
+            flash(f'Fehler beim Sperren des Benutzers "{target_user["name"]}" (ID {user_id}).', 'error')
+        elif 'unlock_user' in request.form:
+            if toggle_user_lock(user_id, False):
+                flash(f'Benutzer "{target_user["name"]}" (ID {user_id}) wurde entsperrt.', 'success')
+                return redirect(BASE_URL + url_for('admin_user_transactions', user_id=user_id))
+            flash(f'Fehler beim Entsperren des Benutzers "{target_user["name"]}" (ID {user_id}).', 'error')
         elif 'delete_user' in request.form:
             if delete_user(user_id):
                 flash(f'Benutzer "{target_user["name"]}" (ID {user_id}) wurde gelöscht.', 'success')
