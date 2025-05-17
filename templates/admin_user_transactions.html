@@ -5,7 +5,7 @@
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-    <h2>Transaktionen für {{ user.name }} ({{ user.code }}) - Aktuelle Credits: {{ total_credits }}</h2>
+    <h2>Transaktionen für {{ user.name }} ({{ user.code }}) - Aktuelle Credits: {{ total_credits }} {% if user.is_locked %} (gesperrt){% endif %}</h2>
     <p class="admin-link"><a href="{{ url_for('admin_dashboard') }}">Zurück zur Benutzerübersicht</a></p>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
@@ -76,9 +76,21 @@
         <button type="submit" name="add_nfc_token">NFC-Token aktualisieren</button>
     </form>
 
+    {% if user.is_locked %}
+    <form method="POST" onsubmit="return confirm('Möchtest du diesen Benutzer wirklich entsperren?');">
+        <input type="hidden" name="unlock_user" value="true">
+        <button type="submit" class="red-button">Benutzer entsperren</button>
+    </form>
+    {% else %}
+    <form method="POST" onsubmit="return confirm('Möchtest du diesen Benutzer wirklich sperren?');">
+        <input type="hidden" name="lock_user" value="true">
+        <button type="submit" class="red-button">Benutzer sperren</button>
+    </form>
+    {% endif %}
+
     <form method="POST" onsubmit="return confirm('ACHTUNG: Möchtest du diesen Benutzer WIRKLICH löschen? Alle zugehörigen Daten gehen verloren!');">
         <input type="hidden" name="delete_user" value="true">
-        <button type="submit" class="delete-button">Benutzer löschen</button>
+        <button type="submit" class="red-button">Benutzer löschen</button>
     </form>
 </body>
 </html>
