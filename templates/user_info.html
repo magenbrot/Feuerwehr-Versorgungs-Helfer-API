@@ -19,6 +19,10 @@
 
     <p>Dein Benutzer-Code ist: <strong>{{ user.code }}</strong></p>
 
+    {% if user.is_locked %}
+    <h4 class="hinweis">Du bist momentan gesperrt! Bitte melde dich bei der Abteilung Verpflegung!</h4>
+    {% endif %}
+
     <h3>Gesamte Credits: {{ total_credits }}</h3>
 
     <h3>Deine Transaktionen:</h3>
