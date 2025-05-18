@@ -162,14 +162,14 @@ def fetch_user(code):
         code (str): Der eindeutige Code des Benutzers.
 
     Returns:
-        dict: Ein Dictionary mit den Benutzerdaten (id, code, name, password, is_admin) oder None, falls kein Benutzer gefunden wird.
+        dict: Ein Dictionary mit den Benutzerdaten (id, code, nachname, vorname, password, is_admin) oder None, falls kein Benutzer gefunden wird.
     """
 
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if cnx:
         cursor = cnx.cursor(dictionary=True)
         try:
-            query = "SELECT id, code, name, password, is_admin FROM users WHERE code = %s"
+            query = "SELECT id, code, nachname, vorname, password, is_admin FROM users WHERE code = %s"
             cursor.execute(query, (code,))
             user = cursor.fetchone()
             return user
@@ -191,7 +191,7 @@ def get_user_by_id(user_id):
         user_id (int): Die ID des Benutzers.
 
     Returns:
-        dict: Ein Dictionary mit den Benutzerdaten (id, code, name, is_admin, password, nfc_uid)
+        dict: Ein Dictionary mit den Benutzerdaten (id, code, nachname, vorname, is_locked, is_admin, password, nfc_uid)
               oder None, falls kein Benutzer gefunden wird.
     """
 
@@ -200,7 +200,7 @@ def get_user_by_id(user_id):
         cursor = cnx.cursor(dictionary=True)
         try:
             query = """
-                SELECT id, code, name, is_locked, is_admin, password, nfc_uid
+                SELECT id, code, nachname, vorname, is_locked, is_admin, password, nfc_uid
                 FROM users
                 WHERE id = %s
             """
@@ -284,7 +284,7 @@ def get_all_users():
 
     Returns:
         list: Eine Liste von Dictionaries, wobei jedes Dictionary einen Benutzer repräsentiert
-              (id, code, name, is_admin, nfc_uid).
+              (id, code, nachname, vorname, is_locked, is_admin, nfc_uid).
     """
 
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
@@ -292,9 +292,9 @@ def get_all_users():
         cursor = cnx.cursor(dictionary=True)
         try:
             query = """
-                SELECT id, code, name, is_locked, is_admin, nfc_uid
+                SELECT id, code, nachname, vorname, is_locked, is_admin, nfc_uid
                 FROM users
-                ORDER BY name
+                ORDER BY nachname
             """
             cursor.execute(query)
             users = cursor.fetchall()
@@ -561,19 +561,19 @@ def admin_user_transactions(user_id):
                 return redirect(BASE_URL + url_for('admin_user_transactions', user_id=user_id))
         elif 'lock_user' in request.form:
             if toggle_user_lock(user_id, True):
-                flash(f'Benutzer "{target_user["name"]}" (ID {user_id}) wurde gesperrt.', 'success')
+                flash(f'Benutzer "{target_user["nachname"]}, {target_user["vorname"]}" (ID {user_id}) wurde gesperrt.', 'success')
                 return redirect(BASE_URL + url_for('admin_user_transactions', user_id=user_id))
-            flash(f'Fehler beim Sperren des Benutzers "{target_user["name"]}" (ID {user_id}).', 'error')
+            flash(f'Fehler beim Sperren des Benutzers "{target_user["nachname"]}, {target_user["vorname"]}" (ID {user_id}).', 'error')
         elif 'unlock_user' in request.form:
             if toggle_user_lock(user_id, False):
-                flash(f'Benutzer "{target_user["name"]}" (ID {user_id}) wurde entsperrt.', 'success')
+                flash(f'Benutzer "{target_user["nachname"]}, {target_user["vorname"]}" (ID {user_id}) wurde entsperrt.', 'success')
                 return redirect(BASE_URL + url_for('admin_user_transactions', user_id=user_id))
-            flash(f'Fehler beim Entsperren des Benutzers "{target_user["name"]}" (ID {user_id}).', 'error')
+            flash(f'Fehler beim Entsperren des Benutzers "{target_user["nachname"]}, {target_user["vorname"]}" (ID {user_id}).', 'error')
         elif 'delete_user' in request.form:
             if delete_user(user_id):
-                flash(f'Benutzer "{target_user["name"]}" (ID {user_id}) wurde gelöscht.', 'success')
+                flash(f'Benutzer "{target_user["nachname"]}, {target_user["vorname"]}" (ID {user_id}) wurde gelöscht.', 'success')
                 return redirect(BASE_URL + url_for('admin_dashboard')) # Zurück zur Benutzerübersicht
-            flash(f'Fehler beim Löschen des Benutzers "{target_user["name"]}" (ID {user_id}).', 'error')
+            flash(f'Fehler beim Löschen des Benutzers "{target_user["nachname"]}, {target_user["vorname"]}" (ID {user_id}).', 'error')
         elif 'add_nfc_token' in request.form:
             nfc_uid = request.form['nfc_uid']
             if update_user_nfc_uid(user_id, nfc_uid):
