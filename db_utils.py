@@ -38,10 +38,10 @@ class DatabaseConnectionPool:
                 cls._connection_pool = pooling.MySQLConnectionPool(
                     pool_name="dbpool", pool_size=3, **database_config
                 )
-                print("Datenbankverbindungspool erfolgreich initialisiert (db_utils).")
+                print("Datenbankverbindungspool erfolgreich initialisiert.")
             except mysql.connector.Error as e:
                 print(
-                    f"Fehler beim Initialisieren des Datenbankverbindungspools (db_utils): {e}"
+                    f"Fehler beim Initialisieren des Datenbankverbindungspools: {e}"
                 )
                 raise  # Wirf den Fehler weiter, damit die Anwendung reagieren kann
 
@@ -86,7 +86,7 @@ class DatabaseConnectionPool:
             cnx = cls._connection_pool.get_connection()
             return cnx
         except mysql.connector.Error as e:
-            print(f"Fehler beim Abrufen einer Verbindung aus dem Pool (db_utils): {e}")
+            print(f"Fehler beim Abrufen einer Verbindung aus dem Pool: {e}")
             return None
 
 
