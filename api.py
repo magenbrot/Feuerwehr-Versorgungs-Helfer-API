@@ -132,18 +132,18 @@ def health_protected_route(user_id, username):
         db_utils.DatabaseConnectionPool.close_connection(cnx)
 
 
-@app.route('/credits-total', methods=['GET'])
+@app.route('/guthaben-alle', methods=['GET'])
 @api_key_required
 def get_alle_summe(user_id, username):
     """
-    Gibt die Gesamtcredits der Personen in der Datenbank zurück (nur für authentifizierte Benutzer).
+    Gibt das Guthaben aller Personen in der Datenbank zurück (nur für authentifizierte Benutzer).
 
     Args:
         user_id (int): Die ID des authentifizierten Benutzers.
         username (str): Der Benutzername des authentifizierten Benutzers.
 
     Returns:
-        flask.Response: Eine JSON-Antwort mit einer Liste von Benutzern und ihren Gesamtcredits.
+        flask.Response: Eine JSON-Antwort mit einer Liste von Benutzern und ihrem Guthaben.
     """
 
     print(f"Benutzer authentifiziert {user_id} - {username}.")
@@ -154,9 +154,9 @@ def get_alle_summe(user_id, username):
 
     try:
         cursor.execute(
-            "SELECT u.nachname AS nachname, u.vorname AS vorname, SUM(t.credits) AS summe_credits FROM transactions AS t INNER JOIN users AS u ON t.user_id = u.id GROUP BY u.nachname ORDER BY summe_credits DESC;")
+            "SELECT u.nachname AS nachname, u.vorname AS vorname, SUM(t.saldo_aenderung) AS saldo FROM transactions AS t INNER JOIN users AS u ON t.user_id = u.id GROUP BY u.nachname, u.vorname ORDER BY saldo DESC;")
         personen = cursor.fetchall()
-        print("Die Creditsumme aller Personen wurde ermittelt.")
+        print("Das Gesamtguthaben aller Personen wurde ermittelt.")
         return jsonify(personen)
     except Error as err:
         print(f'Fehler beim Lesen der Daten: {err}.')
@@ -171,7 +171,7 @@ def get_alle_summe(user_id, username):
 def process_nfc_transaction(user_id, username):
     """
     Verarbeitet eine NFC-Transaktion, indem die übermittelte UID einem Benutzer zugeordnet
-    und eine Gutschrift von 1 Credit in der Datenbank vermerkt wird.
+    und 1 Strich in der Datenbank vermerkt wird.
 
     Args:
         user_id (int): Die ID des authentifizierten API-Benutzers.
@@ -195,14 +195,14 @@ def process_nfc_transaction(user_id, username):
             return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
         cursor = cnx.cursor()
         try:
-            artikel = "NFC-Scan"  # Beschreibung der Transaktion
-            add_credits = 1
-            sql_transaktion = "INSERT INTO transactions (user_id, article, credits) VALUES (%s, %s, %s)"
-            werte_transaktion = (benutzer_id, artikel, add_credits)
+            artikel = "NFC-Scan"
+            saldo_aenderung = -1
+            sql_transaktion = "INSERT INTO transactions (user_id, article, saldo_aenderung) VALUES (%s, %s, %s)"
+            werte_transaktion = (benutzer_id, artikel, saldo_aenderung)
             cursor.execute(sql_transaktion, werte_transaktion)
             cnx.commit()
-            print(f'Transaktion für Benutzer-ID {benutzer_id} - {benutzer_nachname}, {benutzer_vorname} erfolgreich erstellt (+1 Credit).')
-            return jsonify({'message': f'Transaktion für {benutzer_nachname}, {benutzer_vorname} erfolgreich erstellt (+1 Credit).'}), 200
+            print(f'Transaktion für Benutzer-ID {benutzer_id} - {benutzer_nachname}, {benutzer_vorname} erfolgreich erstellt ({{ saldo_aenderung }} Strich(e)).')
+            return jsonify({'message': f'Transaktion für {benutzer_nachname}, {benutzer_vorname} erfolgreich erstellt ({{ saldo_aenderung }} Strich(e)).'}), 200
         except Error as err:
             cnx.rollback()
             print(f"Fehler beim Erstellen der Transaktion: {err}")
@@ -415,7 +415,7 @@ def get_person_by_code(user_id, username, code):
         code (str): Der 10-stellige Code der gesuchten Person.
 
     Returns:
-        flask.Response: Eine JSON-Antwort mit den Personendaten (Name, Summe der Credits) oder einem Fehler.
+        flask.Response: Eine JSON-Antwort mit den Personendaten (Name, Vorname, Saldo) oder einem Fehler.
     """
 
     print(f"Benutzer authentifiziert {user_id} - {username}")
@@ -428,10 +428,10 @@ def get_person_by_code(user_id, username, code):
         person = cursor.fetchone()
         if person:
             cursor.execute(
-                "SELECT u.nachname AS nachname, u.vorname AS vorname, SUM(t.credits) AS summe_credits FROM transactions AS t INNER JOIN users AS u ON t.user_id = u.id WHERE u.code = %s GROUP BY u.name", (code,))
+                "SELECT u.nachname AS nachname, u.vorname AS vorname, SUM(t.saldo_aenderung) AS saldo FROM transactions AS t INNER JOIN users AS u ON t.user_id = u.id WHERE u.code = %s GROUP BY u.nachname, u.vorname", (code,))
             person = cursor.fetchone()
             if person:
-                print(f"Person mit Code {code} gefunden: {person['nachname']}, {person['vorname']} - {person['summe_credits']} Credits")
+                print(f"Person mit Code {code} gefunden: {person['nachname']}, {person['vorname']} - {person['saldo']} Saldo")
                 return jsonify(person)
             print(f"Person mit Code {code} hat noch keine Transaktionen durchgeführt.")
             return jsonify({'error': 'Person hat noch keine Transaktionen durchgeführt.'}), 200
@@ -472,15 +472,15 @@ def person_bearbeiten(user_id, username, code):
         if user_data:
             user_id = user_data[0]
             artikel = request.json.get('artikel')
-            credits_change = request.json.get('credits')
+            saldo_aenderung = request.json.get('saldo_aenderung')
 
-            if not artikel or credits_change is None:
-                print("Ungültige Anfrage. Artikel und Credits sind erforderlich.")
-                return jsonify({'error': 'Parameter Artikel und Credits sind erforderlich.'}), 400
+            if not artikel or saldo_aenderung is None:
+                print("Ungültige Anfrage. Artikel und Saldoänderung sind erforderlich.")
+                return jsonify({'error': 'Parameter Artikel und Saldoänderung sind erforderlich.'}), 400
 
             # Transaktion erstellen
-            sql_transaktion = "INSERT INTO transactions (user_id, article, credits) VALUES (%s, %s, %s)"
-            werte_transaktion = (user_id, artikel, credits_change)
+            sql_transaktion = "INSERT INTO transactions (user_id, article, saldo_aenderung) VALUES (%s, %s, %s)"
+            werte_transaktion = (user_id, artikel, saldo_aenderung)
             cursor.execute(sql_transaktion, werte_transaktion)
             cnx.commit()
             print("Transaktion erfolgreich erstellt.")
