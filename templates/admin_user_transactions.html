@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Transaktionen für {{ user.name }}</title>
+    <title>Transaktionen für {{ user.nachname }}, {{ user.vorname }}</title>
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-    <h2>Transaktionen für {{ user.name }} ({{ user.code }}) - Aktuelle Credits: {{ total_credits }} {% if user.is_locked %} (gesperrt){% endif %}</h2>
+    <h2>Transaktionen für {{ user.nachname }}, {{ user.vorname }} ({{ user.code }}) - Aktuelle Credits: {{ total_credits }} {% if user.is_locked %} (gesperrt){% endif %}</h2>
     <p class="admin-link"><a href="{{ url_for('admin_dashboard') }}">Zurück zur Benutzerübersicht</a></p>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
