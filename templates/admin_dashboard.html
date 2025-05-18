@@ -5,7 +5,7 @@
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-    <h2>Willkommen im Admin-Bereich, {{ user.name }}!</h2>
+    <h2>Willkommen im Admin-Bereich, {{ user.vorname }}!</h2>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
@@ -34,7 +34,7 @@
             {% for u in users %}
             <tr>
                 <td><a href="{{ url_for('admin_user_transactions', user_id=u.id) }}">{{ u.code }}</a></td>
-                <td>{{ u.name }}</td>
+                <td>{{ u.nachname }}, {{ u.vorname }}</td>
                 <td>{% if u.is_locked %}Ja{% else %}Nein{% endif %}</td>
                 <td>{% if u.is_admin %}Ja{% else %}Nein{% endif %}</td>
                 <td>{% if u.nfc_uid %}{{ u.nfc_uid.hex() }}{% else %}Kein Token hinterlegt{% endif %}</td>
