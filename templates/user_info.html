@@ -5,7 +5,7 @@
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-    <h2>Hallo, {{ user.name }}!</h2>
+    <h2>Hallo, {{ user.vorname }}!</h2>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}

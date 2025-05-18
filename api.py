@@ -89,11 +89,11 @@ def finde_benutzer_zu_nfc_uid(uid_base64):
 
     try:
         uid_bytes = base64.b64decode(uid_base64)
-        cursor.execute("SELECT id, name FROM users WHERE nfc_uid = %s", (uid_bytes,))
+        cursor.execute("SELECT id, nachname, vorname FROM users WHERE nfc_uid = %s", (uid_bytes,))
         user = cursor.fetchone()
         if user:
-            print(f"Benutzer gefunden: {user[0]} - {user[1]}")
-            return user[0], user[1]
+            print(f"Benutzer gefunden: {user[0]} - {user[1]}, {user[2]}") # ID, Nachnachme, Vorname
+            return user[0], user[1], user[2]
         return None
     except Error as err:
         print(f"Fehler beim Suchen des Benutzers anhand der UID: {err}")
@@ -154,7 +154,7 @@ def get_alle_summe(user_id, username):
 
     try:
         cursor.execute(
-            "SELECT u.name AS benutzername, SUM(t.credits) AS summe_credits FROM transactions AS t INNER JOIN users AS u ON t.user_id = u.id GROUP BY u.name ORDER BY summe_credits DESC;")
+            "SELECT u.nachname AS nachname, u.vorname AS vorname, SUM(t.credits) AS summe_credits FROM transactions AS t INNER JOIN users AS u ON t.user_id = u.id GROUP BY u.nachname ORDER BY summe_credits DESC;")
         personen = cursor.fetchall()
         print("Die Creditsumme aller Personen wurde ermittelt.")
         return jsonify(personen)
@@ -187,7 +187,7 @@ def process_nfc_transaction(user_id, username):
         return jsonify({'error': 'Ungültige Anfrage. Die UID des NFC-Tokens fehlt.'}), 400
 
     nfc_uid = daten['uid']
-    benutzer_id, benutzer_name = finde_benutzer_zu_nfc_uid(nfc_uid)
+    benutzer_id, benutzer_nachname, benutzer_vorname = finde_benutzer_zu_nfc_uid(nfc_uid)
 
     if benutzer_id:
         cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
@@ -201,8 +201,8 @@ def process_nfc_transaction(user_id, username):
             werte_transaktion = (benutzer_id, artikel, add_credits)
             cursor.execute(sql_transaktion, werte_transaktion)
             cnx.commit()
-            print(f'Transaktion für Benutzer-ID {benutzer_id} - {benutzer_name} erfolgreich erstellt (+1 Credit).')
-            return jsonify({'message': f'Transaktion für {benutzer_name} erfolgreich erstellt (+1 Credit).'}), 200
+            print(f'Transaktion für Benutzer-ID {benutzer_id} - {benutzer_nachname}, {benutzer_vorname} erfolgreich erstellt (+1 Credit).')
+            return jsonify({'message': f'Transaktion für {benutzer_nachname}, {benutzer_vorname} erfolgreich erstellt (+1 Credit).'}), 200
         except Error as err:
             cnx.rollback()
             print(f"Fehler beim Erstellen der Transaktion: {err}")
@@ -235,7 +235,7 @@ def get_alle_personen(user_id, username):
     cursor = cnx.cursor(dictionary=True)
     try:
         cursor.execute(
-            "SELECT t.id, u.name AS benutzername, t.article, t.timestamp FROM transactions AS t INNER JOIN users AS u ON t.user_id = u.id ORDER BY t.timestamp DESC;")
+            "SELECT t.id, u.nachname AS nachname, u.vorname AS vorname, t.article, t.timestamp FROM transactions AS t INNER JOIN users AS u ON t.user_id = u.id ORDER BY t.timestamp DESC;")
         personen = cursor.fetchall()
         print("Transaktionen wurden ermittelt.")
         return jsonify(personen)
@@ -297,16 +297,17 @@ def create_person(user_id, username):
 
     print(f"Benutzer authentifiziert {user_id} - {username}")
     daten = request.get_json()
-    if not daten or 'code' not in daten or 'name' not in daten:
+    if not daten or 'code' not in daten or 'nachname' not in daten or 'vorname' not in daten:
         return jsonify({'error': 'Ungültige oder unvollständige Daten.'}), 400
 
     code = daten['code']
-    name = daten['name']
+    nachname = daten['nachname']
+    vorname = daten['vorname']
     password = daten['password']
 
     if not isinstance(code, str) or len(code) != 10 or not code.isdigit():
         return jsonify({'error': 'Der Code muss ein 10-stelliger Zahlencode sein.'}), 400
-    if not isinstance(name, str) or not name.strip():
+    if not isinstance(nachname, str) or not nachname.strip() or not isinstance(vorname, str) or not vorname.strip():
         return jsonify({'error': 'Der Name darf nicht leer sein.'}), 400
 
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
@@ -314,8 +315,8 @@ def create_person(user_id, username):
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
     cursor = cnx.cursor()
     try:
-        sql = "INSERT IGNORE INTO users (code, name, password) VALUES (%s, %s, %s)"
-        werte = (code, name, password)
+        sql = "INSERT IGNORE INTO users (code, nachname, vorname, password) VALUES (%s, %s, %s, %s)"
+        werte = (code, nachname, vorname, password)
         cursor.execute(sql, werte)
         cnx.commit()
         print(f"Person mit Code {code} erfolgreich hinzugefügt.")
@@ -388,10 +389,10 @@ def person_exists_by_code(user_id, username, code):
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
     cursor = cnx.cursor(dictionary=True)
     try:
-        cursor.execute("SELECT name FROM users WHERE code = %s", (code,))
+        cursor.execute("SELECT nachname, vorname FROM users WHERE code = %s", (code,))
         person = cursor.fetchone()
         if person:
-            print(f"Person mit Code {code} gefunden: {person['name']}")
+            print(f"Person mit Code {code} gefunden: {person['nachname']}, {person['vorname']}")
             return jsonify(person)
         return jsonify({'error': 'Person nicht gefunden.'}), 200
     except Error as err:
@@ -423,14 +424,14 @@ def get_person_by_code(user_id, username, code):
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
     cursor = cnx.cursor(dictionary=True)
     try:
-        cursor.execute("SELECT name FROM users WHERE code = %s", (code,))
+        cursor.execute("SELECT nachname, vorname FROM users WHERE code = %s", (code,))
         person = cursor.fetchone()
         if person:
             cursor.execute(
-                "SELECT u.name AS name, SUM(t.credits) AS summe_credits FROM transactions AS t INNER JOIN users AS u ON t.user_id = u.id WHERE u.code = %s GROUP BY u.name", (code,))
+                "SELECT u.nachname AS nachname, u.vorname AS vorname, SUM(t.credits) AS summe_credits FROM transactions AS t INNER JOIN users AS u ON t.user_id = u.id WHERE u.code = %s GROUP BY u.name", (code,))
             person = cursor.fetchone()
             if person:
-                print(f"Person mit Code {code} gefunden: {person['name']} - {person['summe_credits']} Credits")
+                print(f"Person mit Code {code} gefunden: {person['nachname']}, {person['vorname']} - {person['summe_credits']} Credits")
                 return jsonify(person)
             print(f"Person mit Code {code} hat noch keine Transaktionen durchgeführt.")
             return jsonify({'error': 'Person hat noch keine Transaktionen durchgeführt.'}), 200
