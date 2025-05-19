@@ -1,6 +1,6 @@
 # Feuerwehr-Versorgungs-Helfer-API
 
-Hier handelt es sich um den serverseitigen Teil der Applikation und stellt die API für die entfernten Clients und die WebGUI bereit.
+Hier handelt es sich um den serverseitigen Teil der Applikation. Sie stellt die API für die entfernten Clients und die WebGUI bereit.
 
 Der Code für den QR-Code- und NFC-Scanner ist [hier](https://github.com/magenbrot/Feuerwehr-Versorgungs-Helfer) zu finden.
 
