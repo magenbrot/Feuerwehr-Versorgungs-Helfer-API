@@ -510,12 +510,18 @@ def login():
         str: Die gerenderte Login-Seite (login.html) mit optionaler Fehlermeldung.
     """
 
+    # Wenn der Benutzer bereits eingeloggt ist, weiterleiten
+    if 'user_id' in session:
+        print("Benutzercookie gefunden, leite weiter.")
+        return redirect(BASE_URL + url_for('user_info'))
+
     if request.method == 'POST':
         code = request.form['code']
         password = request.form['password']
         user = fetch_user(code)
         if user and check_password_hash(user['password'], password):
             session['user_id'] = user['id']
+            session.permanent = True
             print("Redirecting: " + (BASE_URL + url_for('user_info')))
             return redirect(BASE_URL + url_for('user_info'))
         return render_template('login.html', error='Ungültiger Benutzername oder Passwort')
@@ -614,6 +620,7 @@ def admin_user_modification(user_id):
     transactions = get_user_transactions(user_id)
     saldo = get_saldo_for_user(user_id)
 
+    print(request.form)
     if request.method == 'POST':
         if 'delete_transactions' in request.form:
             if delete_all_transactions(user_id):
