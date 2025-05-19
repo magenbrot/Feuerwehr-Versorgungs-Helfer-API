@@ -255,3 +255,85 @@ form button.red-button:hover {
 .password-form button[type="submit"]:hover {
     background-color: #0056b3;
 }
+
+/* Styles für die NFC-Token löschen-Buttons */
+.compact-delete-form {
+    display: inline-block;
+    margin: 0;
+    padding: 0;
+    line-height: 1;
+}
+
+.compact-delete-form button[type="submit"] {
+    margin: 0;
+    padding: 2px 5px;
+    cursor: pointer;
+    vertical-align: middle;
+}
+
+/* Styles für das "Neue Transaktion und NFC-Token hinzufügen"-Formular */
+form.inline-form-transaction {
+    display: flex;          /* Elemente werden in einer Reihe angeordnet */
+    flex-wrap: wrap;        /* Ermöglicht Umbruch auf die nächste Zeile bei Platzmangel */
+    align-items: center;    /* Zentriert die Elemente vertikal in der Reihe */
+    gap: 10px;              /* Fügt Abstand zwischen den Elementen hinzu (empfohlen statt margins) */
+
+    /* Behalten Sie die bestehenden Stile für Rahmen, Padding, etc. bei */
+    margin-top: 20px;
+    padding: 15px;
+    border: 1px solid #eee;
+    border-radius: 5px;
+    background-color: #f9f9f9;
+    width: 100%;
+    max-width: 700px;
+    box-sizing: border-box;
+}
+
+form.inline-form-transaction label {
+    /* Label ist jetzt ein Flex-Item, display: block wird nicht mehr benötigt,
+       wenn es in der gleichen Zeile sein soll wie der Input-Feld-Teil */
+    /* Behalten Sie den margin-bottom, wenn das Label ÜBER dem Input-Feld stehen soll */
+    /* Oder entfernen/ändern Sie ihn, wenn Label und Input-Feld nebeneinander im selben "Block" stehen sollen */
+     display: block; /* Behält bei, dass das Label über dem Input steht */
+     margin-bottom: 5px; /* Behält den Abstand unter dem Label */
+     font-weight: bold; /* Von Ihrer bestehenden Regel */
+     /* Flexbox 'align-items: center' auf dem Formular kümmert sich um die vertikale Ausrichtung */
+}
+
+form.inline-form-transaction input[type="text"],
+form.inline-form-transaction input[type="number"] {
+     /* Input-Felder sind jetzt auch Flex-Items */
+     /* Die allgemeine width: calc(100% - 12px) passt hier nicht mehr, da sie sich auf den Container (das Formular) bezieht */
+     width: auto; /* Setzt die Breite automatisch basierend auf Inhalt und Flexbox-Regeln */
+     max-width: 150px;
+     flex-grow: 1; /* Optional: Lässt die Input-Felder wachsen und den verfügbaren Platz füllen */
+
+
+     /* Behalten Sie Padding, Border, etc. bei */
+     padding: 8px;
+     border: 1px solid #ccc;
+     border-radius: 4px;
+     box-sizing: border-box;
+     font-size: 1em; /* Von Ihrer bestehenden Regel */
+}
+
+form.inline-form-transaction button[type="submit"] {
+    /* Button ist jetzt auch ein Flex-Item */
+    margin-top: 0; /* Entfernt den unnötigen Abstand nach oben */
+    width: auto; /* Der Button nimmt nur die benötigte Breite ein */
+
+    /* Behalten Sie die Button-Stile bei */
+    background-color: #007bff;
+    color: white;
+    padding: 10px 15px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1em;
+    /* align-self: flex-end; */ /* Optional: Richtet den Button am unteren Rand der Reihe aus, falls nötig */
+}
+
+/* Passen Sie den Hover-Stil an, falls eine spezifischere Regel benötigt wird */
+form.inline-form-transaction button[type="submit"]:hover {
+    background-color: #0056b3;
+}
