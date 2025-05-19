@@ -16,17 +16,20 @@ CREATE TABLE transactions (
   id int NOT NULL,
   user_id int NOT NULL,
   article varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  credits int NOT NULL DEFAULT '1',
+  saldo_aenderung int NOT NULL DEFAULT '1',
   timestamp datetime NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE users (
   id int NOT NULL,
   code varchar(10) COLLATE utf8mb4_unicode_ci NOT NULL,
-  name varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  nachname varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  vorname varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   password varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  is_admin tinyint(1) NOT NULL DEFAULT '0',
-  nfc_uid varbinary(20) DEFAULT NULL
+  email varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  kommentar varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  is_locked tinyint(1) NOT NULL DEFAULT '0',
+  is_admin tinyint(1) NOT NULL DEFAULT '0'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
@@ -45,8 +48,7 @@ ALTER TABLE transactions
 
 ALTER TABLE users
   ADD PRIMARY KEY (id),
-  ADD UNIQUE KEY code (code),
-  ADD UNIQUE KEY nfc_uid (nfc_uid);
+  ADD UNIQUE KEY code (code);
 
 
 ALTER TABLE api_keys

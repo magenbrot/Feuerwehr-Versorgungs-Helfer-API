@@ -47,18 +47,16 @@
         <button type="submit">Alle Transaktionen löschen</button>
     </form>
 
-    <h3>Neue Transaktion hinzufügen:</h3>
-    <form method="POST" name="add_transaction">
-        <div>
-            <label for="article">Artikel:</label>
-            <input type="text" id="article" name="article" value="Admin-Eintrag" required>
-        </div>
-        <div>
-            <label for="saldo_aenderung">Änderung:</label>
-            <input type="number" id="saldo_aenderung" name="saldo_aenderung" value="-1" required>
-        </div>
-        <button type="submit" name="add_transaction">Hinzufügen</button>
-    </form>
+<h3>Neue Transaktion hinzufügen:</h3>
+<form method="POST" class="inline-form-transaction">
+    <label for="article">Artikel:</label>
+    <input type="text" id="article" name="article" value="Admin-Eintrag" required>
+
+    <label for="saldo_aenderung">Änderung:</label>
+    <input type="number" id="saldo_aenderung" name="saldo_aenderung" value="-1" required>
+
+    <button type="submit" name="add_transaction">Hinzufügen</button>
+</form>
 
     <h3>NFC-Token:</h3>
     {% if nfc_tokens %}
@@ -77,12 +75,12 @@
             <tr>
                 <td>{{ nfc_token.token_id }}</td>
                 <td>{{ nfc_token.token_name }}</td>
-                <td>{{ nfc_token.token_uid }}</td>
+                <td>{{ nfc_token.token_uid.hex() }}</td>
                 <td>{{ nfc_token.last_used }}</td>
                 <td>
-                    <form method="POST" name="delete_user_nfc_token" class="compact-delete-form" onsubmit="return confirm('Möchtest du diesen Token wirklich löschen?');">
+                    <form method="POST" class="compact-delete-form" onsubmit="return confirm('Möchtest du diesen Token wirklich löschen?');">
                         <input type="hidden" name="nfc_token_id" value="{{ nfc_token.token_id}}">
-                        <button type="submit" class="red-button">Löschen</button>
+                        <button type="submit" name="delete_user_nfc_token" class="red-button">Löschen</button>
                     </form>
                 </td>
             </tr>
@@ -94,15 +92,13 @@
     {% endif %}
 
 
-    <h3>NFC-Token hinzufügen:</h3>
-    <form method="POST" name="add_user_nfc_token">
-        <div>
-            <label for="nfc_token_name">NFC-Name:</label>
-            <input type="text" id="nfc_token_name" name="nfc_token_name" title="Bitte gib deinem Token einen Namen.">
-            <label for="nfc_token_uid">NFC-UID (hexadezimal):</label>
-            <input type="text" id="nfc_token_uid" name="nfc_token_uid" required pattern="[0-9A-Fa-f]{2,}" title="Bitte gib eine Hexadezimalzahl mit mindestens 2 Zeichen ein.">
-        </div>
-        <button type="submit" name="add_user_nfc_token">NFC-Token hinzufügen</button>
+    <h3>neuen NFC-Token hinzufügen:</h3>
+    <form method="POST" class="inline-form-transaction">
+        <label for="nfc_token_name">NFC-Name:</label>
+        <input type="text" id="nfc_token_name" name="nfc_token_name" title="Bitte gib deinem Token einen Namen.">
+        <label for="nfc_token_uid">NFC-UID (hexadezimal):</label>
+        <input type="text" id="nfc_token_uid" name="nfc_token_uid" required pattern="[0-9A-Fa-f]{2,}" title="Bitte gib eine Hexadezimalzahl mit mindestens 2 Zeichen ein.">
+        <button type="submit" name="add_user_nfc_token">Hinzufügen</button>
     </form>
 
     {% if user.is_locked %}

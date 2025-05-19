@@ -55,7 +55,6 @@
     <table>
         <thead>
             <tr>
-                <th>ID</th>
                 <th>Name</th>
                 <th>UID</th>
                 <th>zuletzt verwendet</th>
@@ -64,9 +63,8 @@
         <tbody>
             {% for nfc_token in nfc_tokens %}
             <tr>
-                <td>{{ nfc_token.token_id }}</td>
                 <td>{{ nfc_token.token_name }}</td>
-                <td>{{ nfc_token.token_uid }}</td>
+                <td>{{ nfc_token.token_uid.hex() }}</td>
                 <td>{{ nfc_token.last_used }}</td>
             </tr>
             {% endfor %}
@@ -75,8 +73,6 @@
     {% else %}
     <p>Noch keine NFC-Token hinterlegt.</p>
     {% endif %}
-
-    <hr>
 
     <h3>Passwort ändern:</h3>
     <form method="POST" name="change_password" class="password-form">
