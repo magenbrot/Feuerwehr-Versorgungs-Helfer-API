@@ -23,7 +23,7 @@
     <h4 class="hinweis">Du bist momentan gesperrt! Bitte melde dich bei der Abteilung Verpflegung!</h4>
     {% endif %}
 
-    <h3>Gesamte Credits: {{ total_credits }}</h3>
+    <h3>Saldo: {{ saldo }}</h3>
 
     <h3>Deine Transaktionen:</h3>
     {% if transactions %}
@@ -31,7 +31,7 @@
         <thead>
             <tr>
                 <th>Artikel</th>
-                <th>Credits</th>
+                <th>Soll / Haben</th>
                 <th>Zeitpunkt</th>
             </tr>
         </thead>
@@ -39,7 +39,7 @@
             {% for transaction in transactions %}
             <tr>
                 <td>{{ transaction.article }}</td>
-                <td>{{ transaction.credits }}</td>
+                <td>{{ transaction.saldo_aenderung }}</td>
                 <td>{{ transaction.timestamp }}</td>
             </tr>
             {% endfor %}
@@ -49,13 +49,30 @@
     <p>Noch keine Transaktionen vorhanden.</p>
     {% endif %}
 
-    {% if user.nfc_uid %}
-        <p>NFC-UID: {{ user.nfc_uid.hex() }}</p>
-    {% else %}
-        <p>Keine NFC-UID zugewiesen</p>
-    {% endif %}
 
-    <hr>
+    <h3>Deine registrierten NFC-Token:</h3>
+    {% if nfc_tokens %}
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>UID</th>
+                <th>zuletzt verwendet</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for nfc_token in nfc_tokens %}
+            <tr>
+                <td>{{ nfc_token.token_name }}</td>
+                <td>{{ nfc_token.token_uid.hex() }}</td>
+                <td>{{ nfc_token.last_used }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>Noch keine NFC-Token hinterlegt.</p>
+    {% endif %}
 
     <h3>Passwort ändern:</h3>
     <form method="POST" name="change_password" class="password-form">

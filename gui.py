@@ -48,6 +48,7 @@ def hex_to_binary(hex_string):
         bytes: Die Binärdaten, die dem Hexadezimalstring entsprechen. Gibt None zurück,
                wenn die Konvertierung aufgrund eines ungültigen Hexadezimalstrings oder Typs fehlschlägt.
     """
+
     try:
         return binascii.unhexlify(hex_string)
     except binascii.Error:
@@ -58,9 +59,9 @@ def hex_to_binary(hex_string):
         return None
 
 
-def update_user_nfc_uid(user_id, hex_uid):
+def add_user_nfc_token(user_id, token_name, hex_uid):
     """
-    Aktualisiert die NFC-UID eines Benutzers in der Datenbank.
+    Fügt einen neuen NFC-Token der Datenbank hinzu.
 
     Args:
         user_id (int): Die ID des Benutzers.
@@ -69,18 +70,54 @@ def update_user_nfc_uid(user_id, hex_uid):
     Returns:
         bool: True bei Erfolg, False bei Fehler (z.B. ungültige UID, Datenbankfehler).
     """
+
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if cnx:
         cursor = cnx.cursor()
         binary_uid = hex_to_binary(hex_uid)
         if binary_uid:
             try:
-                query = "UPDATE users SET nfc_uid = %s WHERE id = %s"
-                cursor.execute(query, (binary_uid, user_id))
+                query = "INSERT INTO nfc_token SET user_id = %s, token_name = %s, token_uid = %s, last_used = NOW()"
+                cursor.execute(query, (user_id, token_name, binary_uid))
                 cnx.commit()
                 return True
             except Error as err:
-                print(f"Fehler beim Aktualisieren der NFC-UID: {err}")
+                print(f"Fehler beim Hinzufügen des NFC-Tokens: {err}")
+                cnx.rollback()
+                return False
+            finally:
+                cursor.close()
+                db_utils.DatabaseConnectionPool.close_connection(cnx)
+        else:
+            flash('Ungültige NFC-UID. Bitte überprüfe die Eingabe.', 'error')
+            return False
+    return False
+
+
+def delete_user_nfc_token(user_id, token_id):
+    """
+    Entfernt einen NFC-Token aus der Datenbank.
+
+    Args:
+        user_id (int): Die ID des Benutzers.
+        token_id (int): Die des zu entfernenen Tokens.
+
+    Returns:
+        bool: True bei Erfolg, False bei Fehler (z.B. ungültige ID, Datenbankfehler).
+    """
+
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
+    if cnx:
+        cursor = cnx.cursor()
+        if token_id:
+            try:
+                print(f"Lösche NFC-Tokens: {token_id} von Benutzer {user_id}")
+                query = "DELETE FROM nfc_token WHERE token_id = %s AND user_id = %s"
+                cursor.execute(query, (token_id, user_id))
+                cnx.commit()
+                return True
+            except Error as err:
+                print(f"Fehler beim Entfernen des NFC-Tokens: {err}")
                 cnx.rollback()
                 return False
             finally:
@@ -191,7 +228,7 @@ def get_user_by_id(user_id):
         user_id (int): Die ID des Benutzers.
 
     Returns:
-        dict: Ein Dictionary mit den Benutzerdaten (id, code, nachname, vorname, is_locked, is_admin, password, nfc_uid)
+        dict: Ein Dictionary mit den Benutzerdaten (id, code, nachname, vorname, is_locked, is_admin, password)
               oder None, falls kein Benutzer gefunden wird.
     """
 
@@ -200,7 +237,7 @@ def get_user_by_id(user_id):
         cursor = cnx.cursor(dictionary=True)
         try:
             query = """
-                SELECT id, code, nachname, vorname, is_locked, is_admin, password, nfc_uid
+                SELECT id, code, nachname, vorname, is_locked, is_admin, password
                 FROM users
                 WHERE id = %s
             """
@@ -217,27 +254,27 @@ def get_user_by_id(user_id):
     return None
 
 
-def get_total_credits_for_user(user_id):
+def get_saldo_for_user(user_id):
     """
-    Berechnet die Summe der Credits für den Benutzer mit der übergebenen user_id.
+    Berechnet das Saldo für den Benutzer mit der übergebenen user_id.
 
     Args:
         user_id (int): Die ID des Benutzers.
 
     Returns:
-        int: Die Summe der Credits oder 0, falls kein Benutzer gefunden wird.
+        int: Das Saldo oder 0, falls kein Benutzer gefunden wird.
     """
 
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if cnx:
         cursor = cnx.cursor()
         try:
-            query = "SELECT SUM(credits) FROM transactions WHERE user_id = %s"
+            query = "SELECT SUM(saldo_aenderung) FROM transactions WHERE user_id = %s"
             cursor.execute(query, (user_id,))
-            total_credits = cursor.fetchone()[0] or 0
-            return total_credits
+            saldo = cursor.fetchone()[0] or 0
+            return saldo
         except Error as err:
-            print(f"Datenbankfehler beim Abrufen der Gesamtcredits: {err}")
+            print(f"Datenbankfehler beim Abrufen des Saldos: {err}")
             return 0
         finally:
             if cursor:
@@ -246,12 +283,12 @@ def get_total_credits_for_user(user_id):
     return 0
 
 
-def get_total_credits_by_user():
+def get_saldo_by_user():
     """
-    Berechnet die Summe der Credits für jeden Benutzer.
+    Berechnet das Saldo für jeden Benutzer.
 
     Returns:
-        dict: Ein Dictionary, wobei der Schlüssel die Benutzer-ID und der Wert die Summe der Credits ist.
+        dict: Ein Dictionary, wobei der Schlüssel die Benutzer-ID und der Wert das Saldo ist.
               Enthält alle Benutzer, auch solche ohne Transaktionen (Wert dann 0).
     """
 
@@ -260,16 +297,16 @@ def get_total_credits_by_user():
         cursor = cnx.cursor(dictionary=True)
         try:
             query = """
-                SELECT u.id, SUM(t.credits) AS total_credits
+                SELECT u.id, SUM(t.saldo_aenderung) AS saldo
                 FROM users u
                 LEFT JOIN transactions t ON u.id = t.user_id
                 GROUP BY u.id
             """
             cursor.execute(query)
-            credits_by_user = {row['id']: row['total_credits'] or 0 for row in cursor.fetchall()}
-            return credits_by_user
+            saldo_by_user = {row['id']: row['saldo'] or 0 for row in cursor.fetchall()}
+            return saldo_by_user
         except Error as err:
-            print(f"Datenbankfehler beim Abrufen der Credits pro Benutzer: {err}")
+            print(f"Datenbankfehler beim Abrufen des Saldos pro Benutzer: {err}")
             return {}
         finally:
             if cursor:
@@ -284,7 +321,7 @@ def get_all_users():
 
     Returns:
         list: Eine Liste von Dictionaries, wobei jedes Dictionary einen Benutzer repräsentiert
-              (id, code, nachname, vorname, is_locked, is_admin, nfc_uid).
+              (id, code, nachname, vorname, is_locked, is_admin).
     """
 
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
@@ -292,7 +329,7 @@ def get_all_users():
         cursor = cnx.cursor(dictionary=True)
         try:
             query = """
-                SELECT id, code, nachname, vorname, is_locked, is_admin, nfc_uid
+                SELECT id, code, nachname, vorname, is_locked, is_admin
                 FROM users
                 ORDER BY nachname
             """
@@ -308,6 +345,34 @@ def get_all_users():
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return []
 
+def get_user_nfc_tokens(user_id):
+    """
+    Ruft alle Tokens eines Benutzer ab, absteigend sortiert nach dem Zeitpunkt der letzten Verwendung.
+
+    Args:
+        user_id (int): Die ID des Benutzers.
+
+    Returns:
+        list: Eine Liste von Dictionaries, wobei jedes Dictionary einen Token repräsentiert
+              (token_id, token_name, token_uid, last_used). Gibt None zurück, falls ein Fehler auftritt.
+    """
+
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
+    if cnx:
+        cursor = cnx.cursor(dictionary=True)
+        try:
+            query = "SELECT token_id, token_name, token_uid, last_used FROM nfc_token WHERE user_id = %s ORDER BY last_used DESC"
+            cursor.execute(query, (user_id,))
+            transactions = cursor.fetchall()
+            return transactions
+        except Error as err:
+            print(f"Datenbankfehler beim Abrufen der Benutzertransaktionen: {err}")
+            return None
+        finally:
+            if cursor:
+                cursor.close()
+            db_utils.DatabaseConnectionPool.close_connection(cnx)
+    return None
 
 def get_user_transactions(user_id):
     """
@@ -318,14 +383,14 @@ def get_user_transactions(user_id):
 
     Returns:
         list: Eine Liste von Dictionaries, wobei jedes Dictionary eine Transaktion repräsentiert
-              (id, article, credits, timestamp). Gibt None zurück, falls ein Fehler auftritt.
+              (id, article, saldo_aendung, timestamp). Gibt None zurück, falls ein Fehler auftritt.
     """
 
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if cnx:
         cursor = cnx.cursor(dictionary=True)
         try:
-            query = "SELECT id, article, credits, timestamp FROM transactions WHERE user_id = %s ORDER BY timestamp DESC"
+            query = "SELECT id, article, saldo_aenderung, timestamp FROM transactions WHERE user_id = %s ORDER BY timestamp DESC"
             cursor.execute(query, (user_id,))
             transactions = cursor.fetchall()
             return transactions
@@ -339,14 +404,14 @@ def get_user_transactions(user_id):
     return None
 
 
-def add_transaction(user_id, article, credits_change):
+def add_transaction(user_id, article, saldo_aenderung):
     """
     Fügt eine neue Transaktion für einen Benutzer hinzu.
 
     Args:
         user_id (int): Die ID des Benutzers.
         article (str): Der Artikel der Transaktion.
-        credits (int): Die Anzahl der Credits der Transaktion.
+        saldo_aenderung (int): Die Änderung im Saldo der Transaktion.
 
     Returns:
         bool: True bei Erfolg, False bei Fehler.
@@ -356,8 +421,8 @@ def add_transaction(user_id, article, credits_change):
     if cnx:
         cursor = cnx.cursor()
         try:
-            query = "INSERT INTO transactions (user_id, article, credits) VALUES (%s, %s, %s)"
-            cursor.execute(query, (user_id, article, credits_change))
+            query = "INSERT INTO transactions (user_id, article, saldo_aenderung) VALUES (%s, %s, %s)"
+            cursor.execute(query, (user_id, article, saldo_aenderung))
             cnx.commit()
             return True
         except Error as err:
@@ -445,12 +510,18 @@ def login():
         str: Die gerenderte Login-Seite (login.html) mit optionaler Fehlermeldung.
     """
 
+    # Wenn der Benutzer bereits eingeloggt ist, weiterleiten
+    if 'user_id' in session:
+        print("Benutzercookie gefunden, leite weiter.")
+        return redirect(BASE_URL + url_for('user_info'))
+
     if request.method == 'POST':
         code = request.form['code']
         password = request.form['password']
         user = fetch_user(code)
         if user and check_password_hash(user['password'], password):
             session['user_id'] = user['id']
+            session.permanent = True
             print("Redirecting: " + (BASE_URL + url_for('user_info')))
             return redirect(BASE_URL + url_for('user_info'))
         return render_template('login.html', error='Ungültiger Benutzername oder Passwort')
@@ -462,7 +533,7 @@ def user_info():
     """
     Zeigt die Benutzerinformationen an und verarbeitet die Passwortänderung.
 
-    Wenn die Methode GET ist, werden die Benutzerinformationen, Transaktionen und die Summe der Credits abgerufen und angezeigt.
+    Wenn die Methode GET ist, werden die Benutzerinformationen, Transaktionen und der Saldo abgerufen und angezeigt.
     Wenn die Methode POST ist und das Passwortänderungsformular abgeschickt wurde, wird das aktuelle Passwort überprüft,
     das neue Passwort validiert, gehasht und in der Datenbank aktualisiert.
 
@@ -475,8 +546,9 @@ def user_info():
         return redirect(BASE_URL + url_for('login'))
 
     user = get_user_by_id(user_id)
+    nfc_tokens = get_user_nfc_tokens(user_id)
     transactions = get_user_transactions(user_id)
-    total_credits = sum(t['credits'] for t in transactions) if transactions else 0
+    saldo = sum(t['saldo_aenderung'] for t in transactions) if transactions else 0
 
     if request.method == 'POST':
         if 'change_password' in request.form:
@@ -500,13 +572,13 @@ def user_info():
                     return redirect(BASE_URL + url_for('user_info'))
                 flash('Fehler beim Ändern des Passworts.', 'error')
 
-    return render_template('user_info.html', user=user, transactions=transactions, total_credits=total_credits)
+    return render_template('user_info.html', user=user, nfc_tokens=nfc_tokens, transactions=transactions, saldo=saldo)
 
 
 @app.route('/admin')
 def admin_dashboard():
     """
-    Zeigt das Admin-Dashboard an, mit einer Übersicht über alle Benutzer und deren Credits.
+    Zeigt das Admin-Dashboard an, mit einer Übersicht über alle Benutzer und deren Saldo.
 
     Benötigt einen angemeldeten Admin-Benutzer.
 
@@ -520,13 +592,13 @@ def admin_dashboard():
         admin_user = get_user_by_id(user_id)
         if admin_user and admin_user['is_admin']:
             users = get_all_users()
-            credits_by_user = get_total_credits_by_user()
-            return render_template('admin_dashboard.html', user=admin_user, users=users, credits_by_user=credits_by_user)
+            saldo_by_user = get_saldo_by_user()
+            return render_template('admin_dashboard.html', user=admin_user, users=users, saldo_by_user=saldo_by_user)
     return redirect(BASE_URL + url_for('login'))
 
 
 @app.route('/admin/user/<int:user_id>/transactions', methods=['GET', 'POST'])
-def admin_user_transactions(user_id):
+def admin_user_modification(user_id):
     """
     Zeigt die Transaktionen eines bestimmten Benutzers an und ermöglicht das Hinzufügen und Löschen von Transaktionen
     sowie das Löschen des Benutzers selbst.  Benötigt einen angemeldeten Admin-Benutzer.
@@ -535,7 +607,7 @@ def admin_user_transactions(user_id):
         user_id (int): Die ID des Benutzers, dessen Transaktionen angezeigt werden sollen.
 
     Returns:
-        str: Die gerenderte Seite mit den Transaktionen des Benutzers (admin_user_transactions.html)
+        str: Die gerenderte Seite mit den Transaktionen des Benutzers (admin_user_modification.html)
              oder eine Weiterleitung zur Login-Seite, falls der Benutzer nicht angemeldet oder kein Admin ist.
     """
 
@@ -544,44 +616,55 @@ def admin_user_transactions(user_id):
         return redirect(BASE_URL + url_for('login'))
 
     target_user = get_user_by_id(user_id)
+    nfc_tokens = get_user_nfc_tokens(user_id)
     transactions = get_user_transactions(user_id)
-    total_credits = get_total_credits_for_user(user_id)
+    saldo = get_saldo_for_user(user_id)
 
+    print(request.form)
     if request.method == 'POST':
         if 'delete_transactions' in request.form:
             if delete_all_transactions(user_id):
                 flash('Alle Transaktionen für diesen Benutzer wurden gelöscht.', 'success')
-                return redirect(BASE_URL + url_for('admin_user_transactions', user_id=user_id))
+                return redirect(BASE_URL + url_for('admin_user_modification', user_id=user_id))
             flash('Fehler beim Löschen der Transaktionen.', 'error')
         elif 'add_transaction' in request.form:
             article = request.form['article']
-            credits_change = int(request.form['credits'])
-            if add_transaction(user_id, article, credits_change):
+            saldo_aenderung = int(request.form['saldo_aenderung'])
+            if add_transaction(user_id, article, saldo_aenderung):
                 flash('Transaktion erfolgreich hinzugefügt.', 'success')
-                return redirect(BASE_URL + url_for('admin_user_transactions', user_id=user_id))
+                return redirect(BASE_URL + url_for('admin_user_modification', user_id=user_id))
         elif 'lock_user' in request.form:
             if toggle_user_lock(user_id, True):
                 flash(f'Benutzer "{target_user["nachname"]}, {target_user["vorname"]}" (ID {user_id}) wurde gesperrt.', 'success')
-                return redirect(BASE_URL + url_for('admin_user_transactions', user_id=user_id))
+                return redirect(BASE_URL + url_for('admin_user_modification', user_id=user_id))
             flash(f'Fehler beim Sperren des Benutzers "{target_user["nachname"]}, {target_user["vorname"]}" (ID {user_id}).', 'error')
         elif 'unlock_user' in request.form:
             if toggle_user_lock(user_id, False):
                 flash(f'Benutzer "{target_user["nachname"]}, {target_user["vorname"]}" (ID {user_id}) wurde entsperrt.', 'success')
-                return redirect(BASE_URL + url_for('admin_user_transactions', user_id=user_id))
+                return redirect(BASE_URL + url_for('admin_user_modification', user_id=user_id))
             flash(f'Fehler beim Entsperren des Benutzers "{target_user["nachname"]}, {target_user["vorname"]}" (ID {user_id}).', 'error')
         elif 'delete_user' in request.form:
             if delete_user(user_id):
                 flash(f'Benutzer "{target_user["nachname"]}, {target_user["vorname"]}" (ID {user_id}) wurde gelöscht.', 'success')
                 return redirect(BASE_URL + url_for('admin_dashboard')) # Zurück zur Benutzerübersicht
             flash(f'Fehler beim Löschen des Benutzers "{target_user["nachname"]}, {target_user["vorname"]}" (ID {user_id}).', 'error')
-        elif 'add_nfc_token' in request.form:
-            nfc_uid = request.form['nfc_uid']
-            if update_user_nfc_uid(user_id, nfc_uid):
-                flash('NFC-Token erfolgreich aktualisiert.', 'success')
-                return redirect(BASE_URL + url_for('admin_user_transactions', user_id=user_id))
-            flash('Fehler beim Aktualisieren des NFC-Tokens.', 'error')
+        elif 'add_user_nfc_token' in request.form:
+            nfc_token_name = request.form['nfc_token_name']
+            nfc_token_uid = request.form['nfc_token_uid']
+            if add_user_nfc_token(user_id, nfc_token_name, nfc_token_uid):
+                flash('NFC-Token erfolgreich hinzugefügt.', 'success')
+                return redirect(BASE_URL + url_for('admin_user_modification', user_id=user_id))
+            flash('Fehler beim Hinzufügen des NFC-Tokens.', 'error')
+        elif 'delete_user_nfc_token' in request.form:
+            nfc_token_id = request.form['nfc_token_id']
+            if delete_user_nfc_token(user_id, nfc_token_id):
+                flash('NFC-Token erfolgreich entfernt.', 'success')
+                return redirect(BASE_URL + url_for('admin_user_modification', user_id=user_id))
+            flash('Fehler beim Entfernen des NFC-Tokens.', 'error')
+        else:
+            flash('Ungültige Anfrage.', 'error')
 
-    return render_template('admin_user_transactions.html', user=target_user, transactions=transactions, total_credits=total_credits)
+    return render_template('admin_user_modification.html', user=target_user, nfc_tokens=nfc_tokens, transactions=transactions, saldo=saldo)
 
 
 @app.route('/logout')
@@ -599,4 +682,4 @@ def logout():
 
 if __name__ == '__main__':
     debug_mode = os.getenv('FLASK_DEBUG', 'False').lower() in ['true', '1', 'yes']
-    app.run(debug=debug_mode)
+    app.run(port=5001, debug=debug_mode)
