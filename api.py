@@ -89,7 +89,9 @@ def finde_benutzer_zu_nfc_uid(uid_base64):
 
     try:
         uid_bytes = base64.b64decode(uid_base64)
-        cursor.execute("SELECT id, nachname, vorname FROM users WHERE nfc_uid = %s", (uid_bytes,))
+
+        #cursor.execute("SELECT id, nachname, vorname FROM users WHERE nfc_uid = %s", (uid_bytes,))
+        cursor.execute("SELECT u.id AS id, u.nachname AS nachname, u.vorname AS vorname FROM nfc_token AS t INNER JOIN users AS u ON t.user_id = u.id WHERE t.token_uid = %s", (uid_bytes,))
         user = cursor.fetchone()
         if user:
             print(f"Benutzer gefunden: {user[0]} - {user[1]}, {user[2]}") # ID, Nachnachme, Vorname
@@ -132,18 +134,18 @@ def health_protected_route(user_id, username):
         db_utils.DatabaseConnectionPool.close_connection(cnx)
 
 
-@app.route('/guthaben-alle', methods=['GET'])
+@app.route('/saldo-alle', methods=['GET'])
 @api_key_required
 def get_alle_summe(user_id, username):
     """
-    Gibt das Guthaben aller Personen in der Datenbank zurück (nur für authentifizierte Benutzer).
+    Gibt das Saldo aller Personen in der Datenbank zurück (nur für authentifizierte Benutzer).
 
     Args:
         user_id (int): Die ID des authentifizierten Benutzers.
         username (str): Der Benutzername des authentifizierten Benutzers.
 
     Returns:
-        flask.Response: Eine JSON-Antwort mit einer Liste von Benutzern und ihrem Guthaben.
+        flask.Response: Eine JSON-Antwort mit einer Liste von Benutzern und ihrem Saldo.
     """
 
     print(f"Benutzer authentifiziert {user_id} - {username}.")
@@ -154,9 +156,10 @@ def get_alle_summe(user_id, username):
 
     try:
         cursor.execute(
-            "SELECT u.nachname AS nachname, u.vorname AS vorname, SUM(t.saldo_aenderung) AS saldo FROM transactions AS t INNER JOIN users AS u ON t.user_id = u.id GROUP BY u.nachname, u.vorname ORDER BY saldo DESC;")
+            "SELECT u.nachname AS nachname, u.vorname AS vorname, SUM(t.saldo_aenderung) AS saldo " \
+            "FROM transactions AS t INNER JOIN users AS u ON t.user_id = u.id GROUP BY u.nachname, u.vorname ORDER BY saldo DESC;")
         personen = cursor.fetchall()
-        print("Das Gesamtguthaben aller Personen wurde ermittelt.")
+        print("Das Saldo aller Personen wurde ermittelt.")
         return jsonify(personen)
     except Error as err:
         print(f'Fehler beim Lesen der Daten: {err}.')
@@ -166,9 +169,58 @@ def get_alle_summe(user_id, username):
         db_utils.DatabaseConnectionPool.close_connection(cnx)
 
 
-@app.route('/nfc-transaction', methods=['PUT'])
+# @app.route('/nfc-saldoabfrage', methods=['POST'])
+# @api_key_required
+# def nfc_saldoabfrage(user_id, username):
+#     """
+#     Holt den aktuelle Saldo des Token-Besitzer aus der Datenbank.
+
+#     Args:
+#         user_id (int): Die ID des authentifizierten API-Benutzers.
+#         username (str): Der Benutzername des authentifizierten API-Benutzers.
+
+#     Returns:
+#         flask.Response: Eine JSON-Antwort mit dem Saldo oder einem Fehler.
+#     """
+
+#     print(f"Benutzer authentifiziert {user_id} - {username}.")
+#     daten = request.get_json()
+#     if not daten or 'uid' not in daten:
+#         return jsonify({'error': 'Ungültige Anfrage. Die UID des NFC-Tokens fehlt.'}), 400
+
+#     nfc_uid = daten['uid']
+#     benutzer_id, benutzer_nachname, benutzer_vorname = finde_benutzer_zu_nfc_uid(nfc_uid)
+
+#     if benutzer_id:
+#         cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
+#         if not cnx:
+#             return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
+#         cursor = cnx.cursor(dictionary=True)
+#         try:
+#             cursor.execute(
+#                 "SELECT u.nachname AS nachname, u.vorname AS vorname, SUM(t.saldo_aenderung) AS saldo " \
+#                 "FROM transactions AS t INNER JOIN users AS u ON t.user_id = u.id WHERE u.id = %s GROUP BY u.nachname, u.vorname", (benutzer_id,))
+#             person = cursor.fetchone()
+
+#             if person:
+#                 print(f"Person mit Code {benutzer_id} gefunden: {person['nachname']}, {person['vorname']} - Saldo {person['saldo']}")
+#                 return jsonify(person)
+#             print(f"Person mit Code {benutzer_id} hat noch keine Transaktionen durchgeführt.")
+#             return jsonify({'error': 'Person hat noch keine Transaktionen durchgeführt.'}), 200
+
+#         except Error as err:
+#             print(f"Fehler beim Lesen der Daten: {err}")
+#             return jsonify({'error': 'Fehler beim Lesen der Daten.'}), 500
+#         finally:
+#             cursor.close()
+#             db_utils.DatabaseConnectionPool.close_connection(cnx)
+#     else:
+#         return jsonify({'error': f'Kein Benutzer mit der UID {nfc_uid} gefunden.'}), 404
+
+
+@app.route('/nfc-transaktion', methods=['PUT'])
 @api_key_required
-def process_nfc_transaction(user_id, username):
+def nfc_transaction(user_id, username):
     """
     Verarbeitet eine NFC-Transaktion, indem die übermittelte UID einem Benutzer zugeordnet
     und 1 Strich in der Datenbank vermerkt wird.
@@ -193,7 +245,7 @@ def process_nfc_transaction(user_id, username):
         cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
         if not cnx:
             return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
-        cursor = cnx.cursor()
+        cursor = cnx.cursor(dictionary=True)
         try:
             artikel = "NFC-Scan"
             saldo_aenderung = -1
@@ -201,8 +253,17 @@ def process_nfc_transaction(user_id, username):
             werte_transaktion = (benutzer_id, artikel, saldo_aenderung)
             cursor.execute(sql_transaktion, werte_transaktion)
             cnx.commit()
-            print(f'Transaktion für Benutzer-ID {benutzer_id} - {benutzer_nachname}, {benutzer_vorname} erfolgreich erstellt ({{ saldo_aenderung }} Strich(e)).')
-            return jsonify({'message': f'Transaktion für {benutzer_nachname}, {benutzer_vorname} erfolgreich erstellt ({{ saldo_aenderung }} Strich(e)).'}), 200
+            print(f'Transaktion für Benutzer-ID {benutzer_id} - {benutzer_vorname} {benutzer_nachname} erfolgreich erstellt (Saldo {saldo_aenderung}).')
+
+            cursor.execute(
+                "SELECT SUM(t.saldo_aenderung) AS saldo " \
+                "FROM transactions AS t INNER JOIN users AS u ON t.user_id = u.id WHERE u.id = %s", (benutzer_id,))
+            person = cursor.fetchone()
+            if person:
+                print(f"Person mit Code {benutzer_id} gefunden: {benutzer_vorname} {benutzer_nachname} - Aktueller Saldo: {person['saldo']}")
+                #return jsonify({'message': f'Danke {benutzer_vorname} {benutzer_nachname}. Dein aktueller Saldo beträgt: {person["saldo"]}.'}), 200
+                return jsonify({'message': f'Danke {benutzer_vorname}. Dein aktueller Saldo beträgt: {person["saldo"]}.'}), 200
+            return jsonify({'message': f'Transaktion für {benutzer_vorname} {benutzer_nachname} erfolgreich erstellt (Saldo {saldo_aenderung}).'}), 200 # dieser Code sollte nie erreicht werden
         except Error as err:
             cnx.rollback()
             print(f"Fehler beim Erstellen der Transaktion: {err}")
@@ -394,7 +455,8 @@ def person_exists_by_code(user_id, username, code):
         if person:
             print(f"Person mit Code {code} gefunden: {person['nachname']}, {person['vorname']}")
             return jsonify(person)
-        return jsonify({'error': 'Person nicht gefunden.'}), 200
+        print(f"Person mit Code {code} nicht gefunden.")
+        return jsonify({'error': 'Person nicht gefunden.'}), 404
     except Error as err:
         print(f"Fehler beim Lesen der Daten: {err}")
         return jsonify({'error': 'Fehler beim Lesen der Daten.'}), 500
@@ -428,10 +490,11 @@ def get_person_by_code(user_id, username, code):
         person = cursor.fetchone()
         if person:
             cursor.execute(
-                "SELECT u.nachname AS nachname, u.vorname AS vorname, SUM(t.saldo_aenderung) AS saldo FROM transactions AS t INNER JOIN users AS u ON t.user_id = u.id WHERE u.code = %s GROUP BY u.nachname, u.vorname", (code,))
+                "SELECT u.nachname AS nachname, u.vorname AS vorname, SUM(t.saldo_aenderung) AS saldo " \
+                "FROM transactions AS t INNER JOIN users AS u ON t.user_id = u.id WHERE u.code = %s GROUP BY u.nachname, u.vorname", (code,))
             person = cursor.fetchone()
             if person:
-                print(f"Person mit Code {code} gefunden: {person['nachname']}, {person['vorname']} - {person['saldo']} Saldo")
+                print(f"Person mit Code {code} gefunden: {person['nachname']}, {person['vorname']} - Saldo {person['saldo']}")
                 return jsonify(person)
             print(f"Person mit Code {code} hat noch keine Transaktionen durchgeführt.")
             return jsonify({'error': 'Person hat noch keine Transaktionen durchgeführt.'}), 200
