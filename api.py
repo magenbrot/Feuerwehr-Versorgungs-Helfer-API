@@ -13,7 +13,7 @@ app = Flask(__name__)
 app.json.ensure_ascii = False
 app.json.mimetype = "application/json; charset=utf-8"
 
-# Initialisiere den Pool einmal beim Start der Anwendung
+# Initialisiere den Pool einmal beim Start der Anwendung # pylint: disable=R0801
 try:
     db_utils.DatabaseConnectionPool.initialize_pool(config.db_config)
 except Error:
