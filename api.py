@@ -85,7 +85,7 @@ def finde_benutzer_zu_nfc_token(token_base64):
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if not cnx:
         return None
-    cursor = cnx.cursor()
+    cursor = cnx.cursor(dictionary=True)
 
     try:
         token_bytes = base64.b64decode(token_base64)
@@ -94,7 +94,7 @@ def finde_benutzer_zu_nfc_token(token_base64):
         "FROM nfc_token AS t INNER JOIN users AS u ON t.user_id = u.id WHERE t.token_daten = %s", (token_bytes,))
         user = cursor.fetchone()
         if user:
-            print(f"Benutzer: {user[0]} - {user[1]}, {user[2]} (TokenID: {user[3]})") # ID, Nachnachme, Vorname, TokenID
+            print(f"Benutzer: {user['id']} - {user['vorname']}, {user['nachname']} (TokenID: {user['token_id']})") # ID, Nachnachme, Vorname, TokenID
             return user
         return None
     except Error as err:
@@ -201,7 +201,7 @@ def nfc_transaction(user_id, username):
 
         try:
             sql_transaktion = "UPDATE nfc_token SET last_used = NOW() WHERE token_id = %s"
-            cursor.execute(sql_transaktion, (benutzer['token_id'],))
+            cursor.execute(sql_transaktion, (int(benutzer['token_id']),))
             cnx.commit()
         except Error as err:
             cnx.rollback()
