@@ -223,7 +223,7 @@ def nfc_transaction(user_id, username):
             person = cursor.fetchone()
             if person:
                 print(f"Benutzer ID {benutzer['id']} gefunden: {benutzer['vorname']} {benutzer['nachname']} - Aktueller Saldo: {person['saldo']}")
-                return jsonify({'message': f'Danke {benutzer['vorname']}. Dein aktueller Saldo beträgt: {person["saldo"]}.'}), 200
+                return jsonify({'message': f"Danke {benutzer['vorname']}. Dein aktueller Saldo beträgt: {person["saldo"]}."}), 200
             return jsonify({'message': f'Transaktion für {benutzer['vorname']} {benutzer['nachname']} erfolgreich erstellt (Saldo {saldo_aenderung}).'}), 200 # dieser Code sollte nie erreicht werden
         except Error as err:
             cnx.rollback()
