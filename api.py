@@ -1,6 +1,7 @@
 """Dieses Modul ist eine API Middleware für den Feuerwehr-Versorgungs-Helfer"""
 
 import base64
+import sys
 from functools import wraps
 from flask import Flask, jsonify, request # pigar: required-packages=uWSGI
 from mysql.connector import Error
@@ -12,6 +13,12 @@ app = Flask(__name__)
 app.json.ensure_ascii = False
 app.json.mimetype = "application/json; charset=utf-8"
 
+# Initialisiere den Pool einmal beim Start der Anwendung
+try:
+    db_utils.DatabaseConnectionPool.initialize_pool(config.db_config)
+except Error:
+    print("Fehler beim Starten der Datenbankverbindung.")
+    sys.exit(1)
 
 def get_user_by_api_key(api_key):
     """
