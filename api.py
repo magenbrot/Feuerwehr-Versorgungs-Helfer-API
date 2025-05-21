@@ -162,7 +162,7 @@ def get_alle_summe(user_id, username):
         print("Das Saldo aller Personen wurde ermittelt.")
         return jsonify(personen)
     except Error as err:
-        print(f'Fehler beim Lesen der Daten: {err}.')
+        print(f"Fehler beim Lesen der Daten: {err}.")
         return jsonify({'error': 'Fehler beim Lesen der Daten.'}), 500
     finally:
         cursor.close()
@@ -215,7 +215,7 @@ def nfc_transaction(user_id, username):
             werte_transaktion = (benutzer['id'], artikel, saldo_aenderung)
             cursor.execute(sql_transaktion, werte_transaktion)
             cnx.commit()
-            print(f'Transaktion für Benutzer-ID {benutzer['id']} - {benutzer['vorname']} {benutzer['nachname']} erfolgreich erstellt (Saldo {saldo_aenderung}).')
+            print(f"Transaktion für Benutzer-ID {benutzer['id']} - {benutzer['vorname']} {benutzer['nachname']} erfolgreich erstellt (Saldo {saldo_aenderung}).")
 
             cursor.execute(
                 "SELECT SUM(t.saldo_aenderung) AS saldo " \
@@ -262,7 +262,7 @@ def get_alle_personen(user_id, username):
         print("Transaktionen wurden ermittelt.")
         return jsonify(personen)
     except Error as err:
-        print(f'Fehler beim Lesen der Daten: {err}.')
+        print(f"Fehler beim Lesen der Daten: {err}.")
         return jsonify({'error': 'Fehler beim Lesen der Daten.'}), 500
     finally:
         cursor.close()
