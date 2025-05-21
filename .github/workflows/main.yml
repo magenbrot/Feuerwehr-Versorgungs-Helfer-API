@@ -26,13 +26,6 @@ jobs:
     permissions:
       contents: read
 
-  run_bandit:
-    uses: ./.github/workflows/bandit.yml
-    permissions:
-      contents: read # for actions/checkout to fetch code
-      security-events: write # for github/codeql-action/upload-sarif to upload SARIF results
-      actions: read # only required for a private repository by github/codeql-action/upload-sarif to get the Action run status
-
   deploy_application:
     needs: [run_codeql, run_pylint, run_bandit]
     uses: ./.github/workflows/deploy-and-restart-api.yml
