@@ -93,7 +93,8 @@ def finde_benutzer_zu_nfc_token(token_base64):
     try:
         token_bytes = base64.b64decode(token_base64)
 
-        cursor.execute("SELECT u.id AS id, u.nachname AS nachname, u.vorname AS vorname, t.token_id as token_id FROM nfc_token AS t INNER JOIN users AS u ON t.user_id = u.id WHERE t.token_daten = %s", (token_bytes,))
+        cursor.execute("SELECT u.id AS id, u.nachname AS nachname, u.vorname AS vorname, t.token_id as token_id " \
+        "FROM nfc_token AS t INNER JOIN users AS u ON t.user_id = u.id WHERE t.token_daten = %s", (token_bytes,))
         user = cursor.fetchone()
         if user:
             print(f"Benutzer: {user[0]} - {user[1]}, {user[2]} (TokenID: {user[3]})") # ID, Nachnachme, Vorname, TokenID
@@ -203,7 +204,6 @@ def nfc_transaction(user_id, username):
 
         try:
             sql_transaktion = "UPDATE nfc_token SET last_used = NOW() WHERE token_id = %s"
-            #print(f"aktualisiere last_used: {sql_transaktion} - {benutzer_token_id} ")
             cursor.execute(sql_transaktion, (benutzer_token_id,))
             cnx.commit()
         except Error as err:
@@ -226,7 +226,6 @@ def nfc_transaction(user_id, username):
             person = cursor.fetchone()
             if person:
                 print(f"Benutzer ID {benutzer_id} gefunden: {benutzer_vorname} {benutzer_nachname} - Aktueller Saldo: {person['saldo']}")
-                #return jsonify({'message': f'Danke {benutzer_vorname} {benutzer_nachname}. Dein aktueller Saldo beträgt: {person["saldo"]}.'}), 200
                 return jsonify({'message': f'Danke {benutzer_vorname}. Dein aktueller Saldo beträgt: {person["saldo"]}.'}), 200
             return jsonify({'message': f'Transaktion für {benutzer_vorname} {benutzer_nachname} erfolgreich erstellt (Saldo {saldo_aenderung}).'}), 200 # dieser Code sollte nie erreicht werden
         except Error as err:

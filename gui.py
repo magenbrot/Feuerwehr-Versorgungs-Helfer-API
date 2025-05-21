@@ -3,7 +3,6 @@
 import binascii
 import os
 import sys
-from datetime import datetime
 from dotenv import load_dotenv
 from flask import Flask, render_template, request, redirect, url_for, session, flash # pigar: required-packages=uWSGI
 from werkzeug.security import check_password_hash, generate_password_hash
