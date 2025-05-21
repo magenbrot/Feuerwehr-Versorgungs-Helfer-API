@@ -30,7 +30,7 @@
     <table>
         <thead>
             <tr>
-                <th>Artikel</th>
+                <th>Beschreibung</th>
                 <th>Soll / Haben</th>
                 <th>Zeitpunkt</th>
             </tr>
@@ -38,7 +38,7 @@
         <tbody>
             {% for transaction in transactions %}
             <tr>
-                <td>{{ transaction.article }}</td>
+                <td>{{ transaction.beschreibung }}</td>
                 <td>{{ transaction.saldo_aenderung }}</td>
                 <td>{{ transaction.timestamp }}</td>
             </tr>

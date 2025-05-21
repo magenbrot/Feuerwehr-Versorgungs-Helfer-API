@@ -15,7 +15,7 @@ CREATE TABLE api_users (
 CREATE TABLE transactions (
   id int NOT NULL,
   user_id int NOT NULL,
-  article varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  beschreibung varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   saldo_aenderung int NOT NULL DEFAULT '1',
   timestamp datetime NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
