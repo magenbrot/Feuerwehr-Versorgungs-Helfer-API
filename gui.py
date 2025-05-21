@@ -38,7 +38,7 @@ def hex_to_binary(hex_string):
     Konvertiert einen Hexadezimalstring in Binärdaten.
 
     Diese Funktion nimmt einen Hexadezimalstring entgegen und wandelt ihn in die entsprechende
-    Binärdarstellung um.  Sie wird typischerweise verwendet, um NFC-UIDs zu verarbeiten,
+    Binärdarstellung um.  Sie wird typischerweise verwendet, um NFC-Token Daten zu verarbeiten,
     die oft als Hexadezimalstrings dargestellt werden.
 
     Args:
@@ -59,26 +59,26 @@ def hex_to_binary(hex_string):
         return None
 
 
-def add_user_nfc_token(user_id, token_name, hex_uid):
+def add_user_nfc_token(user_id, token_name, token_hex):
     """
     Fügt einen neuen NFC-Token der Datenbank hinzu.
 
     Args:
         user_id (int): Die ID des Benutzers.
-        hex_uid (str): Die Hexadezimaldarstellung der NFC-UID.
+        token_hex (str): Die Hexadezimaldarstellung der NFC-Token Daten.
 
     Returns:
-        bool: True bei Erfolg, False bei Fehler (z.B. ungültige UID, Datenbankfehler).
+        bool: True bei Erfolg, False bei Fehler (z.B. ungültige Daten, Datenbankfehler).
     """
 
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if cnx:
         cursor = cnx.cursor()
-        binary_uid = hex_to_binary(hex_uid)
-        if binary_uid:
+        token_binary = hex_to_binary(token_hex)
+        if token_binary:
             try:
-                query = "INSERT INTO nfc_token SET user_id = %s, token_name = %s, token_uid = %s, last_used = NOW()"
-                cursor.execute(query, (user_id, token_name, binary_uid))
+                query = "INSERT INTO nfc_token SET user_id = %s, token_name = %s, token_daten = %s, last_used = NOW()"
+                cursor.execute(query, (user_id, token_name, token_binary))
                 cnx.commit()
                 return True
             except Error as err:
@@ -89,7 +89,7 @@ def add_user_nfc_token(user_id, token_name, hex_uid):
                 cursor.close()
                 db_utils.DatabaseConnectionPool.close_connection(cnx)
         else:
-            flash('Ungültige NFC-UID. Bitte überprüfe die Eingabe.', 'error')
+            flash('Ungültige NFC-Token Daten. Bitte überprüfe die Eingabe.', 'error')
             return False
     return False
 
@@ -124,7 +124,7 @@ def delete_user_nfc_token(user_id, token_id):
                 cursor.close()
                 db_utils.DatabaseConnectionPool.close_connection(cnx)
         else:
-            flash('Ungültige NFC-UID. Bitte überprüfe die Eingabe.', 'error')
+            flash('Ungültige NFC-Token Daten. Bitte überprüfe die Eingabe.', 'error')
             return False
     return False
 
@@ -222,7 +222,7 @@ def fetch_user(code):
 
 def get_user_by_id(user_id):
     """
-    Ruft einen Benutzer anhand seiner ID ab und holt die zugehörige NFC-UID.
+    Ruft einen Benutzer anhand seiner ID ab und holt die zugehörige NFC-Token Daten.
 
     Args:
         user_id (int): Die ID des Benutzers.
@@ -317,7 +317,7 @@ def get_saldo_by_user():
 
 def get_all_users():
     """
-    Ruft alle Benutzer aus der Datenbank ab, sortiert nach Namen, und holt die zugehörige NFC-UID.
+    Ruft alle Benutzer aus der Datenbank ab, sortiert nach Namen, und holt die zugehörige NFC-Token Daten.
 
     Returns:
         list: Eine Liste von Dictionaries, wobei jedes Dictionary einen Benutzer repräsentiert
@@ -354,14 +354,14 @@ def get_user_nfc_tokens(user_id):
 
     Returns:
         list: Eine Liste von Dictionaries, wobei jedes Dictionary einen Token repräsentiert
-              (token_id, token_name, token_uid, last_used). Gibt None zurück, falls ein Fehler auftritt.
+              (token_id, token_name, token_daten, last_used). Gibt None zurück, falls ein Fehler auftritt.
     """
 
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if cnx:
         cursor = cnx.cursor(dictionary=True)
         try:
-            query = "SELECT token_id, token_name, token_uid, last_used FROM nfc_token WHERE user_id = %s ORDER BY last_used DESC"
+            query = "SELECT token_id, token_name, token_daten, last_used, DATEDIFF(CURDATE(), DATE(last_used)) AS last_used_days_ago FROM nfc_token WHERE user_id = %s ORDER BY last_used DESC"
             cursor.execute(query, (user_id,))
             transactions = cursor.fetchall()
             return transactions
@@ -650,8 +650,8 @@ def admin_user_modification(user_id):
             flash(f'Fehler beim Löschen des Benutzers "{target_user["nachname"]}, {target_user["vorname"]}" (ID {user_id}).', 'error')
         elif 'add_user_nfc_token' in request.form:
             nfc_token_name = request.form['nfc_token_name']
-            nfc_token_uid = request.form['nfc_token_uid']
-            if add_user_nfc_token(user_id, nfc_token_name, nfc_token_uid):
+            nfc_token_daten = request.form['nfc_token_daten']
+            if add_user_nfc_token(user_id, nfc_token_name, nfc_token_daten):
                 flash('NFC-Token erfolgreich hinzugefügt.', 'success')
                 return redirect(BASE_URL + url_for('admin_user_modification', user_id=user_id))
             flash('Fehler beim Hinzufügen des NFC-Tokens.', 'error')

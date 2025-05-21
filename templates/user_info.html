@@ -56,7 +56,7 @@
         <thead>
             <tr>
                 <th>Name</th>
-                <th>UID</th>
+                <th>Daten</th>
                 <th>zuletzt verwendet</th>
             </tr>
         </thead>
@@ -64,8 +64,14 @@
             {% for nfc_token in nfc_tokens %}
             <tr>
                 <td>{{ nfc_token.token_name }}</td>
-                <td>{{ nfc_token.token_uid.hex() }}</td>
-                <td>{{ nfc_token.last_used }}</td>
+                <td>{{ nfc_token.token_daten.hex() }}</td>
+                <td>{{ nfc_token.last_used }}
+                    {% if nfc_token.last_used_days_ago == 0 %}
+                    (heute)
+                    {% else %}
+                    (vor {{ nfc_token.last_used_days_ago }} Tagen)
+                    {% endif %}
+                </td>
             </tr>
             {% endfor %}
         </tbody>
