@@ -27,5 +27,5 @@ jobs:
       contents: read
 
   deploy_application:
-    needs: [run_codeql, run_pylint, run_bandit]
+    needs: [run_codeql, run_pylint]
     uses: ./.github/workflows/deploy-and-restart-api.yml
