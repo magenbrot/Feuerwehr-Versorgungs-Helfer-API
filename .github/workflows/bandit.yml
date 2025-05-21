@@ -13,8 +13,6 @@
 name: Bandit
 on:
   workflow_call:
-  push:
-    branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
   schedule:
