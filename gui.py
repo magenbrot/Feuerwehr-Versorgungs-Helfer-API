@@ -3,6 +3,7 @@
 import binascii
 import os
 import sys
+from datetime import datetime
 from dotenv import load_dotenv
 from flask import Flask, render_template, request, redirect, url_for, session, flash # pigar: required-packages=uWSGI
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -361,7 +362,7 @@ def get_user_nfc_tokens(user_id):
     if cnx:
         cursor = cnx.cursor(dictionary=True)
         try:
-            query = "SELECT token_id, token_name, token_daten, last_used FROM nfc_token WHERE user_id = %s ORDER BY last_used DESC"
+            query = "SELECT token_id, token_name, token_daten, last_used, DATEDIFF(CURDATE(), DATE(last_used)) AS last_used_days_ago FROM nfc_token WHERE user_id = %s ORDER BY last_used DESC"
             cursor.execute(query, (user_id,))
             transactions = cursor.fetchall()
             return transactions

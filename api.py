@@ -82,28 +82,29 @@ def finde_benutzer_zu_nfc_token(token_base64):
         int or None: Die ID des Benutzers oder None, falls kein Benutzer gefunden wird.
         str or None: Der Nachname des Benutzers oder None, falls kein Benutzer gefunden wird.
         str or None: Der Vorname des Benutzer oder None, falls kein Benutzer gefunden wird.
+        str or None: Die ID des verwendeten Tokens oder None, falls kein Benutzer gefunden wird.
     """
 
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if not cnx:
-        return None, None, None
+        return None, None, None, None
     cursor = cnx.cursor()
 
     try:
         token_bytes = base64.b64decode(token_base64)
 
-        cursor.execute("SELECT u.id AS id, u.nachname AS nachname, u.vorname AS vorname FROM nfc_token AS t INNER JOIN users AS u ON t.user_id = u.id WHERE t.token_daten = %s", (token_bytes,))
+        cursor.execute("SELECT u.id AS id, u.nachname AS nachname, u.vorname AS vorname, t.token_id as token_id FROM nfc_token AS t INNER JOIN users AS u ON t.user_id = u.id WHERE t.token_daten = %s", (token_bytes,))
         user = cursor.fetchone()
         if user:
-            print(f"Benutzer gefunden: {user[0]} - {user[1]}, {user[2]}") # ID, Nachnachme, Vorname
-            return user[0], user[1], user[2]
-        return None, None, None
+            print(f"Benutzer: {user[0]} - {user[1]}, {user[2]} (TokenID: {user[3]})") # ID, Nachnachme, Vorname, TokenID
+            return user[0], user[1], user[2], user[3]
+        return None, None, None, None
     except Error as err:
         print(f"Fehler beim Suchen des Benutzers anhand des Tokens: {err}")
-        return None, None, None
+        return None, None, None, None
     except base64.binascii.Error:
         print(f"Fehler: Ungültiger Base64-String: {token_base64}")
-        return None, None, None
+        return None, None, None, None
     finally:
         cursor.close()
         db_utils.DatabaseConnectionPool.close_connection(cnx)
@@ -192,7 +193,7 @@ def nfc_transaction(user_id, username):
 
     nfc_token = daten['token']
 
-    benutzer_id, benutzer_nachname, benutzer_vorname = finde_benutzer_zu_nfc_token(nfc_token)
+    benutzer_id, benutzer_nachname, benutzer_vorname, benutzer_token_id = finde_benutzer_zu_nfc_token(nfc_token)
 
     if benutzer_id:
         cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
@@ -200,8 +201,15 @@ def nfc_transaction(user_id, username):
             return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
         cursor = cnx.cursor(dictionary=True)
 
-        # TODO
-        # hier muss noch der last_used Eintrag des NFC-Tokens aktualisiert werden!
+        try:
+            sql_transaktion = "UPDATE nfc_token SET last_used = NOW() WHERE token_id = %s"
+            #print(f"aktualisiere last_used: {sql_transaktion} - {benutzer_token_id} ")
+            cursor.execute(sql_transaktion, (benutzer_token_id,))
+            cnx.commit()
+        except Error as err:
+            cnx.rollback()
+            print(f"Fehler beim Aktualisieren der zuletzt verwendet Zeit des NFC-Tokens: {err}")
+            return jsonify({'error': 'Fehler beim Aktualisieren der zuletzt verwendet Zeit des NFC-Tokens.'}), 500
 
         try:
             artikel = "NFC-Scan"
@@ -217,7 +225,7 @@ def nfc_transaction(user_id, username):
                 "FROM transactions AS t INNER JOIN users AS u ON t.user_id = u.id WHERE u.id = %s", (benutzer_id,))
             person = cursor.fetchone()
             if person:
-                print(f"Person mit Code {benutzer_id} gefunden: {benutzer_vorname} {benutzer_nachname} - Aktueller Saldo: {person['saldo']}")
+                print(f"Benutzer ID {benutzer_id} gefunden: {benutzer_vorname} {benutzer_nachname} - Aktueller Saldo: {person['saldo']}")
                 #return jsonify({'message': f'Danke {benutzer_vorname} {benutzer_nachname}. Dein aktueller Saldo beträgt: {person["saldo"]}.'}), 200
                 return jsonify({'message': f'Danke {benutzer_vorname}. Dein aktueller Saldo beträgt: {person["saldo"]}.'}), 200
             return jsonify({'message': f'Transaktion für {benutzer_vorname} {benutzer_nachname} erfolgreich erstellt (Saldo {saldo_aenderung}).'}), 200 # dieser Code sollte nie erreicht werden
