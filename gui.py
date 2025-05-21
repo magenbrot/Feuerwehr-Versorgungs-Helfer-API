@@ -25,7 +25,7 @@ else:
 
 app.config['SECRET_KEY'] = os.urandom(24)
 
-# Initialisiere den Pool einmal beim Start der Anwendung
+# Initialisiere den Pool einmal beim Start der Anwendung # pylint: disable=R0801
 try:
     db_utils.DatabaseConnectionPool.initialize_pool(config.db_config)
 except Error:
