@@ -383,14 +383,14 @@ def get_user_transactions(user_id):
 
     Returns:
         list: Eine Liste von Dictionaries, wobei jedes Dictionary eine Transaktion repräsentiert
-              (id, article, saldo_aendung, timestamp). Gibt None zurück, falls ein Fehler auftritt.
+              (id, beschreibung, saldo_aendung, timestamp). Gibt None zurück, falls ein Fehler auftritt.
     """
 
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if cnx:
         cursor = cnx.cursor(dictionary=True)
         try:
-            query = "SELECT id, article, saldo_aenderung, timestamp FROM transactions WHERE user_id = %s ORDER BY timestamp DESC"
+            query = "SELECT id, beschreibung, saldo_aenderung, timestamp FROM transactions WHERE user_id = %s ORDER BY timestamp DESC"
             cursor.execute(query, (user_id,))
             transactions = cursor.fetchall()
             return transactions
@@ -404,13 +404,13 @@ def get_user_transactions(user_id):
     return None
 
 
-def add_transaction(user_id, article, saldo_aenderung):
+def add_transaction(user_id, beschreibung, saldo_aenderung):
     """
     Fügt eine neue Transaktion für einen Benutzer hinzu.
 
     Args:
         user_id (int): Die ID des Benutzers.
-        article (str): Der Artikel der Transaktion.
+        beschreibung (str): Die Beschreibung der Transaktion.
         saldo_aenderung (int): Die Änderung im Saldo der Transaktion.
 
     Returns:
@@ -421,8 +421,8 @@ def add_transaction(user_id, article, saldo_aenderung):
     if cnx:
         cursor = cnx.cursor()
         try:
-            query = "INSERT INTO transactions (user_id, article, saldo_aenderung) VALUES (%s, %s, %s)"
-            cursor.execute(query, (user_id, article, saldo_aenderung))
+            query = "INSERT INTO transactions (user_id, beschreibung, saldo_aenderung) VALUES (%s, %s, %s)"
+            cursor.execute(query, (user_id, beschreibung, saldo_aenderung))
             cnx.commit()
             return True
         except Error as err:
@@ -628,9 +628,9 @@ def admin_user_modification(user_id):
                 return redirect(BASE_URL + url_for('admin_user_modification', user_id=user_id))
             flash('Fehler beim Löschen der Transaktionen.', 'error')
         elif 'add_transaction' in request.form:
-            article = request.form['article']
+            beschreibung = request.form['beschreibung']
             saldo_aenderung = int(request.form['saldo_aenderung'])
-            if add_transaction(user_id, article, saldo_aenderung):
+            if add_transaction(user_id, beschreibung, saldo_aenderung):
                 flash('Transaktion erfolgreich hinzugefügt.', 'success')
                 return redirect(BASE_URL + url_for('admin_user_modification', user_id=user_id))
         elif 'lock_user' in request.form:

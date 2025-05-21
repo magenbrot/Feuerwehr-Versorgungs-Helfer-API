@@ -190,6 +190,7 @@ def nfc_transaction(user_id, username):
         return jsonify({'error': 'Ungültige Anfrage. Die Daten des NFC-Tokens fehlen.'}), 400
 
     nfc_token = daten['token']
+    beschreibung = daten['beschreibung']
 
     benutzer = finde_benutzer_zu_nfc_token(nfc_token)
     # (id, nachname, vorname, token_id)
@@ -209,13 +210,12 @@ def nfc_transaction(user_id, username):
             return jsonify({'error': 'Fehler beim Aktualisieren der zuletzt verwendet Zeit des NFC-Tokens.'}), 500
 
         try:
-            artikel = "NFC-Scan"
             saldo_aenderung = -1
-            sql_transaktion = "INSERT INTO transactions (user_id, article, saldo_aenderung) VALUES (%s, %s, %s)"
-            werte_transaktion = (benutzer['id'], artikel, saldo_aenderung)
+            sql_transaktion = "INSERT INTO transactions (user_id, beschreibung, saldo_aenderung) VALUES (%s, %s, %s)"
+            werte_transaktion = (benutzer['id'], beschreibung, saldo_aenderung)
             cursor.execute(sql_transaktion, werte_transaktion)
             cnx.commit()
-            print(f"Transaktion für Benutzer-ID {benutzer['id']} - {benutzer['vorname']} {benutzer['nachname']} erfolgreich erstellt (Saldo {saldo_aenderung}).")
+            print(f"Transaktion für Benutzer-ID {benutzer['id']} - {benutzer['vorname']} {benutzer['nachname']}, \"{beschreibung}\", erfolgreich erstellt (Saldo {saldo_aenderung}).")
 
             cursor.execute(
                 "SELECT SUM(t.saldo_aenderung) AS saldo " \
@@ -257,7 +257,7 @@ def get_alle_personen(user_id, username):
     cursor = cnx.cursor(dictionary=True)
     try:
         cursor.execute(
-            "SELECT t.id, u.nachname AS nachname, u.vorname AS vorname, t.article, t.timestamp FROM transactions AS t INNER JOIN users AS u ON t.user_id = u.id ORDER BY t.timestamp DESC;")
+            "SELECT t.id, u.nachname AS nachname, u.vorname AS vorname, t.beschreibung, t.timestamp FROM transactions AS t INNER JOIN users AS u ON t.user_id = u.id ORDER BY t.timestamp DESC;")
         personen = cursor.fetchall()
         print("Transaktionen wurden ermittelt.")
         return jsonify(personen)
@@ -495,16 +495,16 @@ def person_bearbeiten(user_id, username, code):
         user_data = cursor.fetchone()
         if user_data:
             user_id = user_data[0]
-            artikel = request.json.get('artikel')
+            beschreibung = request.json.get('beschreibung')
             saldo_aenderung = request.json.get('saldo_aenderung')
 
-            if not artikel or saldo_aenderung is None:
-                print("Ungültige Anfrage. Artikel und Saldoänderung sind erforderlich.")
-                return jsonify({'error': 'Parameter Artikel und Saldoänderung sind erforderlich.'}), 400
+            if not beschreibung or saldo_aenderung is None:
+                print("Ungültige Anfrage. Beschreibung und Saldoänderung sind erforderlich.")
+                return jsonify({'error': 'Parameter Beschreibung und Saldoänderung sind erforderlich.'}), 400
 
             # Transaktion erstellen
-            sql_transaktion = "INSERT INTO transactions (user_id, article, saldo_aenderung) VALUES (%s, %s, %s)"
-            werte_transaktion = (user_id, artikel, saldo_aenderung)
+            sql_transaktion = "INSERT INTO transactions (user_id, beschreibung, saldo_aenderung) VALUES (%s, %s, %s)"
+            werte_transaktion = (user_id, beschreibung, saldo_aenderung)
             cursor.execute(sql_transaktion, werte_transaktion)
             cnx.commit()
             print("Transaktion erfolgreich erstellt.")
