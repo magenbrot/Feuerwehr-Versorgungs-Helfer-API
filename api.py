@@ -79,15 +79,12 @@ def finde_benutzer_zu_nfc_token(token_base64):
         token_base64 (str): Die Base64-kodierte NFC-Daten des Tokens.
 
     Returns:
-        int or None: Die ID des Benutzers oder None, falls kein Benutzer gefunden wird.
-        str or None: Der Nachname des Benutzers oder None, falls kein Benutzer gefunden wird.
-        str or None: Der Vorname des Benutzer oder None, falls kein Benutzer gefunden wird.
-        str or None: Die ID des verwendeten Tokens oder None, falls kein Benutzer gefunden wird.
+        dict: Ein Dictionary mit den Benutzerdaten (id, nachname, vorname, token_id) oder None, falls kein Benutzer gefunden wird.
     """
 
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if not cnx:
-        return None, None, None, None
+        return None
     cursor = cnx.cursor()
 
     try:
@@ -98,14 +95,14 @@ def finde_benutzer_zu_nfc_token(token_base64):
         user = cursor.fetchone()
         if user:
             print(f"Benutzer: {user[0]} - {user[1]}, {user[2]} (TokenID: {user[3]})") # ID, Nachnachme, Vorname, TokenID
-            return user[0], user[1], user[2], user[3]
-        return None, None, None, None
+            return user
+        return None
     except Error as err:
         print(f"Fehler beim Suchen des Benutzers anhand des Tokens: {err}")
-        return None, None, None, None
+        return None
     except base64.binascii.Error:
         print(f"Fehler: Ungültiger Base64-String: {token_base64}")
-        return None, None, None, None
+        return None
     finally:
         cursor.close()
         db_utils.DatabaseConnectionPool.close_connection(cnx)
@@ -194,9 +191,9 @@ def nfc_transaction(user_id, username):
 
     nfc_token = daten['token']
 
-    benutzer_id, benutzer_nachname, benutzer_vorname, benutzer_token_id = finde_benutzer_zu_nfc_token(nfc_token)
-
-    if benutzer_id:
+    benutzer = finde_benutzer_zu_nfc_token(nfc_token)
+    # (id, nachname, vorname, token_id)
+    if benutzer:
         cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
         if not cnx:
             return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
@@ -204,7 +201,7 @@ def nfc_transaction(user_id, username):
 
         try:
             sql_transaktion = "UPDATE nfc_token SET last_used = NOW() WHERE token_id = %s"
-            cursor.execute(sql_transaktion, (benutzer_token_id,))
+            cursor.execute(sql_transaktion, (benutzer['token_id'],))
             cnx.commit()
         except Error as err:
             cnx.rollback()
@@ -215,19 +212,19 @@ def nfc_transaction(user_id, username):
             artikel = "NFC-Scan"
             saldo_aenderung = -1
             sql_transaktion = "INSERT INTO transactions (user_id, article, saldo_aenderung) VALUES (%s, %s, %s)"
-            werte_transaktion = (benutzer_id, artikel, saldo_aenderung)
+            werte_transaktion = (benutzer['id'], artikel, saldo_aenderung)
             cursor.execute(sql_transaktion, werte_transaktion)
             cnx.commit()
-            print(f'Transaktion für Benutzer-ID {benutzer_id} - {benutzer_vorname} {benutzer_nachname} erfolgreich erstellt (Saldo {saldo_aenderung}).')
+            print(f'Transaktion für Benutzer-ID {benutzer['id']} - {benutzer['vorname']} {benutzer['nachname']} erfolgreich erstellt (Saldo {saldo_aenderung}).')
 
             cursor.execute(
                 "SELECT SUM(t.saldo_aenderung) AS saldo " \
-                "FROM transactions AS t INNER JOIN users AS u ON t.user_id = u.id WHERE u.id = %s", (benutzer_id,))
+                "FROM transactions AS t INNER JOIN users AS u ON t.user_id = u.id WHERE u.id = %s", (benutzer['id'],))
             person = cursor.fetchone()
             if person:
-                print(f"Benutzer ID {benutzer_id} gefunden: {benutzer_vorname} {benutzer_nachname} - Aktueller Saldo: {person['saldo']}")
-                return jsonify({'message': f'Danke {benutzer_vorname}. Dein aktueller Saldo beträgt: {person["saldo"]}.'}), 200
-            return jsonify({'message': f'Transaktion für {benutzer_vorname} {benutzer_nachname} erfolgreich erstellt (Saldo {saldo_aenderung}).'}), 200 # dieser Code sollte nie erreicht werden
+                print(f"Benutzer ID {benutzer['id']} gefunden: {benutzer['vorname']} {benutzer['nachname']} - Aktueller Saldo: {person['saldo']}")
+                return jsonify({'message': f'Danke {benutzer['vorname']}. Dein aktueller Saldo beträgt: {person["saldo"]}.'}), 200
+            return jsonify({'message': f'Transaktion für {benutzer['vorname']} {benutzer['nachname']} erfolgreich erstellt (Saldo {saldo_aenderung}).'}), 200 # dieser Code sollte nie erreicht werden
         except Error as err:
             cnx.rollback()
             print(f"Fehler beim Erstellen der Transaktion: {err}")
