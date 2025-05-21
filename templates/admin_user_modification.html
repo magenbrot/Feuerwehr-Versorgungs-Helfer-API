@@ -76,7 +76,13 @@
                 <td>{{ nfc_token.token_id }}</td>
                 <td>{{ nfc_token.token_name }}</td>
                 <td>{{ nfc_token.token_daten.hex() }}</td>
-                <td>{{ nfc_token.last_used }}</td>
+                <td>{{ nfc_token.last_used }}
+                    {% if nfc_token.last_used_days_ago == 0 %}
+                    (heute)
+                    {% else %}
+                    (vor {{ nfc_token.last_used_days_ago }} Tagen)
+                    {% endif %}
+                </td>
                 <td>
                     <form method="POST" class="compact-delete-form" onsubmit="return confirm('Möchtest du diesen Token wirklich löschen?');">
                         <input type="hidden" name="nfc_token_id" value="{{ nfc_token.token_id}}">
