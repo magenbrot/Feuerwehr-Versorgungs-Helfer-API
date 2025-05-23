@@ -3,12 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Transaktionen für {{ user.nachname }}, {{ user.vorname }}</title>
+    <title>Verwaltung für {{ user.nachname }}, {{ user.vorname }}</title>
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo/favicon.png') }}">
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-    <h2>Transaktionen für {{ user.nachname }}, {{ user.vorname }} ({{ user.code }}) - Aktueller Saldo: {{ saldo }} {% if user.is_locked %} (gesperrt){% endif %}</h2>
+    <h2>Verwaltung für {{ user.nachname }}, {{ user.vorname }} ({{ user.code }})</h2>
+    <h2>Aktueller Saldo: {{ saldo }} {% if user.is_locked %} (gesperrt){% endif %}{% if user.kommentar %} - {{ user.kommentar }}{% endif %}</h2>
 
     <div class="admin-link">
         <a href="{{ url_for('admin_dashboard') }}">Zurück zum Admin Dashboard</a>
@@ -53,16 +54,16 @@
         <button type="submit">Alle Transaktionen löschen</button>
     </form>
 
-<h3>Neue Transaktion hinzufügen:</h3>
-<form method="POST" class="inline-form-transaction">
-    <label for="beschreibung">Beschreibung:</label>
-    <input type="text" id="beschreibung" name="beschreibung" value="Admin-Eintrag" required>
+    <h3>Neue Transaktion hinzufügen:</h3>
+    <form method="POST" class="inline-form-transaction">
+        <label for="beschreibung">Beschreibung:</label>
+        <input type="text" id="beschreibung" name="beschreibung" value="Admin-Eintrag" required>
 
-    <label for="saldo_aenderung">Änderung:</label>
-    <input type="number" id="saldo_aenderung" name="saldo_aenderung" value="-1" required>
+        <label for="saldo_aenderung">Änderung:</label>
+        <input type="number" id="saldo_aenderung" name="saldo_aenderung" value="-1" required>
 
-    <button type="submit" name="add_transaction">Hinzufügen</button>
-</form>
+        <button type="submit" name="add_transaction">Hinzufügen</button>
+    </form>
 
     <h3>NFC-Token:</h3>
     {% if nfc_tokens %}
@@ -107,9 +108,23 @@
     <form method="POST" class="inline-form-transaction">
         <label for="nfc_token_name">NFC-Name:</label>
         <input type="text" id="nfc_token_name" name="nfc_token_name" title="Bitte gib deinem Token einen Namen.">
-        <label for="nfc_token_daten">NFC-Daten (hexadezimal):</label>
+        <label for="nfc_token_daten">NFC-Daten:</label>
         <input type="text" id="nfc_token_daten" name="nfc_token_daten" required pattern="[0-9A-Fa-f]{2,}" title="Bitte gib eine Hexadezimalzahl mit mindestens 2 Zeichen ein.">
         <button type="submit" name="add_user_nfc_token">Hinzufügen</button>
+    </form>
+
+    <h3>Kommentar setzen/ändern:</h3>
+    <form method="POST" class="inline-form-transaction">
+        <label for="kommentar">Kommentar:</label>
+        <input type="text" id="kommentar" name="kommentar" title="Bitte gib einen Kommentar ein.">
+        <button type="submit" name="update_user_comment">Speichern</button>
+    </form>
+
+    <h3>Emailadresse setzen/ändern:</h3>
+    <form method="POST" class="inline-form-transaction">
+        <label for="email">Emailadresse:</label>
+        <input type="text" id="email" name="email" title="Bitte gib die Emailadresse ein.">
+        <button type="submit" name="update_user_email">Speichern</button>
     </form>
 
     {% if user.is_locked %}
@@ -124,10 +139,24 @@
     </form>
     {% endif %}
 
+    {% if user.is_admin %}
+    <form method="POST" onsubmit="return confirm('Möchtest du diesen Benutzer wirklich zum normalen Benutzer degradieren?');">
+        <input type="hidden" name="demote_user" value="true">
+        <button type="submit" class="red-button">Admin zu Benutzer degradieren</button>
+    </form>
+    {% else %}
+    <form method="POST" onsubmit="return confirm('Möchtest du diesen Benutzer wirklich zum Admin befördern?');">
+        <input type="hidden" name="promote_user" value="true">
+        <button type="submit" class="red-button">Benutzer zum Admin befördern</button>
+    </form>
+    {% endif %}
+
     <form method="POST" onsubmit="return confirm('ACHTUNG: Möchtest du diesen Benutzer WIRKLICH löschen? Alle zugehörigen Daten gehen verloren!');">
         <input type="hidden" name="delete_user" value="true">
         <button type="submit" class="red-button">Benutzer löschen</button>
     </form>
+
+    <hr>
 
     <div class="admin-link">
         <a href="{{ url_for('user_info') }}">Zur eigenen Benutzeransicht</a> |
