@@ -1,12 +1,18 @@
 <!DOCTYPE html>
-<html>
+<html lang="de">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Transaktionen für {{ user.nachname }}, {{ user.vorname }}</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo/favicon.png') }}">
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
     <h2>Transaktionen für {{ user.nachname }}, {{ user.vorname }} ({{ user.code }}) - Aktueller Saldo: {{ saldo }} {% if user.is_locked %} (gesperrt){% endif %}</h2>
-    <p class="admin-link"><a href="{{ url_for('admin_dashboard') }}">Zurück zur Benutzerübersicht</a></p>
+
+    <div class="admin-link">
+        <a href="{{ url_for('admin_dashboard') }}">Zurück zum Admin Dashboard</a>
+    </div>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
@@ -97,7 +103,6 @@
     <p>Noch keine NFC-Token hinterlegt.</p>
     {% endif %}
 
-
     <h3>neuen NFC-Token hinzufügen:</h3>
     <form method="POST" class="inline-form-transaction">
         <label for="nfc_token_name">NFC-Name:</label>
@@ -123,5 +128,11 @@
         <input type="hidden" name="delete_user" value="true">
         <button type="submit" class="red-button">Benutzer löschen</button>
     </form>
+
+    <div class="admin-link">
+        <a href="{{ url_for('user_info') }}">Zur eigenen Benutzeransicht</a> |
+        <a href="{{ url_for('logout') }}">Abmelden</a>
+    </div>
+
 </body>
 </html>

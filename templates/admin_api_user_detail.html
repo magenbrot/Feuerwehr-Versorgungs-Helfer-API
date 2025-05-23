@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API-Benutzer Details: {{ api_user.username }} - Admin</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo/favicon.png') }}">
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+        <h1>API-Benutzer Details: {{ api_user.username }}</h1>
+
+        <div class="admin-link">
+            <a href="{{ url_for('admin_manage_api_users') }}">Zurück zur API-Benutzer Verwaltung</a> |
+            <a href="{{ url_for('admin_dashboard') }}">Admin Dashboard</a>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <ul class="flashes">
+                {% for category, message in messages %}
+                    <li class="{{ category }}">{{ message }}</li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+        {% endwith %}
+
+        <h2>Benutzerinformationen</h2>
+        <p><strong>ID:</strong> {{ api_user.id }}</p>
+        <p><strong>Username:</strong> {{ api_user.username }}</p>
+
+        <h2>Zugehörige API-Keys</h2>
+        {% if api_keys %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Key ID</th>
+                        <th>API Key</th>
+                        <th>Aktion</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for key in api_keys %}
+                    <tr>
+                        <td>{{ key.id }}</td>
+                        <td>{{ key.api_key }}</td>
+                        <td>
+                            <form method="POST" action="{{ url_for('admin_delete_api_key', api_key_id=key.id) }}" class="compact-delete-form" onsubmit="return confirm('Sind Sie sicher, dass Sie diesen API-Key unwiderruflich löschen möchten?');">
+                                <input type="hidden" name="api_user_id_for_redirect" value="{{ api_user.id }}">
+                                <button type="submit" class="red-button">Löschen</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p>Für diesen API-Benutzer wurden keine API-Keys gefunden.</p>
+        {% endif %}
+
+        <hr>
+
+        <h3>Neuen API-Key für {{ api_user.username }} generieren</h3>
+        <form method="POST" action="{{ url_for('admin_generate_api_key_for_user', api_user_id=api_user.id) }}">
+            <button type="submit" class="button">Neuen API-Key erstellen</button>
+        </form>
+
+    <div class="admin-link">
+        <a href="{{ url_for('user_info') }}">Zur eigenen Benutzeransicht</a> |
+        <a href="{{ url_for('logout') }}">Abmelden</a>
+    </div>
+
+</body>
+</html>

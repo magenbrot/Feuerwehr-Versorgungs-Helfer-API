@@ -1,11 +1,14 @@
 <!DOCTYPE html>
-<html>
+<html lang="de">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Dashboard</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo/favicon.png') }}">
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-    <h2>Willkommen im Admin-Bereich, {{ user.vorname }}!</h2>
+    <h2>Willkommen, {{ user.vorname }} {{ user.nachname }}!</h2>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
@@ -17,6 +20,12 @@
       {% endif %}
     {% endwith %}
 
+    <h2>Benutzerverwaltung</h2>
+    <div class="admin-link">
+        <a href="{{ url_for('add_user') }}">Neuen regulären Benutzer hinzufügen</a> |
+        <a href="{{ url_for('admin_manage_api_users') }}">API-Benutzer verwalten</a>
+    </div>
+
     <h3>Übersicht der Benutzer:</h3>
     {% if users %}
     <table>
@@ -24,7 +33,9 @@
             <tr>
                 <th>Code</th>
                 <th>Name</th>
-                <th>Gesperrt</th>
+                <th>Email</th>
+                <th>Kommentar</th>
+                <th>Status</th>
                 <th>Admin</th>
                 <th>Saldo</th>
             </tr>
@@ -34,7 +45,9 @@
             <tr>
                 <td><a href="{{ url_for('admin_user_modification', user_id=u.id) }}">{{ u.code }}</a></td>
                 <td>{{ u.nachname }}, {{ u.vorname }}</td>
-                <td>{% if u.is_locked %}Ja{% else %}Nein{% endif %}</td>
+                <td>{{ u.email }}</td>
+                <td>{{ u.kommentar }}</td>
+                <td>{% if u.is_locked %}Gesperrt{% else %}Aktiv{% endif %}</td>
                 <td>{% if u.is_admin %}Ja{% else %}Nein{% endif %}</td>
                 <td>{{ saldo_by_user.get(u.id, 0) }}</td>
             </tr>
@@ -44,7 +57,10 @@
     {% else %}
     <p>Keine Benutzer vorhanden.</p>
     {% endif %}
-    <p class="admin-link"><a href="{{ url_for('user_info') }}">Zur eigenen Benutzeransicht</a></p>
-    <p><a href="{{ url_for('logout') }}">Abmelden</a></p>
+
+    <div class="admin-link">
+        <a href="{{ url_for('user_info') }}">Zur eigenen Benutzeransicht</a> |
+        <a href="{{ url_for('logout') }}">Abmelden</a>
+    </div>
 </body>
 </html>

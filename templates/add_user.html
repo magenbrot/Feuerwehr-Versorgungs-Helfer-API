@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neuen Benutzer hinzufügen - Admin</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo/favicon.png') }}">
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <h1>Neuen regulären Benutzer hinzufügen</h1>
+
+    <div class="admin-link">
+        <a href="{{ url_for('admin_dashboard') }}">Zurück zum Admin Dashboard</a>
+    </div>
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+              <ul class="flashes">
+              {% for category, message in messages %}
+                  <li class="{{ category }}">{{ message }}</li>
+              {% endfor %}
+              </ul>
+          {% endif %}
+      {% endwith %}
+
+      <form method="POST" action="{{ url_for('add_user') }}">
+          <div class="form-group">
+              <label for="code">Code (Login-Name, max. 10 Ziffern):*</label>
+              <input type="text" id="code" name="code" maxlength="10" required value="{{ current_code if current_code else '' }}">
+          </div>
+          <div class="form-group">
+              <label for="vorname">Vorname:*</label>
+              <input type="text" id="vorname" name="vorname" required value="{{ form_data.vorname if form_data else '' }}">
+          </div>
+          <div class="form-group">
+              <label for="nachname">Nachname:*</label>
+              <input type="text" id="nachname" name="nachname" required value="{{ form_data.nachname if form_data else '' }}">
+          </div>
+          <div class="form-group">
+              <label for="password">Passwort (mind. 8 Zeichen):*</label>
+              <input type="password" id="password" name="password" required minlength="8" value="{{ form_data.password if form_data else '' }}">
+          </div>
+          <div class="form-group">
+              <label for="confirm_password">Passwort bestätigen:*</label>
+              <input type="password" id="confirm_password" name="confirm_password" required minlength="8" value="{{ form_data.password if form_data else '' }}">
+          </div>
+          <div class="form-group">
+              <label for="email">E-Mail (optional):</label>
+              <input type="email" id="email" name="email" value="{{ form_data.email if form_data else '' }}">
+          </div>
+          <div class="form-group">
+              <label for="kommentar">Kommentar (optional):</label>
+              <textarea id="kommentar" name="kommentar" rows="3">{{ form_data.kommentar if form_data else '' }}</textarea>
+          </div>
+          <div class="form-group">
+              <label for="is_admin">
+                  <input type="checkbox" id="is_admin" name="is_admin" value="true" {{ 'checked' if form_data and form_data.get('is_admin') == 'true' }}>
+                  Ist Administrator?
+              </label>
+          </div>
+          <button type="submit" class="button">Benutzer erstellen</button>
+      </form>
+
+    <div class="admin-link">
+        <a href="{{ url_for('user_info') }}">Zur eigenen Benutzeransicht</a> |
+        <a href="{{ url_for('logout') }}">Abmelden</a>
+    </div>
+
+</body>
+</html>
