@@ -84,6 +84,19 @@ button[type="submit"]:hover {
     display: inline-block;
 }
 
+.admin-link a:first-child {
+    margin-left: 5px; /* Entfernt den linken Rand vom ersten Link, um unnötigen Abstand am Ende zu vermeiden */
+}
+
+.admin-link a {
+    margin-right: 10px;
+    margin-left: 10px;
+}
+
+.admin-link a:last-child {
+    margin-right: 5px; /* Entfernt den rechten Rand vom letzten Link, um unnötigen Abstand am Ende zu vermeiden */
+}
+
 p {
     line-height: 1.6;
     color: #555;

@@ -1,7 +1,10 @@
 <!DOCTYPE html>
-<html>
+<html lang="de">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Benutzerinformationen</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo/favicon.png') }}">
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
@@ -98,10 +101,12 @@
         <button type="submit">Passwort ändern</button>
     </form>
 
-    {% if user.is_admin %}
-        <p class="admin-link"><a href="{{ url_for('admin_dashboard') }}">Zum Admin-Dashboard</a></p>
-    {% endif %}
+    <div class="admin-link">
+        {% if user.is_admin %}
+        <a href="{{ url_for('admin_dashboard') }}">Zum Admin-Dashboard</a> |
+        {% endif %}
+        <a href="{{ url_for('logout') }}">Abmelden</a>
+    </div>
 
-    <p><a href="{{ url_for('logout') }}">Abmelden</a></p>
-  </body>
+</body>
 </html>
