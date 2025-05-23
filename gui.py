@@ -685,18 +685,19 @@ def update_password(user_id, new_password_hash):
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return False
 
-def add_regular_user_db(code, nachname, vorname, password, email, kommentar, is_admin):
+def add_regular_user_db(user_data):
     """
     Fügt einen neuen regulären Benutzer der Datenbank hinzu.
 
     Args:
-        code (str): Eindeutiger Code des Benutzers.
-        nachname (str): Nachname des Benutzers.
-        vorname (str): Vorname des Benutzers.
-        password (str): Passwort des Benutzers (Klartext, wird hier gehasht).
-        email (str, optional): E-Mail-Adresse des Benutzers.
-        kommentar (str, optional): Kommentar zum Benutzer.
-        is_admin (bool): Gibt an, ob der Benutzer Admin-Rechte hat.
+        user_data (dict): Ein Dictionary mit den Benutzerdaten:
+            'code' (str): Eindeutiger Code des Benutzers.
+            'nachname' (str): Nachname des Benutzers.
+            'vorname' (str): Vorname des Benutzers.
+            'password' (str): Passwort des Benutzers (Klartext, wird hier gehasht).
+            'email' (str, optional): E-Mail-Adresse des Benutzers.
+            'kommentar' (str, optional): Kommentar zum Benutzer.
+            'is_admin' (bool): Gibt an, ob der Benutzer Admin-Rechte hat.
 
     Returns:
         bool: True bei Erfolg, False bei Fehler (z.B. Datenbankfehler, doppelter Code).
@@ -704,17 +705,25 @@ def add_regular_user_db(code, nachname, vorname, password, email, kommentar, is_
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if cnx:
         cursor = cnx.cursor()
-        hashed_password = generate_password_hash(password)
+        hashed_password = generate_password_hash(user_data['password'])
         try:
             query = """
                 INSERT INTO users (code, nachname, vorname, password, email, kommentar, is_admin, is_locked)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, 0)
             """
-            cursor.execute(query, (code, nachname, vorname, hashed_password, email, kommentar, 1 if is_admin else 0))
+            cursor.execute(query, (
+                user_data['code'],
+                user_data['nachname'],
+                user_data['vorname'],
+                hashed_password,
+                user_data.get('email'),
+                user_data.get('kommentar'),
+                1 if user_data.get('is_admin') else 0
+            ))
             cnx.commit()
             return True
         except IntegrityError:
-            flash(f"Benutzercode '{code}' existiert bereits oder ein anderes eindeutiges Feld ist doppelt.", 'error')
+            flash(f"Benutzercode '{user_data['code']}' existiert bereits oder ein anderes eindeutiges Feld ist doppelt.", 'error')
             cnx.rollback()
             return False
         except Error as err:
@@ -858,6 +867,28 @@ def delete_api_user_and_keys_db(api_user_id):
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return False
 
+
+# --- Felper Funktionen ---
+
+def _validate_add_user_form(form_data):
+    """Helper to validate add_user form data."""
+    errors = False
+    required_fields = ['code', 'nachname', 'vorname', 'password', 'confirm_password']
+    if not all(form_data.get(field) for field in required_fields):
+        flash("Bitte füllen Sie alle Pflichtfelder aus (Code, Nachname, Vorname, Passwort).", "error")
+        errors = True
+    if form_data.get('password') != form_data.get('confirm_password'):
+        flash("Die Passwörter stimmen nicht überein.", "error")
+        errors = True
+    if form_data.get('password') and len(form_data.get('password')) < 8:
+        flash('Das Passwort muss mindestens 8 Zeichen lang sein.', 'error')
+        errors = True
+    if fetch_user(form_data.get('code')):
+        flash(f"Der Code '{form_data.get('code')}' wird bereits verwendet. Bitte wählen Sie einen anderen.", "error")
+        errors = True
+    return not errors
+
+
 # --- Flask Routen ---
 
 @app.route('/', methods=['GET', 'POST'])
@@ -987,20 +1018,7 @@ def admin_dashboard():
 def add_user():
     """
     Verarbeitet das Hinzufügen eines neuen regulären Benutzers (Frontend-Benutzer).
-
-    Diese Route ist nur für Administratoren zugänglich. Bei einer GET-Anfrage wird das
-    Formular zum Hinzufügen eines Benutzers angezeigt. Bei einer POST-Anfrage werden
-    die Formulardaten validiert und versucht, den neuen Benutzer in der Datenbank
-    zu speichern. Das Passwort wird vor dem Speichern gehasht.
-
-    Returns:
-        werkzeug.wrappers.response.Response: Bei GET das gerenderte Template
-        `add_user.html`. Bei POST eine Weiterleitung zum Admin-Dashboard bei Erfolg
-        oder zurück zum Formular mit Fehlermeldungen bei Misserfolg.
-        Bei Authentifizierungs-/Autorisierungsfehlern erfolgt eine Weiterleitung
-        zur Login- bzw. Benutzerinformationsseite.
     """
-
     user_id = session.get('user_id')
     if not user_id:
         flash("Bitte zuerst einloggen.", "info")
@@ -1017,70 +1035,38 @@ def add_user():
         return redirect(BASE_URL + url_for('login'))
 
     if request.method == 'POST':
-        code_input = request.form.get('code')
-        nachname = request.form.get('nachname')
-        vorname = request.form.get('vorname')
-        password = request.form.get('password')
-        confirm_password = request.form.get('confirm_password')
-        email = request.form.get('email')
-        kommentar = request.form.get('kommentar')
-        is_admin_form = 'is_admin' in request.form
-
-        # Validierungen für POST
-        error_occurred = False
-        if not all([code_input, nachname, vorname, password, confirm_password]):
-            flash("Bitte füllen Sie alle Pflichtfelder aus (Code, Nachname, Vorname, Passwort).", "error")
-            error_occurred = True
-        if password != confirm_password:
-            flash("Die Passwörter stimmen nicht überein.", "error")
-            error_occurred = True
-        if len(password) < 8 and password: # Nur prüfen, wenn Passwort nicht leer ist (wird schon oben geprüft)
-            flash('Das Passwort muss mindestens 8 Zeichen lang sein.', 'error')
-            error_occurred = True
-
-        # Zusätzliche Prüfung, ob der manuell eingegebene oder geänderte Code beim POST schon existiert
-        # Dies ist wichtig, falls der Benutzer den vorab generierten Code ändert.
-        # Die add_regular_user_db hat bereits eine Unique-Constraint-Prüfung,
-        # aber eine frühere Prüfung hier kann die UX verbessern.
-        existing_user_with_code = fetch_user(code_input)
-        if existing_user_with_code:
-            flash(f"Der Code '{code_input}' wird bereits verwendet. Bitte wählen Sie einen anderen.", "error")
-            error_occurred = True
-
-        if not error_occurred:
-            if add_regular_user_db(code_input, nachname, vorname, password, email, kommentar, is_admin_form):
-                flash(f"Benutzer '{vorname} {nachname}' erfolgreich hinzugefügt.", "success")
+        form_data = request.form
+        if _validate_add_user_form(form_data):
+            user_details = {
+                'code': form_data.get('code'),
+                'nachname': form_data.get('nachname'),
+                'vorname': form_data.get('vorname'),
+                'password': form_data.get('password'),
+                'email': form_data.get('email'),
+                'kommentar': form_data.get('kommentar'),
+                'is_admin': 'is_admin' in form_data
+            }
+            if add_regular_user_db(user_details):
+                flash(f"Benutzer '{user_details['vorname']} {user_details['nachname']}' erfolgreich hinzugefügt.", "success")
                 return redirect(BASE_URL + url_for('admin_dashboard'))
-            # Fehlerbehandlung (z.B. doppelter Code durch Race Condition) wird in add_regular_user_db gemacht und geflasht
-            # Dies würde bedeuten, dass das Formular erneut angezeigt wird.
-
-        # Wenn ein Fehler beim POST auftrat, das Formular mit den eingegebenen Daten erneut anzeigen
-        # und den Code behalten, den der Benutzer eingegeben/gesehen hat.
+        # Bei Validierungsfehler oder DB-Fehler (geflasht in add_regular_user_db),
+        # das Formular mit den eingegebenen Daten erneut anzeigen
         return render_template('add_user.html',
                                user=admin_user,
-                               current_code=code_input, # Den vom User eingegebenen Code wiederverwenden
-                               # Die anderen Felder werden im Template via request.form gefüllt, falls vorhanden
-                               form_data=request.form
+                               current_code=form_data.get('code'), # Den vom User eingegebenen Code wiederverwenden
+                               form_data=form_data
                               )
 
-    # GET Request: Neuen, garantiert eindeutigen zufälligen Code generieren
+    # GET Request
     generated_code = None
-    attempts = 0
-    max_attempts = 100 # Sicherheitslimit, um eine Endlosschleife zu verhindern (extrem unwahrscheinlich)
-
-    while attempts < max_attempts:
+    for _ in range(100): # Max 100 attempts
         potential_code = ''.join(random.choices(string.digits, k=10))
-        if not fetch_user(potential_code): # fetch_user prüft, ob der Code existiert
+        if not fetch_user(potential_code):
             generated_code = potential_code
             break
-        attempts += 1
-
     if not generated_code:
-        # Fallback, falls nach max_attempts kein eindeutiger Code gefunden wurde
-        # (Dies sollte praktisch nie passieren mit 10^10 Möglichkeiten)
         flash("Konnte keinen eindeutigen Code generieren. Bitte versuchen Sie es manuell oder später erneut.", "error")
-        # Optional: einen leeren Code oder einen Platzhalter übergeben
-        generated_code = ""
+        generated_code = "" # Fallback
 
     return render_template('add_user.html', user=admin_user, current_code=generated_code, form_data=None)
 
@@ -1332,14 +1318,14 @@ def admin_delete_api_user(api_user_id):
     return redirect(BASE_URL + url_for('admin_manage_api_users'))
 
 
-@app.route('/admin/user/<int:user_id>/transactions', methods=['GET', 'POST'])
-def admin_user_modification(user_id):
+@app.route('/admin/user/<int:target_user_id>/transactions', methods=['GET', 'POST'])
+def admin_user_modification(target_user_id):
     """
     Zeigt die Transaktionen eines bestimmten Benutzers an und ermöglicht das Hinzufügen und Löschen von Transaktionen
     sowie das Löschen des Benutzers selbst.  Benötigt einen angemeldeten Admin-Benutzer.
 
     Args:
-        user_id (int): Die ID des Benutzers, dessen Transaktionen angezeigt werden sollen.
+        target_user_id (int): Die ID des Benutzers, dessen Transaktionen angezeigt werden sollen.
 
     Returns:
         str: Die gerenderte Seite mit den Transaktionen des Benutzers (admin_user_modification.html)
@@ -1361,22 +1347,22 @@ def admin_user_modification(user_id):
         flash('Ihr Administratorkonto wurde gesperrt.', 'error')
         return redirect(BASE_URL + url_for('login'))
 
-    target_user = get_user_by_id(user_id)
+    target_user = get_user_by_id(target_user_id)
     if not target_user:
         flash("Benutzer nicht gefunden.", "error")
         return redirect(BASE_URL + url_for('admin_dashboard'))
 
-    nfc_tokens = get_user_nfc_tokens(user_id)
-    transactions = get_user_transactions(user_id)
-    saldo = get_saldo_for_user(user_id)
+    nfc_tokens = get_user_nfc_tokens(target_user_id)
+    transactions = get_user_transactions(target_user_id)
+    saldo = get_saldo_for_user(target_user_id)
 
     if request.method == 'POST':
         if 'delete_transactions' in request.form:
-            if delete_all_transactions(user_id):
+            if delete_all_transactions(target_user_id):
                 flash('Alle Transaktionen für diesen Benutzer wurden gelöscht.', 'success')
             else:
                 flash('Fehler beim Löschen der Transaktionen.', 'error')
-            return redirect(BASE_URL + url_for('admin_user_modification', user_id=user_id))
+            return redirect(BASE_URL + url_for('admin_user_modification', target_user_id=target_user_id))
 
         if 'add_transaction' in request.form:
             beschreibung = request.form.get('beschreibung', '')
@@ -1388,86 +1374,89 @@ def admin_user_modification(user_id):
             else:
                 try:
                     saldo_aenderung = int(saldo_aenderung_str)
-                    if add_transaction(user_id, beschreibung, saldo_aenderung):
+                    if add_transaction(target_user_id, beschreibung, saldo_aenderung):
                         flash('Transaktion erfolgreich hinzugefügt.', 'success')
                     # Fehler wird in add_transaction geflasht
                 except ValueError:
                     flash('Ungültiger Wert für Saldoänderung. Es muss eine Zahl sein.', 'error')
-            return redirect(BASE_URL + url_for('admin_user_modification', user_id=user_id))
+            return redirect(BASE_URL + url_for('admin_user_modification', target_user_id=target_user_id))
 
         if 'lock_user' in request.form:
-            if toggle_user_lock(user_id, True):
-                flash(f'Benutzer "{target_user.get("nachname", "")}, {target_user.get("vorname", "")}" (ID {user_id}) wurde gesperrt.', 'success')
+            if toggle_user_lock(target_user_id, True):
+                flash(f'Benutzer "{target_user.get("nachname", "")}, {target_user.get("vorname", "")}" (ID {target_user_id}) wurde gesperrt.', 'success')
             else:
                 flash('Fehler beim Sperren des Benutzers.', 'error')
-            return redirect(BASE_URL + url_for('admin_user_modification', user_id=user_id))
+            return redirect(BASE_URL + url_for('admin_user_modification', target_user_id=target_user_id))
 
         if 'unlock_user' in request.form:
-            if toggle_user_lock(user_id, False):
-                flash(f'Benutzer "{target_user.get("nachname", "")}, {target_user.get("vorname", "")}" (ID {user_id}) wurde entsperrt.', 'success')
+            if toggle_user_lock(target_user_id, False):
+                flash(f'Benutzer "{target_user.get("nachname", "")}, {target_user.get("vorname", "")}" (ID {target_user_id}) wurde entsperrt.', 'success')
             else:
                 flash('Fehler beim Entsperren des Benutzers.', 'error')
-            return redirect(BASE_URL + url_for('admin_user_modification', user_id=user_id))
+            return redirect(BASE_URL + url_for('admin_user_modification', target_user_id=target_user_id))
 
         if 'promote_user' in request.form:
-            if toggle_user_admin(user_id, True):
-                flash(f'Benutzer "{target_user.get("nachname", "")}, {target_user.get("vorname", "")}" (ID {user_id}) wurde zum Admin befördert.', 'success')
+            if toggle_user_admin(target_user_id, True):
+                flash(f'Benutzer "{target_user.get("nachname", "")}, {target_user.get("vorname", "")}" (ID {target_user_id}) wurde zum Admin befördert.', 'success')
             else:
                 flash('Fehler beim Befördern des Benutzers.', 'error')
-            return redirect(BASE_URL + url_for('admin_user_modification', user_id=user_id))
+            return redirect(BASE_URL + url_for('admin_user_modification', target_user_id=target_user_id))
 
         if 'demote_user' in request.form:
-            if toggle_user_admin(user_id, False):
-                flash(f'Admin "{target_user.get("nachname", "")}, {target_user.get("vorname", "")}" (ID {user_id}) wurde zum Benutzer degradiert.', 'success')
+            if toggle_user_admin(target_user_id, False):
+                flash(f'Admin "{target_user.get("nachname", "")}, {target_user.get("vorname", "")}" (ID {target_user_id}) wurde zum Benutzer degradiert.', 'success')
             else:
                 flash('Fehler beim Degradieren des Admins.', 'error')
-            return redirect(BASE_URL + url_for('admin_user_modification', user_id=user_id))
+            return redirect(BASE_URL + url_for('admin_user_modification', target_user_id=target_user_id))
 
         if 'delete_user' in request.form:
             # Sicherheitsabfrage, ob der Admin sich selbst löschen will
-            if user_id == logged_in_user_id:
+            if target_user_id == logged_in_user_id:
                 flash("Sie können sich nicht selbst löschen.", "warning")
-                return redirect(BASE_URL + url_for('admin_user_modification', user_id=user_id))
+                return redirect(BASE_URL + url_for('admin_user_modification', target_user_id=target_user_id))
 
-            if delete_user(user_id): # delete_user löscht auch Transaktionen durch DB CASCADE
-                flash(f'Benutzer "{target_user.get("nachname", "")}, {target_user.get("vorname", "")}" (ID {user_id}) wurde gelöscht.', 'success')
+            if delete_user(target_user_id): # delete_user löscht auch Transaktionen durch DB CASCADE
+                flash(f'Benutzer "{target_user.get("nachname", "")}, {target_user.get("vorname", "")}" (ID {target_user_id}) wurde gelöscht.', 'success')
                 return redirect(BASE_URL + url_for('admin_dashboard'))
             flash('Fehler beim Löschen des Benutzers.', 'error')
-            return redirect(BASE_URL + url_for('admin_user_modification', user_id=user_id))
+            return redirect(BASE_URL + url_for('admin_user_modification', target_user_id=target_user_id))
 
         if 'add_user_nfc_token' in request.form:
             nfc_token_name = request.form.get('nfc_token_name')
             nfc_token_daten = request.form.get('nfc_token_daten') # HEX Format erwartet
             if not nfc_token_name or not nfc_token_daten:
                 flash('Token Name und Token Daten (HEX) dürfen nicht leer sein.', 'error')
-            elif add_user_nfc_token(user_id, nfc_token_name, nfc_token_daten): # Fehlerbehandlung in Funktion
+            elif add_user_nfc_token(target_user_id, nfc_token_name, nfc_token_daten): # Fehlerbehandlung in Funktion
                 flash('NFC-Token erfolgreich hinzugefügt.', 'success')
-            return redirect(BASE_URL + url_for('admin_user_modification', user_id=user_id))
+            return redirect(BASE_URL + url_for('admin_user_modification', target_user_id=target_user_id))
 
         if 'update_user_comment' in request.form:
             comment = request.form.get('kommentar')
             if not comment:
                 flash('Kommentar darf nicht leer sein.', 'error')
-            elif update_user_comment(user_id, comment):
+            elif update_user_comment(target_user_id, comment):
                 flash('Kommentar erfolgreich aktualisiert.', 'success')
+            return redirect(BASE_URL + url_for('admin_user_modification', target_user_id=target_user_id))
 
         if 'update_user_email' in request.form:
             email = request.form.get('email')
             if not email:
                 flash('Emailadresse darf nicht leer sein.', 'error')
-            elif update_user_email(user_id, email):
+            elif update_user_email(target_user_id, email):
                 flash('Emailadresse erfolgreich aktualisiert.', 'success')
+            return redirect(BASE_URL + url_for('admin_user_modification', target_user_id=target_user_id))
 
         if 'delete_user_nfc_token' in request.form:
             nfc_token_id = request.form.get('nfc_token_id')
             if not nfc_token_id:
                 flash('Keine Token ID zum Löschen übergeben.', 'error')
-            elif delete_user_nfc_token(user_id, nfc_token_id):
+            elif delete_user_nfc_token(target_user_id, nfc_token_id):
                 flash('NFC-Token erfolgreich entfernt.', 'success')
             # Fehler in Funktion
-            return redirect(BASE_URL + url_for('admin_user_modification', user_id=user_id))
+            return redirect(BASE_URL + url_for('admin_user_modification', target_user_id=target_user_id))
+
         flash('Ungültige oder fehlende Aktion.', 'error')
-        return redirect(BASE_URL + url_for('admin_user_modification', user_id=user_id))
+        return redirect(BASE_URL + url_for('admin_user_modification', target_user_id=target_user_id))
 
     return render_template('admin_user_modification.html', user=target_user, nfc_tokens=nfc_tokens, transactions=transactions, saldo=saldo, admin_user=admin_user)
 
