@@ -167,6 +167,39 @@ def delete_user(user_id):
     return False
 
 
+def toggle_user_admin(user_id, admin_state):
+    """
+    Macht einen Benutzer zum Admin (oder umgekehrt).
+
+    Args:
+        user_id (int): Die ID des Benutzers.
+        admin_state (bool): True == Befördern, False == Degradieren.
+
+    Returns:
+        bool: True bei Erfolg, False bei Fehler.
+    """
+
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
+    if cnx:
+        cursor = cnx.cursor()
+        try:
+            if admin_state:
+                query = "UPDATE users SET is_admin = 1 WHERE id = %s"
+            else:
+                query = "UPDATE users SET is_admin = 0 WHERE id = %s"
+            cursor.execute(query, (user_id,))
+            cnx.commit()
+            return True
+        except Error as err:
+            print(f"Fehler beim Ändern des Admin-Modes für den Benutzers: {err}")
+            cnx.rollback()
+            return False
+        finally:
+            cursor.close()
+            db_utils.DatabaseConnectionPool.close_connection(cnx)
+    return False
+
+
 def toggle_user_lock(user_id, lock_state):
     """
     Sperrt einen Benutzer anhand seiner ID.
@@ -192,6 +225,66 @@ def toggle_user_lock(user_id, lock_state):
             return True
         except Error as err:
             print(f"Fehler beim Ändern des Locks für den Benutzers: {err}")
+            cnx.rollback()
+            return False
+        finally:
+            cursor.close()
+            db_utils.DatabaseConnectionPool.close_connection(cnx)
+    return False
+
+
+def update_user_comment(user_id, comment):
+    """
+    Ändert den Kommentar eines Benutzer anhand seiner ID.
+
+    Args:
+        user_id (int): Die ID des zu sperrenden Benutzers.
+        comment (str): Der neue Kommentar.
+
+    Returns:
+        bool: True bei Erfolg, False bei Fehler.
+    """
+
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
+    if cnx:
+        cursor = cnx.cursor()
+        try:
+            query = "UPDATE users SET kommentar = %s WHERE id = %s"
+            cursor.execute(query, (comment, user_id))
+            cnx.commit()
+            return True
+        except Error as err:
+            print(f"Fehler beim Ändern des Kommentars für den Benutzers: {err}")
+            cnx.rollback()
+            return False
+        finally:
+            cursor.close()
+            db_utils.DatabaseConnectionPool.close_connection(cnx)
+    return False
+
+
+def update_user_email(user_id, email):
+    """
+    Ändert die Emailadresse eines Benutzer anhand seiner ID.
+
+    Args:
+        user_id (int): Die ID des zu sperrenden Benutzers.
+        email (str): Die neue Emailadresse.
+
+    Returns:
+        bool: True bei Erfolg, False bei Fehler.
+    """
+
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
+    if cnx:
+        cursor = cnx.cursor()
+        try:
+            query = "UPDATE users SET email = %s WHERE id = %s"
+            cursor.execute(query, (email, user_id))
+            cnx.commit()
+            return True
+        except Error as err:
+            print(f"Fehler beim Ändern der Emailadresse für den Benutzers: {err}")
             cnx.rollback()
             return False
         finally:
@@ -353,6 +446,7 @@ def get_all_users():
                 cursor.close()
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return []
+
 
 def get_all_api_users():
     """
@@ -1305,7 +1399,7 @@ def admin_user_modification(user_id):
             if toggle_user_lock(user_id, True):
                 flash(f'Benutzer "{target_user.get("nachname", "")}, {target_user.get("vorname", "")}" (ID {user_id}) wurde gesperrt.', 'success')
             else:
-                flash('Fehler beim Sperren des Benutzers.', 'error') # DB-Funktion flasht genauer
+                flash('Fehler beim Sperren des Benutzers.', 'error')
             return redirect(BASE_URL + url_for('admin_user_modification', user_id=user_id))
 
         if 'unlock_user' in request.form:
@@ -1313,6 +1407,20 @@ def admin_user_modification(user_id):
                 flash(f'Benutzer "{target_user.get("nachname", "")}, {target_user.get("vorname", "")}" (ID {user_id}) wurde entsperrt.', 'success')
             else:
                 flash('Fehler beim Entsperren des Benutzers.', 'error')
+            return redirect(BASE_URL + url_for('admin_user_modification', user_id=user_id))
+
+        if 'promote_user' in request.form:
+            if toggle_user_admin(user_id, True):
+                flash(f'Benutzer "{target_user.get("nachname", "")}, {target_user.get("vorname", "")}" (ID {user_id}) wurde zum Admin befördert.', 'success')
+            else:
+                flash('Fehler beim Befördern des Benutzers.', 'error')
+            return redirect(BASE_URL + url_for('admin_user_modification', user_id=user_id))
+
+        if 'demote_user' in request.form:
+            if toggle_user_admin(user_id, False):
+                flash(f'Admin "{target_user.get("nachname", "")}, {target_user.get("vorname", "")}" (ID {user_id}) wurde zum Benutzer degradiert.', 'success')
+            else:
+                flash('Fehler beim Degradieren des Admins.', 'error')
             return redirect(BASE_URL + url_for('admin_user_modification', user_id=user_id))
 
         if 'delete_user' in request.form:
@@ -1335,6 +1443,20 @@ def admin_user_modification(user_id):
             elif add_user_nfc_token(user_id, nfc_token_name, nfc_token_daten): # Fehlerbehandlung in Funktion
                 flash('NFC-Token erfolgreich hinzugefügt.', 'success')
             return redirect(BASE_URL + url_for('admin_user_modification', user_id=user_id))
+
+        if 'update_user_comment' in request.form:
+            comment = request.form.get('kommentar')
+            if not comment:
+                flash('Kommentar darf nicht leer sein.', 'error')
+            elif update_user_comment(user_id, comment):
+                flash('Kommentar erfolgreich aktualisiert.', 'success')
+
+        if 'update_user_email' in request.form:
+            email = request.form.get('email')
+            if not email:
+                flash('Emailadresse darf nicht leer sein.', 'error')
+            elif update_user_email(user_id, email):
+                flash('Emailadresse erfolgreich aktualisiert.', 'success')
 
         if 'delete_user_nfc_token' in request.form:
             nfc_token_id = request.form.get('nfc_token_id')
