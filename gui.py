@@ -345,6 +345,7 @@ def get_all_users():
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return []
 
+
 def get_user_nfc_tokens(user_id):
     """
     Ruft alle Tokens eines Benutzer ab, absteigend sortiert nach dem Zeitpunkt der letzten Verwendung.
@@ -373,6 +374,7 @@ def get_user_nfc_tokens(user_id):
                 cursor.close()
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return None
+
 
 def get_user_transactions(user_id):
     """

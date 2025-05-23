@@ -20,6 +20,7 @@ except Error:
     print("Fehler beim Starten der Datenbankverbindung.")
     sys.exit(1)
 
+
 def get_user_by_api_key(api_key):
     """
     Ruft den Benutzer anhand des API-Schlüssels aus der Datenbank ab.
