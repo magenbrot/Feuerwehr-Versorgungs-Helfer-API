@@ -28,7 +28,7 @@
 
     <h3>Übersicht der Benutzer:</h3>
     {% if users %}
-    <table>
+    <table class="zebra-table">
         <thead>
             <tr>
                 <th>Code</th>
@@ -43,7 +43,7 @@
         <tbody>
             {% for u in users %}
             <tr>
-                <td><a href="{{ url_for('admin_user_modification', user_id=u.id) }}">{{ u.code }}</a></td>
+                <td><a href="{{ url_for('admin_user_modification', target_user_id=u.id) }}">{{ u.code }}</a></td>
                 <td>{{ u.nachname }}, {{ u.vorname }}</td>
                 <td>{{ u.email }}</td>
                 <td>{{ u.kommentar }}</td>

@@ -131,6 +131,35 @@ th {
     background-color: #f2f2f2;
 }
 
+/* Zebra-Muster für die Listen */
+table.zebra-table {
+    width: 100%;
+    border-collapse: collapse; /* Entfernt doppelte Ränder */
+    margin-bottom: 20px; /* Etwas Abstand nach unten */
+}
+table.zebra-table th, table.zebra-table td {
+    border: 1px solid #ddd; /* Dezente Ränder für Zellen */
+    padding: 8px; /* Innenabstand für Zellen */
+    text-align: left; /* Textausrichtung links */
+}
+table.zebra-table th {
+    background-color: #f2f2f2; /* Heller Hintergrund für Kopfzeile */
+    color: #333; /* Dunklere Schrift für Kopfzeile */
+}
+
+/* Hier kommt das Zebra-Striping */
+table.zebra-table tbody tr:nth-child(even) {
+    background-color: #f9f9f9; /* Sehr heller Grauton für jede zweite Zeile */
+}
+table.zebra-table tbody tr:nth-child(odd) {
+    background-color: #ffffff; /* Weiß für die anderen Zeilen */
+}
+
+/* Optional: Hover-Effekt für Zeilen */
+table.zebra-table tbody tr:hover {
+    background-color: #f1f1f1; /* Etwas dunklerer Hintergrund beim Überfahren mit der Maus */
+}
+
 /* Styles für Formulare auf der Admin-Transaktionsseite */
 form {
     margin-top: 20px;
