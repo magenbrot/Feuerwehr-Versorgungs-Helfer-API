@@ -1,0 +1,13 @@
+[Unit]
+Description=uWSGI instance to serve Feuerwehr-Versorgungs-Helfer API
+After=network.target
+
+[Service]
+User=www-data
+Group=www-data
+WorkingDirectory=<Pfad zum Code>
+Environment="PATH=<Pfad zum Code>/venv/bin"
+ExecStart=<Pfad zum Code>/venv/bin/uwsgi --ini api.ini
+
+[Install]
+WantedBy=multi-user.target
