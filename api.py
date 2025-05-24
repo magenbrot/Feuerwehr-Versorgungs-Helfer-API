@@ -130,7 +130,7 @@ def health_protected_route(user_id, username):
         flask.Response: Eine JSON-Antwort mit dem Healthcheck-Status und Benutzerinformationen.
     """
 
-    print(f"Benutzer authentifiziert {user_id} - {username}")
+    print(f"API-Benutzer authentifiziert {user_id} - {username}")
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if not cnx:
         print("Datenbankverbindung fehlgeschlagen")
@@ -139,6 +139,42 @@ def health_protected_route(user_id, username):
     try:
         return jsonify({'message': f'Healthcheck OK! Authentifizierter Benutzer ID {user_id} ({username}).'})
     finally:
+        db_utils.DatabaseConnectionPool.close_connection(cnx)
+
+
+@app.route('/users', methods=['GET'])
+@api_key_required
+def get_all_users(api_user_id, api_username):
+    """
+    Gibt eine Liste aller angelegten Benutzer mit ihrem Code, Nachnamen und Vornamen zurück.
+    (Nur für authentifizierte API-Benutzer).
+
+    Args:
+        api_user_id (int): Die ID des authentifizierten API-Benutzers.
+        api_username (str): Der Benutzername des authentifizierten API-Benutzers.
+
+    Returns:
+        flask.Response: Eine JSON-Antwort mit einer Liste von Benutzern
+                        (jeder Benutzer als Dictionary mit 'code', 'nachname', 'vorname')
+                        oder einem Fehler.
+    """
+    print(f"API-Benutzer authentifiziert: {api_user_id} - {api_username}. Rufe alle Benutzer ab.")
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
+    if not cnx:
+        return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
+
+    cursor = cnx.cursor(dictionary=True)
+    try:
+        query = "SELECT code, nachname, vorname FROM users ORDER BY nachname, vorname;"
+        cursor.execute(query)
+        users = cursor.fetchall()
+        print(f"{len(users)} Benutzer erfolgreich aus der Datenbank abgerufen.")
+        return jsonify(users), 200
+    except Error as err:
+        print(f"Fehler beim Abrufen aller Benutzer aus der Datenbank: {err}")
+        return jsonify({'error': f'Fehler beim Abrufen der Benutzerdaten: {err}'}), 500
+    finally:
+        cursor.close()
         db_utils.DatabaseConnectionPool.close_connection(cnx)
 
 
