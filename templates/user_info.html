@@ -1,7 +1,10 @@
 <!DOCTYPE html>
-<html>
+<html lang="de">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Benutzerinformationen</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo/favicon.png') }}">
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
@@ -23,85 +26,93 @@
     <h4 class="hinweis">Du bist momentan gesperrt! Bitte melde dich bei der Abteilung Verpflegung!</h4>
     {% endif %}
 
-    <h3>Saldo: {{ saldo }}</h3>
+    <div class="container">
+        <div class="column left-column">
+            <h3>Saldo: {{ saldo }}</h3>
 
-    <h3>Deine Transaktionen:</h3>
-    {% if transactions %}
-    <table>
-        <thead>
-            <tr>
-                <th>Beschreibung</th>
-                <th>Soll / Haben</th>
-                <th>Zeitpunkt</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for transaction in transactions %}
-            <tr>
-                <td>{{ transaction.beschreibung }}</td>
-                <td>{{ transaction.saldo_aenderung }}</td>
-                <td>{{ transaction.timestamp }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    {% else %}
-    <p>Noch keine Transaktionen vorhanden.</p>
-    {% endif %}
+            <h3>Deine Transaktionen:</h3>
+            {% if transactions %}
+            <table class="zebra-table">
+                <thead>
+                    <tr>
+                        <th>Beschreibung</th>
+                        <th>Soll / Haben</th>
+                        <th>Zeitpunkt</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for transaction in transactions %}
+                    <tr>
+                        <td>{{ transaction.beschreibung }}</td>
+                        <td>{{ transaction.saldo_aenderung }}</td>
+                        <td>{{ transaction.timestamp }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p>Noch keine Transaktionen vorhanden.</p>
+            {% endif %}
 
 
-    <h3>Deine registrierten NFC-Token:</h3>
-    {% if nfc_tokens %}
-    <table>
-        <thead>
-            <tr>
-                <th>Name</th>
-                <th>Daten</th>
-                <th>zuletzt verwendet</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for nfc_token in nfc_tokens %}
-            <tr>
-                <td>{{ nfc_token.token_name }}</td>
-                <td>{{ nfc_token.token_daten.hex() }}</td>
-                <td>{{ nfc_token.last_used }}
-                    {% if nfc_token.last_used_days_ago == 0 %}
-                    (heute)
-                    {% else %}
-                    (vor {{ nfc_token.last_used_days_ago }} Tagen)
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    {% else %}
-    <p>Noch keine NFC-Token hinterlegt.</p>
-    {% endif %}
-
-    <h3>Passwort ändern:</h3>
-    <form method="POST" name="change_password" class="password-form">
-        <input type="hidden" name="change_password" value="true">
-        <div>
-            <label for="current_password">Aktuelles Passwort:</label>
-            <input type="password" id="current_password" name="current_password" required>
+            <h3>Deine registrierten NFC-Token:</h3>
+            {% if nfc_tokens %}
+            <table class="zebra-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Daten</th>
+                        <th>zuletzt verwendet</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for nfc_token in nfc_tokens %}
+                    <tr>
+                        <td>{{ nfc_token.token_name }}</td>
+                        <td>{{ nfc_token.token_daten.hex() }}</td>
+                        <td>{{ nfc_token.last_used }}
+                            {% if nfc_token.last_used_days_ago == 0 %}
+                            (heute)
+                            {% else %}
+                            (vor {{ nfc_token.last_used_days_ago }} Tagen)
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p>Noch keine NFC-Token hinterlegt.</p>
+            {% endif %}
         </div>
-        <div>
-            <label for="new_password">Neues Passwort:</label>
-            <input type="password" id="new_password" name="new_password" required>
-        </div>
-        <div>
-            <label for="confirm_new_password">Neues Passwort bestätigen:</label>
-            <input type="password" id="confirm_new_password" name="confirm_new_password" required>
-        </div>
-        <button type="submit">Passwort ändern</button>
-    </form>
 
-    {% if user.is_admin %}
-        <p class="admin-link"><a href="{{ url_for('admin_dashboard') }}">Zum Admin-Dashboard</a></p>
-    {% endif %}
+        <div class="column right-column">
+            <div class="form-section">
+                <h3>Passwort ändern:</h3>
+                <form method="POST" name="change_password" class="password-form"> <input type="hidden" name="change_password" value="true">
+                    <div>
+                        <label for="current_password">Aktuelles Passwort:</label>
+                        <input type="password" id="current_password" name="current_password" required>
+                    </div>
+                    <div>
+                        <label for="new_password">Neues Passwort:</label>
+                        <input type="password" id="new_password" name="new_password" required>
+                    </div>
+                    <div>
+                        <label for="confirm_new_password">Neues Passwort bestätigen:</label>
+                        <input type="password" id="confirm_new_password" name="confirm_new_password" required>
+                    </div>
+                    <button type="submit">Passwort ändern</button>
+                </form>
+            </div>
+        </div>
+    </div>
 
-    <p><a href="{{ url_for('logout') }}">Abmelden</a></p>
-  </body>
+    <div class="admin-link" style="margin-top: 20px;"> {% if user.is_admin %}
+        <a href="{{ url_for('admin_dashboard') }}">Zum Admin-Dashboard</a> |
+        {% endif %}
+        <a href="{{ url_for('logout') }}">Abmelden</a>
+    </div>
+
+</body>
 </html>

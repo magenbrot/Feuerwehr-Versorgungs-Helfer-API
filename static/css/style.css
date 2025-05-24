@@ -84,6 +84,19 @@ button[type="submit"]:hover {
     display: inline-block;
 }
 
+.admin-link a:first-child {
+    margin-left: 5px; /* Entfernt den linken Rand vom ersten Link, um unnötigen Abstand am Ende zu vermeiden */
+}
+
+.admin-link a {
+    margin-right: 10px;
+    margin-left: 10px;
+}
+
+.admin-link a:last-child {
+    margin-right: 5px; /* Entfernt den rechten Rand vom letzten Link, um unnötigen Abstand am Ende zu vermeiden */
+}
+
 p {
     line-height: 1.6;
     color: #555;
@@ -116,6 +129,35 @@ td {
 
 th {
     background-color: #f2f2f2;
+}
+
+/* Zebra-Muster für die Listen */
+table.zebra-table {
+    width: 100%;
+    border-collapse: collapse; /* Entfernt doppelte Ränder */
+    margin-bottom: 20px; /* Etwas Abstand nach unten */
+}
+table.zebra-table th, table.zebra-table td {
+    border: 1px solid #ddd; /* Dezente Ränder für Zellen */
+    padding: 8px; /* Innenabstand für Zellen */
+    text-align: left; /* Textausrichtung links */
+}
+table.zebra-table th {
+    background-color: #f2f2f2; /* Heller Hintergrund für Kopfzeile */
+    color: #333; /* Dunklere Schrift für Kopfzeile */
+}
+
+/* Hier kommt das Zebra-Striping */
+table.zebra-table tbody tr:nth-child(even) {
+    background-color: #f9f9f9; /* Sehr heller Grauton für jede zweite Zeile */
+}
+table.zebra-table tbody tr:nth-child(odd) {
+    background-color: #ffffff; /* Weiß für die anderen Zeilen */
+}
+
+/* Optional: Hover-Effekt für Zeilen */
+table.zebra-table tbody tr:hover {
+    background-color: #f1f1f1; /* Etwas dunklerer Hintergrund beim Überfahren mit der Maus */
 }
 
 /* Styles für Formulare auf der Admin-Transaktionsseite */
@@ -285,7 +327,7 @@ form.inline-form-transaction {
     border-radius: 5px;
     background-color: #f9f9f9;
     width: 100%;
-    max-width: 700px;
+    max-width: 700px; /* Angepasst für breitere Inline-Formulare */
     box-sizing: border-box;
 }
 
@@ -336,4 +378,94 @@ form.inline-form-transaction button[type="submit"] {
 /* Passen Sie den Hover-Stil an, falls eine spezifischere Regel benötigt wird */
 form.inline-form-transaction button[type="submit"]:hover {
     background-color: #0056b3;
+}
+
+/* --- NEUE STYLES FÜR DAS ZWEISPALTIGE LAYOUT --- */
+.container {
+    display: flex;
+    flex-wrap: wrap; /* Allows columns to wrap on smaller screens if needed */
+    width: 100%; /* Nimmt die volle Breite des Elternelements (body max-width) ein */
+    align-items: flex-start; /* Stellt sicher, dass Spalten oben beginnen, auch bei unterschiedlichen Höhen */
+}
+
+.column {
+    padding: 10px;
+    box-sizing: border-box; /* Include padding and border in the element's total width and height */
+}
+
+.left-column {
+    flex: 1; /* Passt sich an, kann aber durch min/max-width begrenzt werden */
+    min-width: 300px; /* Mindestbreite, bevor es umbricht oder scrollt (anpassen nach Bedarf) */
+    margin-right: 20px; /* Space between columns */
+}
+
+.right-column {
+    flex: 1; /* Passt sich an */
+    min-width: 300px; /* Mindestbreite für die rechte Spalte */
+}
+
+/* Spezifische Formular-Stylings für die rechte Spalte */
+.right-column .form-section {
+    margin-bottom: 20px;
+    padding: 15px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    background-color: #f9f9f9;
+    /* Die Breite wird durch die .right-column und Flexbox gesteuert,
+       daher keine explizite width oder max-width hier, es sei denn,
+       es wird für einzelne .form-section benötigt */
+}
+
+.right-column .form-section h3 {
+    margin-top: 0;
+    color: #333;
+}
+
+/* Anpassung für die inline-form-transaction innerhalb der .right-column,
+   falls die globale .inline-form-transaction Regel überschrieben werden muss.
+   Aktuell sollte die globale Regel passen. */
+.right-column form.inline-form-transaction {
+    max-width: none; /* Erlaubt dem Formular, die Breite der rechten Spalte zu nutzen */
+    /* Weitere spezifische Anpassungen hier, falls nötig */
+}
+
+
+.right-column .action-buttons form {
+    margin-bottom: 10px; /* Space between action buttons */
+    border: none; /* Entfernt den Standard-Formularrahmen für diese Button-Gruppen */
+    padding: 0;   /* Entfernt das Standard-Formularpadding */
+    background-color: transparent; /* Macht den Hintergrund transparent */
+    max-width: none; /* Erlaubt volle Breite der Spalte */
+}
+
+.right-column .action-buttons form button[type="submit"] {
+    width: 100%; /* Buttons nehmen die volle Breite ihres Form-Containers ein */
+}
+
+
+/* Responsive adjustments - stack columns on smaller screens */
+@media (max-width: 768px) {
+    .container {
+        flex-direction: column;
+    }
+    .left-column, .right-column {
+        margin-right: 0;
+        width: 100%; /* Full width for stacked columns */
+        min-width: auto; /* Setzt min-width zurück für gestapeltes Layout */
+    }
+    .right-column .form-section {
+        max-width: none; /* Stellt sicher, dass Formulare die volle Breite auf Mobilgeräten nutzen */
+    }
+}
+
+/* Korrektur für globales Form-Styling, damit es nicht die .action-buttons beeinflusst */
+form:not(.action-buttons form):not(.compact-delete-form) {
+    margin-top: 20px;
+    padding: 15px;
+    border: 1px solid #eee;
+    border-radius: 5px;
+    background-color: #f9f9f9;
+    /* width: 100%; wird bereits von .inline-form-transaction oder .form-section gehandhabt */
+    /* max-width: 400px; ist okay für Standardformulare, aber .inline-form-transaction und .form-section haben eigene max-widths */
+    box-sizing: border-box;
 }

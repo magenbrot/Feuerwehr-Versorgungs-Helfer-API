@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API-Benutzer Verwaltung - Admin</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo/favicon.png') }}">
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <h1>API-Benutzer Verwaltung</h1>
+
+    <div class="admin-link">
+        <a href="{{ url_for('admin_dashboard') }}">Zurück zum Admin Dashboard</a>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <ul class="flashes">
+            {% for category, message in messages %}
+                <li class="{{ category }}">{{ message }}</li>
+            {% endfor %}
+            </ul>
+        {% endif %}
+    {% endwith %}
+
+    <div class="container">
+        <div class="column left-column">
+            <h2>Vorhandene API-Benutzer</h2>
+            {% if api_users %}
+                <table class="zebra-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Username</th>
+                            <th>Aktionen</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for api_u in api_users %}
+                        <tr>
+                            <td>{{ api_u.id }}</td>
+                            <td><a href="{{ url_for('admin_api_user_detail', api_user_id_route=api_u.id) }}">{{ api_u.username }}</a></td>
+                            <td>
+                                <form method="POST" action="{{ url_for('admin_delete_api_user', api_user_id_route=api_u.id) }}" class="compact-delete-form" onsubmit="return confirm('Möchtest du diesen API-User wirklich löschen?');">
+                                    <button type="submit" name="delete_api_user_button" class="red-button">Löschen</button> </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <p>Keine API-Benutzer gefunden.</p>
+            {% endif %}
+        </div>
+
+        <div class="column right-column">
+            <div class="form-section">
+                <h2>Neuen API-Benutzer hinzufügen</h2>
+                <form method="POST" action="{{ url_for('admin_api_user_manage') }}"> <div class="form-group"> <label for="username">API-Benutzername:*</label>
+                        <input type="text" id="username" name="username" required>
+                    </div>
+                    <button type="submit" class="button">API-Benutzer erstellen</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <hr>
+
+    <div class="admin-link">
+        <a href="{{ url_for('user_info') }}">Zur eigenen Benutzeransicht</a> |
+        <a href="{{ url_for('logout') }}">Abmelden</a>
+    </div>
+</body>
+</html>

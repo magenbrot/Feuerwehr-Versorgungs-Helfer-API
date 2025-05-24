@@ -1,12 +1,19 @@
 <!DOCTYPE html>
-<html>
+<html lang="de">
 <head>
-    <title>Transaktionen für {{ user.nachname }}, {{ user.vorname }}</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verwaltung für {{ user.nachname }}, {{ user.vorname }}</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo/favicon.png') }}">
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-    <h2>Transaktionen für {{ user.nachname }}, {{ user.vorname }} ({{ user.code }}) - Aktueller Saldo: {{ saldo }} {% if user.is_locked %} (gesperrt){% endif %}</h2>
-    <p class="admin-link"><a href="{{ url_for('admin_dashboard') }}">Zurück zur Benutzerübersicht</a></p>
+    <h2>Verwaltung für {{ user.nachname }}, {{ user.vorname }} ({{ user.code }})</h2>
+    <h2>Aktueller Saldo: {{ saldo }} {% if user.is_locked %} (gesperrt){% endif %}{% if user.kommentar %} - {{ user.kommentar }}{% endif %}</h2>
+
+    <div class="admin-link">
+        <a href="{{ url_for('admin_dashboard') }}">Zurück zum Admin Dashboard</a>
+    </div>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
@@ -18,110 +25,158 @@
       {% endif %}
     {% endwith %}
 
-    <h3>Transaktionen:</h3>
-    {% if transactions %}
-    <table>
-        <thead>
-            <tr>
-                <th>Beschreibung</th>
-                <th>Saldoänderung</th>
-                <th>Zeitpunkt</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for transaction in transactions %}
-            <tr>
-                <td>{{ transaction.beschreibung }}</td>
-                <td>{{ transaction.saldo_aenderung }}</td>
-                <td>{{ transaction.timestamp }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    {% else %}
-    <p>Keine Transaktionen für diesen Benutzer vorhanden.</p>
-    {% endif %}
+    <div class="container">
+        <div class="column left-column">
+            <h3>Transaktionen:</h3>
+            {% if transactions %}
+            <table class="zebra-table">
+                <thead>
+                    <tr>
+                        <th>Beschreibung</th>
+                        <th>Saldoänderung</th>
+                        <th>Zeitpunkt</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for transaction in transactions %}
+                    <tr>
+                        <td>{{ transaction.beschreibung }}</td>
+                        <td>{{ transaction.saldo_aenderung }}</td>
+                        <td>{{ transaction.timestamp }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p>Keine Transaktionen für diesen Benutzer vorhanden.</p>
+            {% endif %}
+            {% if transactions %} <form method="POST" onsubmit="return confirm('Möchtest du wirklich ALLE Transaktionen dieses Benutzers löschen?');" style="margin-top:10px; border: none; background-color: transparent; padding: 0;">
+                <input type="hidden" name="delete_transactions" value="true">
+                <button type="submit">Alle Transaktionen löschen</button>
+            </form>
+            {% endif %}
 
-    <form method="POST" onsubmit="return confirm('Möchtest du wirklich ALLE Transaktionen dieses Benutzers löschen?');">
-        <input type="hidden" name="delete_transactions" value="true">
-        <button type="submit">Alle Transaktionen löschen</button>
-    </form>
+            <h3>NFC-Token:</h3>
+            {% if nfc_tokens %}
+            <table class="zebra-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Name</th>
+                        <th>Daten</th>
+                        <th>zuletzt verwendet</th>
+                        <th>Aktion</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for nfc_token in nfc_tokens %}
+                    <tr>
+                        <td>{{ nfc_token.token_id }}</td>
+                        <td>{{ nfc_token.token_name }}</td>
+                        <td>{{ nfc_token.token_daten.hex() }}</td>
+                        <td>{{ nfc_token.last_used }}
+                            {% if nfc_token.last_used_days_ago == 0 %}
+                            (heute)
+                            {% else %}
+                            (vor {{ nfc_token.last_used_days_ago }} Tagen)
+                            {% endif %}
+                        </td>
+                        <td>
+                            <form method="POST" class="compact-delete-form" onsubmit="return confirm('Möchtest du diesen Token wirklich löschen?');">
+                                <input type="hidden" name="nfc_token_id" value="{{ nfc_token.token_id}}">
+                                <button type="submit" name="delete_user_nfc_token" class="red-button">Löschen</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p>Noch keine NFC-Token hinterlegt.</p>
+            {% endif %}
+        </div>
 
-<h3>Neue Transaktion hinzufügen:</h3>
-<form method="POST" class="inline-form-transaction">
-    <label for="beschreibung">Beschreibung:</label>
-    <input type="text" id="beschreibung" name="beschreibung" value="Admin-Eintrag" required>
+        <div class="column right-column">
+            <div class="form-section">
+                <h3>Neue Transaktion hinzufügen:</h3>
+                <form method="POST" class="inline-form-transaction">
+                    <label for="beschreibung">Beschreibung:</label>
+                    <input type="text" id="beschreibung" name="beschreibung" value="Admin-Eintrag" required>
 
-    <label for="saldo_aenderung">Änderung:</label>
-    <input type="number" id="saldo_aenderung" name="saldo_aenderung" value="-1" required>
+                    <label for="saldo_aenderung">Änderung:</label>
+                    <input type="number" id="saldo_aenderung" name="saldo_aenderung" value="-1" required>
 
-    <button type="submit" name="add_transaction">Hinzufügen</button>
-</form>
+                    <button type="submit" name="add_transaction">Hinzufügen</button>
+                </form>
+            </div>
 
-    <h3>NFC-Token:</h3>
-    {% if nfc_tokens %}
-    <table>
-        <thead>
-            <tr>
-                <th>ID</th>
-                <th>Name</th>
-                <th>Daten</th>
-                <th>zuletzt verwendet</th>
-                <th>Aktion</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for nfc_token in nfc_tokens %}
-            <tr>
-                <td>{{ nfc_token.token_id }}</td>
-                <td>{{ nfc_token.token_name }}</td>
-                <td>{{ nfc_token.token_daten.hex() }}</td>
-                <td>{{ nfc_token.last_used }}
-                    {% if nfc_token.last_used_days_ago == 0 %}
-                    (heute)
-                    {% else %}
-                    (vor {{ nfc_token.last_used_days_ago }} Tagen)
-                    {% endif %}
-                </td>
-                <td>
-                    <form method="POST" class="compact-delete-form" onsubmit="return confirm('Möchtest du diesen Token wirklich löschen?');">
-                        <input type="hidden" name="nfc_token_id" value="{{ nfc_token.token_id}}">
-                        <button type="submit" name="delete_user_nfc_token" class="red-button">Löschen</button>
-                    </form>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    {% else %}
-    <p>Noch keine NFC-Token hinterlegt.</p>
-    {% endif %}
+            <div class="form-section">
+                <h3>neuen NFC-Token hinzufügen:</h3>
+                <form method="POST" class="inline-form-transaction">
+                    <label for="nfc_token_name">NFC-Name:</label>
+                    <input type="text" id="nfc_token_name" name="nfc_token_name" title="Bitte gib deinem Token einen Namen.">
+                    <label for="nfc_token_daten">NFC-Daten:</label>
+                    <input type="text" id="nfc_token_daten" name="nfc_token_daten" required pattern="[0-9A-Fa-f]{2,}" title="Bitte gib eine Hexadezimalzahl mit mindestens 2 Zeichen ein.">
+                    <button type="submit" name="add_user_nfc_token">Hinzufügen</button>
+                </form>
+            </div>
 
+            <div class="form-section">
+                <h3>Kommentar aktualisieren:</h3>
+                <form method="POST" class="inline-form-transaction"> <label for="kommentar">Kommentar:</label>
+                    <input type="text" id="kommentar" name="kommentar" title="Bitte gib einen Kommentar ein." value="{{ user.kommentar if user.kommentar }}">
+                    <button type="submit" name="update_user_comment">Speichern</button>
+                </form>
+            </div>
 
-    <h3>neuen NFC-Token hinzufügen:</h3>
-    <form method="POST" class="inline-form-transaction">
-        <label for="nfc_token_name">NFC-Name:</label>
-        <input type="text" id="nfc_token_name" name="nfc_token_name" title="Bitte gib deinem Token einen Namen.">
-        <label for="nfc_token_daten">NFC-Daten (hexadezimal):</label>
-        <input type="text" id="nfc_token_daten" name="nfc_token_daten" required pattern="[0-9A-Fa-f]{2,}" title="Bitte gib eine Hexadezimalzahl mit mindestens 2 Zeichen ein.">
-        <button type="submit" name="add_user_nfc_token">Hinzufügen</button>
-    </form>
+            <div class="form-section">
+                <h3>Emailadresse aktualisieren:</h3>
+                <form method="POST" class="inline-form-transaction"> <label for="email">Emailadresse:</label>
+                    <input type="text" id="email" name="email" title="Bitte gib die Emailadresse ein." value="{{ user.email if user.email }}">
+                    <button type="submit" name="update_user_email">Speichern</button>
+                </form>
+            </div>
 
-    {% if user.is_locked %}
-    <form method="POST" onsubmit="return confirm('Möchtest du diesen Benutzer wirklich entsperren?');">
-        <input type="hidden" name="unlock_user" value="true">
-        <button type="submit" class="red-button">Benutzer entsperren</button>
-    </form>
-    {% else %}
-    <form method="POST" onsubmit="return confirm('Möchtest du diesen Benutzer wirklich sperren?');">
-        <input type="hidden" name="lock_user" value="true">
-        <button type="submit" class="red-button">Benutzer sperren</button>
-    </form>
-    {% endif %}
+            <div class="form-section action-buttons">
+                <h3>Benutzeraktionen:</h3>
+                {% if user.is_locked %}
+                <form method="POST" onsubmit="return confirm('Möchtest du diesen Benutzer wirklich entsperren?');">
+                    <input type="hidden" name="unlock_user" value="true">
+                    <button type="submit" class="red-button">Benutzer entsperren</button>
+                </form>
+                {% else %}
+                <form method="POST" onsubmit="return confirm('Möchtest du diesen Benutzer wirklich sperren?');">
+                    <input type="hidden" name="lock_user" value="true">
+                    <button type="submit" class="red-button">Benutzer sperren</button>
+                </form>
+                {% endif %}
 
-    <form method="POST" onsubmit="return confirm('ACHTUNG: Möchtest du diesen Benutzer WIRKLICH löschen? Alle zugehörigen Daten gehen verloren!');">
-        <input type="hidden" name="delete_user" value="true">
-        <button type="submit" class="red-button">Benutzer löschen</button>
-    </form>
+                {% if user.is_admin %}
+                <form method="POST" onsubmit="return confirm('Möchtest du diesen Benutzer wirklich zum normalen Benutzer degradieren?');">
+                    <input type="hidden" name="demote_user" value="true">
+                    <button type="submit" class="red-button">Admin zu Benutzer degradieren</button>
+                </form>
+                {% else %}
+                <form method="POST" onsubmit="return confirm('Möchtest du diesen Benutzer wirklich zum Admin befördern?');">
+                    <input type="hidden" name="promote_user" value="true">
+                    <button type="submit" class="red-button">Benutzer zum Admin befördern</button>
+                </form>
+                {% endif %}
+
+                <form method="POST" onsubmit="return confirm('ACHTUNG: Möchtest du diesen Benutzer WIRKLICH löschen? Alle zugehörigen Daten gehen verloren!');">
+                    <input type="hidden" name="delete_user" value="true">
+                    <button type="submit" class="red-button">Benutzer löschen</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <hr>
+
+    <div class="admin-link">
+        <a href="{{ url_for('user_info') }}">Zur eigenen Benutzeransicht</a> |
+        <a href="{{ url_for('logout') }}">Abmelden</a>
+    </div>
+
 </body>
 </html>
