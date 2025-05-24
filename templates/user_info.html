@@ -20,14 +20,18 @@
       {% endif %}
     {% endwith %}
 
-    <p>Dein Benutzer-Code ist: <strong>{{ user.code }}</strong></p>
-
     {% if user.is_locked %}
     <h4 class="hinweis">Du bist momentan gesperrt! Bitte melde dich bei der Abteilung Verpflegung!</h4>
     {% endif %}
 
     <div class="container">
         <div class="column left-column">
+            <p>Dein Benutzer-Code ist: <strong>{{ user.code }}</strong></p>
+            {% if user.email %}
+            <p>Deine Emailadresse ist: <strong>{{ user.email }}</strong></p>
+            {% else %}
+            <p>Du hast noch keine Emailadresse hinterlegt.</p>
+            {% endif %}
             <h3>Saldo: {{ saldo }}</h3>
 
             <h3>Deine Transaktionen:</h3>
@@ -53,7 +57,6 @@
             {% else %}
             <p>Noch keine Transaktionen vorhanden.</p>
             {% endif %}
-
 
             <h3>Deine registrierten NFC-Token:</h3>
             {% if nfc_tokens %}
@@ -103,6 +106,18 @@
                         <input type="password" id="confirm_new_password" name="confirm_new_password" required>
                     </div>
                     <button type="submit">Passwort ändern</button>
+                </form>
+            </div>
+
+            <div class="form-section" style="margin-top: 20px;">
+                <h3>Emailadresse ändern:</h3>
+                <form method="POST" name="change_email">
+                    <input type="hidden" name="change_email" value="true">
+                    <div>
+                        <label for="new_email">Neue Emailadresse:</label>
+                        <input type="email" id="new_email" name="new_email" value="{{ user.email if user.email else '' }}">
+                    </div>
+                    <button type="submit">Emailadresse ändern</button>
                 </form>
             </div>
         </div>

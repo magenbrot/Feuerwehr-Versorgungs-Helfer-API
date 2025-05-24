@@ -101,10 +101,10 @@
                 <h3>Neue Transaktion hinzufügen:</h3>
                 <form method="POST" class="inline-form-transaction">
                     <label for="beschreibung">Beschreibung:</label>
-                    <input type="text" id="beschreibung" name="beschreibung" value="Admin-Eintrag" required>
+                    <input type="text2column" id="beschreibung" name="beschreibung" value="Admin-Eintrag" required>
 
                     <label for="saldo_aenderung">Änderung:</label>
-                    <input type="number" id="saldo_aenderung" name="saldo_aenderung" value="-1" required>
+                    <input type="number2column" id="saldo_aenderung" name="saldo_aenderung" value="-1" required>
 
                     <button type="submit" name="add_transaction">Hinzufügen</button>
                 </form>
@@ -114,9 +114,9 @@
                 <h3>neuen NFC-Token hinzufügen:</h3>
                 <form method="POST" class="inline-form-transaction">
                     <label for="nfc_token_name">NFC-Name:</label>
-                    <input type="text" id="nfc_token_name" name="nfc_token_name" title="Bitte gib deinem Token einen Namen.">
+                    <input type="text2column" id="nfc_token_name" name="nfc_token_name" title="Bitte gib deinem Token einen Namen.">
                     <label for="nfc_token_daten">NFC-Daten:</label>
-                    <input type="text" id="nfc_token_daten" name="nfc_token_daten" required pattern="[0-9A-Fa-f]{2,}" title="Bitte gib eine Hexadezimalzahl mit mindestens 2 Zeichen ein.">
+                    <input type="text2column" id="nfc_token_daten" name="nfc_token_daten" required pattern="[0-9A-Fa-f]{2,}" title="Bitte gib eine Hexadezimalzahl mit mindestens 2 Zeichen ein.">
                     <button type="submit" name="add_user_nfc_token">Hinzufügen</button>
                 </form>
             </div>
@@ -130,9 +130,9 @@
             </div>
 
             <div class="form-section">
-                <h3>Emailadresse aktualisieren:</h3>
+                <h3>Emailadresse aktualisierenn:</h3>
                 <form method="POST" class="inline-form-transaction"> <label for="email">Emailadresse:</label>
-                    <input type="text" id="email" name="email" title="Bitte gib die Emailadresse ein." value="{{ user.email if user.email }}">
+                    <input type="email" id="email" name="email" title="Bitte gib die Emailadresse ein." value="{{ user.email if user.email }}">
                     <button type="submit" name="update_user_email">Speichern</button>
                 </form>
             </div>
