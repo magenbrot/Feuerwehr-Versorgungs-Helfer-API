@@ -2,11 +2,14 @@
 
 import binascii
 import os
+import random
+import secrets
+import string
 import sys
 from dotenv import load_dotenv
 from flask import Flask, render_template, request, redirect, url_for, session, flash # pigar: required-packages=uWSGI
 from werkzeug.security import check_password_hash, generate_password_hash
-from mysql.connector import Error
+from mysql.connector import Error, IntegrityError # IntegrityError für Unique-Constraint-Fehler hinzugefügt
 import config
 import db_utils
 
@@ -33,12 +36,17 @@ except Error:
     sys.exit(1)
 
 
+def generate_api_key_string(length=32):
+    """Generiert einen sicheren, zufälligen API-Key-String."""
+    return secrets.token_hex(length)
+
+
 def hex_to_binary(hex_string):
     """
     Konvertiert einen Hexadezimalstring in Binärdaten.
 
     Diese Funktion nimmt einen Hexadezimalstring entgegen und wandelt ihn in die entsprechende
-    Binärdarstellung um.  Sie wird typischerweise verwendet, um NFC-Token Daten zu verarbeiten,
+    Binärdarstellung um. Sie wird typischerweise verwendet, um NFC-Token Daten zu verarbeiten,
     die oft als Hexadezimalstrings dargestellt werden.
 
     Args:
@@ -65,6 +73,7 @@ def add_user_nfc_token(user_id, token_name, token_hex):
 
     Args:
         user_id (int): Die ID des Benutzers.
+        token_name (str): Der Name des Tokens.
         token_hex (str): Die Hexadezimaldarstellung der NFC-Token Daten.
 
     Returns:
@@ -158,12 +167,45 @@ def delete_user(user_id):
     return False
 
 
-def toggle_user_lock(user_id, lock_state):
+def toggle_user_admin(user_id, admin_state):
     """
-    Sperrt einen Benutzer anhand seiner ID.
+    Macht einen Benutzer zum Admin (oder umgekehrt).
 
     Args:
-        user_id (int): Die ID des zu sperrenden Benutzers.
+        user_id (int): Die ID des Benutzers.
+        admin_state (bool): True == Befördern, False == Degradieren.
+
+    Returns:
+        bool: True bei Erfolg, False bei Fehler.
+    """
+
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
+    if cnx:
+        cursor = cnx.cursor()
+        try:
+            if admin_state:
+                query = "UPDATE users SET is_admin = 1 WHERE id = %s"
+            else:
+                query = "UPDATE users SET is_admin = 0 WHERE id = %s"
+            cursor.execute(query, (user_id,))
+            cnx.commit()
+            return True
+        except Error as err:
+            print(f"Fehler beim Ändern des Admin-Modes für den Benutzers: {err}")
+            cnx.rollback()
+            return False
+        finally:
+            cursor.close()
+            db_utils.DatabaseConnectionPool.close_connection(cnx)
+    return False
+
+
+def toggle_user_lock(user_id, lock_state):
+    """
+    Sperrt einen Benutzer anhand seiner ID oder entsperrt ihn.
+
+    Args:
+        user_id (int): Die ID des zu sperrenden/entsperrenden Benutzers.
         lock_state (bool): True == Sperren, False == Entsperren.
 
     Returns:
@@ -191,6 +233,66 @@ def toggle_user_lock(user_id, lock_state):
     return False
 
 
+def update_user_comment(user_id, comment):
+    """
+    Ändert den Kommentar eines Benutzer anhand seiner ID.
+
+    Args:
+        user_id (int): Die ID des Benutzers.
+        comment (str): Der neue Kommentar.
+
+    Returns:
+        bool: True bei Erfolg, False bei Fehler.
+    """
+
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
+    if cnx:
+        cursor = cnx.cursor()
+        try:
+            query = "UPDATE users SET kommentar = %s WHERE id = %s"
+            cursor.execute(query, (comment, user_id))
+            cnx.commit()
+            return True
+        except Error as err:
+            print(f"Fehler beim Ändern des Kommentars für den Benutzers: {err}")
+            cnx.rollback()
+            return False
+        finally:
+            cursor.close()
+            db_utils.DatabaseConnectionPool.close_connection(cnx)
+    return False
+
+
+def update_user_email(user_id, email):
+    """
+    Ändert die Emailadresse eines Benutzer anhand seiner ID.
+
+    Args:
+        user_id (int): Die ID des Benutzers.
+        email (str): Die neue Emailadresse.
+
+    Returns:
+        bool: True bei Erfolg, False bei Fehler.
+    """
+
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
+    if cnx:
+        cursor = cnx.cursor()
+        try:
+            query = "UPDATE users SET email = %s WHERE id = %s"
+            cursor.execute(query, (email, user_id))
+            cnx.commit()
+            return True
+        except Error as err:
+            print(f"Fehler beim Ändern der Emailadresse für den Benutzers: {err}")
+            cnx.rollback()
+            return False
+        finally:
+            cursor.close()
+            db_utils.DatabaseConnectionPool.close_connection(cnx)
+    return False
+
+
 def fetch_user(code):
     """
     Ruft einen Benutzer aus der Datenbank anhand seines Codes ab.
@@ -199,14 +301,15 @@ def fetch_user(code):
         code (str): Der eindeutige Code des Benutzers.
 
     Returns:
-        dict: Ein Dictionary mit den Benutzerdaten (id, code, nachname, vorname, password, is_admin) oder None, falls kein Benutzer gefunden wird.
+        dict: Ein Dictionary mit den Benutzerdaten (id, code, nachname, vorname, password, is_admin, is_locked)
+              oder None, falls kein Benutzer gefunden wird.
     """
 
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if cnx:
         cursor = cnx.cursor(dictionary=True)
         try:
-            query = "SELECT id, code, nachname, vorname, password, is_admin FROM users WHERE code = %s"
+            query = "SELECT id, code, nachname, vorname, password, is_admin, is_locked FROM users WHERE code = %s"
             cursor.execute(query, (code,))
             user = cursor.fetchone()
             return user
@@ -222,13 +325,13 @@ def fetch_user(code):
 
 def get_user_by_id(user_id):
     """
-    Ruft einen Benutzer anhand seiner ID ab und holt die zugehörige NFC-Token Daten.
+    Ruft einen Benutzer anhand seiner ID ab.
 
     Args:
         user_id (int): Die ID des Benutzers.
 
     Returns:
-        dict: Ein Dictionary mit den Benutzerdaten (id, code, nachname, vorname, is_locked, is_admin, password)
+        dict: Ein Dictionary mit den Benutzerdaten (id, code, nachname, vorname, email, kommentar, is_locked, is_admin, password)
               oder None, falls kein Benutzer gefunden wird.
     """
 
@@ -237,7 +340,7 @@ def get_user_by_id(user_id):
         cursor = cnx.cursor(dictionary=True)
         try:
             query = """
-                SELECT id, code, nachname, vorname, is_locked, is_admin, password
+                SELECT id, code, nachname, vorname, email, kommentar, is_locked, is_admin, password
                 FROM users
                 WHERE id = %s
             """
@@ -262,7 +365,7 @@ def get_saldo_for_user(user_id):
         user_id (int): Die ID des Benutzers.
 
     Returns:
-        int: Das Saldo oder 0, falls kein Benutzer gefunden wird.
+        int: Das Saldo oder 0, falls kein Benutzer gefunden wird oder keine Transaktionen vorhanden sind.
     """
 
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
@@ -271,7 +374,8 @@ def get_saldo_for_user(user_id):
         try:
             query = "SELECT SUM(saldo_aenderung) FROM transactions WHERE user_id = %s"
             cursor.execute(query, (user_id,))
-            saldo = cursor.fetchone()[0] or 0
+            result = cursor.fetchone()
+            saldo = result[0] if result and result[0] is not None else 0
             return saldo
         except Error as err:
             print(f"Datenbankfehler beim Abrufen des Saldos: {err}")
@@ -317,11 +421,12 @@ def get_saldo_by_user():
 
 def get_all_users():
     """
-    Ruft alle Benutzer aus der Datenbank ab, sortiert nach Namen, und holt die zugehörige NFC-Token Daten.
+    Ruft alle Benutzer aus der Datenbank ab, sortiert nach Namen.
 
     Returns:
         list: Eine Liste von Dictionaries, wobei jedes Dictionary einen Benutzer repräsentiert
-              (id, code, nachname, vorname, is_locked, is_admin).
+              (id, code, nachname, vorname, email, kommentar, is_locked, is_admin).
+              Gibt eine leere Liste zurück, falls ein Fehler auftritt.
     """
 
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
@@ -329,15 +434,97 @@ def get_all_users():
         cursor = cnx.cursor(dictionary=True)
         try:
             query = """
-                SELECT id, code, nachname, vorname, is_locked, is_admin
+                SELECT id, code, nachname, vorname, email, kommentar, is_locked, is_admin
                 FROM users
-                ORDER BY nachname
+                ORDER BY nachname, vorname
             """
             cursor.execute(query)
             users = cursor.fetchall()
             return users
         except Error as err:
             print(f"Datenbankfehler beim Abrufen aller Benutzer: {err}")
+            return []
+        finally:
+            if cursor:
+                cursor.close()
+            db_utils.DatabaseConnectionPool.close_connection(cnx)
+    return []
+
+
+def get_all_api_users():
+    """
+    Ruft alle API-Benutzer aus der Datenbank ab, sortiert nach Username.
+
+    Returns:
+        list: Eine Liste von Dictionaries, wobei jedes Dictionary einen API-Benutzer repräsentiert
+              (id, username). Gibt eine leere Liste zurück, falls ein Fehler auftritt.
+    """
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
+    if cnx:
+        cursor = cnx.cursor(dictionary=True)
+        try:
+            query = "SELECT id, username FROM api_users ORDER BY username"
+            cursor.execute(query)
+            api_users = cursor.fetchall()
+            return api_users
+        except Error as err:
+            print(f"Datenbankfehler beim Abrufen aller API-Benutzer: {err}")
+            return []
+        finally:
+            if cursor:
+                cursor.close()
+            db_utils.DatabaseConnectionPool.close_connection(cnx)
+    return []
+
+def get_api_user_by_id(api_user_id):
+    """
+    Ruft einen API-Benutzer anhand seiner ID ab.
+
+    Args:
+        api_user_id (int): Die ID des API-Benutzers.
+
+    Returns:
+        dict: Ein Dictionary mit den API-Benutzerdaten (id, username)
+              oder None, falls kein API-Benutzer gefunden wird.
+    """
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
+    if cnx:
+        cursor = cnx.cursor(dictionary=True)
+        try:
+            query = "SELECT id, username FROM api_users WHERE id = %s"
+            cursor.execute(query, (api_user_id,))
+            api_user = cursor.fetchone()
+            return api_user
+        except Error as err:
+            print(f"Datenbankfehler beim Abrufen des API-Benutzers: {err}")
+            return None
+        finally:
+            if cursor:
+                cursor.close()
+            db_utils.DatabaseConnectionPool.close_connection(cnx)
+    return None
+
+def get_api_keys_for_api_user(api_user_id):
+    """
+    Ruft alle API-Keys für einen bestimmten API-Benutzer ab.
+
+    Args:
+        api_user_id (int): Die ID des API-Benutzers.
+
+    Returns:
+        list: Eine Liste von Dictionaries, wobei jedes Dictionary einen API-Key repräsentiert
+              (id, api_key). Gibt eine leere Liste zurück, falls keine Keys gefunden werden oder ein Fehler auftritt.
+    """
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
+    if cnx:
+        cursor = cnx.cursor(dictionary=True)
+        try:
+            query = "SELECT id, api_key FROM api_keys WHERE user_id = %s ORDER BY id"
+            cursor.execute(query, (api_user_id,))
+            keys = cursor.fetchall()
+            return keys
+        except Error as err:
+            print(f"Datenbankfehler beim Abrufen der API-Keys für API-Benutzer {api_user_id}: {err}")
             return []
         finally:
             if cursor:
@@ -355,19 +542,23 @@ def get_user_nfc_tokens(user_id):
 
     Returns:
         list: Eine Liste von Dictionaries, wobei jedes Dictionary einen Token repräsentiert
-              (token_id, token_name, token_daten, last_used). Gibt None zurück, falls ein Fehler auftritt.
+              (token_id, token_name, token_daten, last_used, last_used_days_ago).
+              Gibt None zurück, falls ein Fehler auftritt.
     """
 
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if cnx:
         cursor = cnx.cursor(dictionary=True)
         try:
-            query = "SELECT token_id, token_name, token_daten, last_used, DATEDIFF(CURDATE(), DATE(last_used)) AS last_used_days_ago FROM nfc_token WHERE user_id = %s ORDER BY last_used DESC"
+            query = """
+                SELECT token_id, token_name, token_daten as token_daten, last_used, DATEDIFF(CURDATE(), DATE(last_used)) AS last_used_days_ago
+                FROM nfc_token WHERE user_id = %s ORDER BY last_used DESC
+            """
             cursor.execute(query, (user_id,))
-            transactions = cursor.fetchall()
-            return transactions
+            nfc_tokens = cursor.fetchall()
+            return nfc_tokens
         except Error as err:
-            print(f"Datenbankfehler beim Abrufen der Benutzertransaktionen: {err}")
+            print(f"Datenbankfehler beim Abrufen der Benutzer NFC Tokens: {err}")
             return None
         finally:
             if cursor:
@@ -385,7 +576,7 @@ def get_user_transactions(user_id):
 
     Returns:
         list: Eine Liste von Dictionaries, wobei jedes Dictionary eine Transaktion repräsentiert
-              (id, beschreibung, saldo_aendung, timestamp). Gibt None zurück, falls ein Fehler auftritt.
+              (id, beschreibung, saldo_aenderung, timestamp). Gibt None zurück, falls ein Fehler auftritt.
     """
 
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
@@ -429,6 +620,7 @@ def add_transaction(user_id, beschreibung, saldo_aenderung):
             return True
         except Error as err:
             print(f"Fehler beim Hinzufügen der Transaktion: {err}")
+            flash(f"Datenbankfehler beim Hinzufügen der Transaktion: {err}", "error")
             cnx.rollback()
             return False
         finally:
@@ -498,6 +690,345 @@ def update_password(user_id, new_password_hash):
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return False
 
+def add_regular_user_db(user_data):
+    """
+    Fügt einen neuen regulären Benutzer der Datenbank hinzu.
+
+    Args:
+        user_data (dict): Ein Dictionary mit den Benutzerdaten:
+            'code' (str): Eindeutiger Code des Benutzers.
+            'nachname' (str): Nachname des Benutzers.
+            'vorname' (str): Vorname des Benutzers.
+            'password' (str): Passwort des Benutzers (Klartext, wird hier gehasht).
+            'email' (str, optional): E-Mail-Adresse des Benutzers.
+            'kommentar' (str, optional): Kommentar zum Benutzer.
+            'is_admin' (bool): Gibt an, ob der Benutzer Admin-Rechte hat.
+
+    Returns:
+        bool: True bei Erfolg, False bei Fehler (z.B. Datenbankfehler, doppelter Code).
+    """
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
+    if cnx:
+        cursor = cnx.cursor()
+        hashed_password = generate_password_hash(user_data['password'])
+        try:
+            query = """
+                INSERT INTO users (code, nachname, vorname, password, email, kommentar, is_admin, is_locked)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, 0)
+            """
+            cursor.execute(query, (
+                user_data['code'],
+                user_data['nachname'],
+                user_data['vorname'],
+                hashed_password,
+                user_data.get('email'),
+                user_data.get('kommentar'),
+                1 if user_data.get('is_admin') else 0
+            ))
+            cnx.commit()
+            return True
+        except IntegrityError:
+            flash(f"Benutzercode '{user_data['code']}' existiert bereits oder ein anderes eindeutiges Feld ist doppelt.", 'error')
+            cnx.rollback()
+            return False
+        except Error as err:
+            print(f"Fehler beim Hinzufügen des regulären Benutzers: {err}")
+            flash("Datenbankfehler beim Hinzufügen des Benutzers.", 'error')
+            cnx.rollback()
+            return False
+        finally:
+            cursor.close()
+            db_utils.DatabaseConnectionPool.close_connection(cnx)
+    return False
+
+def add_api_user_db(username):
+    """
+    Fügt einen neuen API-Benutzer der Datenbank hinzu.
+
+    Args:
+        username (str): Eindeutiger Benutzername des API-Benutzers.
+
+    Returns:
+        int or None: Die ID des neu erstellten API-Benutzers bei Erfolg, sonst None.
+    """
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
+    if cnx:
+        cursor = cnx.cursor()
+        try:
+            query = "INSERT INTO api_users (username) VALUES (%s)"
+            cursor.execute(query, (username,))
+            cnx.commit()
+            return cursor.lastrowid # Gibt die ID des eingefügten Datensatzes zurück
+        except IntegrityError:
+            flash(f"API-Benutzername '{username}' existiert bereits.", 'error')
+            cnx.rollback()
+            return None
+        except Error as err:
+            print(f"Fehler beim Hinzufügen des API-Benutzers: {err}")
+            flash("Datenbankfehler beim Hinzufügen des API-Benutzers.", 'error')
+            cnx.rollback()
+            return None
+        finally:
+            cursor.close()
+            db_utils.DatabaseConnectionPool.close_connection(cnx)
+    return None
+
+
+def add_api_key_for_user_db(api_user_id, api_key_string):
+    """
+    Fügt einen neuen API-Key für einen API-Benutzer hinzu.
+
+    Args:
+        api_user_id (int): Die ID des API-Benutzers.
+        api_key_string (str): Der zu speichernde API-Key.
+
+    Returns:
+        bool: True bei Erfolg, False bei Fehler.
+    """
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
+    if cnx:
+        cursor = cnx.cursor()
+        try:
+            query = "INSERT INTO api_keys (user_id, api_key) VALUES (%s, %s)"
+            cursor.execute(query, (api_user_id, api_key_string))
+            cnx.commit()
+            return True
+        except IntegrityError: # Sollte extrem selten sein, falls der Key schon existiert
+            flash("Generierter API-Key existiert bereits. Bitte erneut versuchen.", 'error')
+            cnx.rollback()
+            return False
+        except Error as err:
+            print(f"Fehler beim Hinzufügen des API-Keys für API-Benutzer {api_user_id}: {err}")
+            flash("Datenbankfehler beim Hinzufügen des API-Keys.", 'error')
+            cnx.rollback()
+            return False
+        finally:
+            cursor.close()
+            db_utils.DatabaseConnectionPool.close_connection(cnx)
+    return False
+
+
+def delete_api_key_db(api_key_id):
+    """
+    Löscht einen spezifischen API-Key anhand seiner ID.
+
+    Args:
+        api_key_id (int): Die ID des zu löschenden API-Keys.
+
+    Returns:
+        bool: True bei Erfolg, False bei Fehler.
+    """
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
+    if cnx:
+        cursor = cnx.cursor()
+        try:
+            query = "DELETE FROM api_keys WHERE id = %s"
+            cursor.execute(query, (api_key_id,))
+            cnx.commit()
+            # Überprüfen, ob eine Zeile tatsächlich gelöscht wurde
+            return cursor.rowcount > 0
+        except Error as err:
+            print(f"Fehler beim Löschen des API-Keys {api_key_id}: {err}")
+            flash("Datenbankfehler beim Löschen des API-Keys.", 'error')
+            cnx.rollback()
+            return False
+        finally:
+            cursor.close()
+            db_utils.DatabaseConnectionPool.close_connection(cnx)
+    return False
+
+
+def delete_api_user_and_keys_db(api_user_id):
+    """
+    Löscht einen API-Benutzer und alle zugehörigen API-Keys.
+
+    Args:
+        api_user_id (int): Die ID des zu löschenden API-Benutzers.
+
+    Returns:
+        bool: True bei Erfolg, False bei Fehler.
+    """
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
+    if cnx:
+        cursor = cnx.cursor()
+        try:
+            # Zuerst alle zugehörigen API-Keys löschen
+            query_delete_keys = "DELETE FROM api_keys WHERE user_id = %s"
+            cursor.execute(query_delete_keys, (api_user_id,))
+
+            # Dann den API-Benutzer löschen
+            query_delete_user = "DELETE FROM api_users WHERE id = %s"
+            cursor.execute(query_delete_user, (api_user_id,))
+
+            cnx.commit()
+            return True
+        except Error as err:
+            print(f"Fehler beim Löschen des API-Benutzers {api_user_id} und seiner Keys: {err}")
+            flash("Datenbankfehler beim Löschen des API-Benutzers.", 'error')
+            cnx.rollback()
+            return False
+        finally:
+            cursor.close()
+            db_utils.DatabaseConnectionPool.close_connection(cnx)
+    return False
+
+
+# --- Helper Funktionen für Admin User Modification ---
+
+def _handle_delete_all_user_transactions(target_user_id):
+    """
+    Verarbeitet die Löschanfrage für alle Transaktionen eines Benutzers.
+
+    Args:
+        target_user_id (int): Die ID des Benutzers, dessen Transaktionen gelöscht werden sollen.
+    """
+    if delete_all_transactions(target_user_id):
+        flash('Alle Transaktionen für diesen Benutzer wurden gelöscht.', 'success')
+    else:
+        flash('Fehler beim Löschen der Transaktionen.', 'error')
+
+def _handle_add_user_transaction(form_data, target_user_id):
+    """
+    Verarbeitet das Hinzufügen einer neuen Transaktion für einen Benutzer.
+
+    Args:
+        form_data (werkzeug.datastructures.ImmutableMultiDict): Die Formulardaten.
+        target_user_id (int): Die ID des Benutzers, für den die Transaktion hinzugefügt wird.
+    """
+    beschreibung = form_data.get('beschreibung', '')
+    saldo_aenderung_str = form_data.get('saldo_aenderung')
+    if not beschreibung:
+        flash('Beschreibung für Transaktion darf nicht leer sein.', 'error')
+    elif saldo_aenderung_str is None:
+        flash('Saldoänderung für Transaktion darf nicht leer sein.', 'error')
+    else:
+        try:
+            saldo_aenderung = int(saldo_aenderung_str)
+            # Die Funktion add_transaction flasht bereits Fehlermeldungen bei DB-Fehlern
+            if add_transaction(target_user_id, beschreibung, saldo_aenderung):
+                flash('Transaktion erfolgreich hinzugefügt.', 'success')
+        except ValueError:
+            flash('Ungültiger Wert für Saldoänderung. Es muss eine Zahl sein.', 'error')
+
+def _handle_toggle_user_lock_state(target_user_id, target_user, lock_state):
+    """
+    Verarbeitet das Sperren oder Entsperren eines Benutzers.
+
+    Args:
+        target_user_id (int): Die ID des Zielbenutzers.
+        target_user (dict): Das Benutzerobjekt des Zielbenutzers.
+        lock_state (bool): True zum Sperren, False zum Entsperren.
+    """
+    action_text = "gesperrt" if lock_state else "entsperrt"
+    if toggle_user_lock(target_user_id, lock_state):
+        flash(f'Benutzer "{target_user.get("nachname", "")}, {target_user.get("vorname", "")}" (ID {target_user_id}) wurde {action_text}.', 'success')
+    else:
+        flash(f'Fehler beim {action_text} des Benutzers.', 'error')
+
+def _handle_toggle_user_admin_state(target_user_id, target_user, admin_state):
+    """
+    Verarbeitet das Befördern oder Degradieren eines Benutzers/Admins.
+
+    Args:
+        target_user_id (int): Die ID des Zielbenutzers.
+        target_user (dict): Das Benutzerobjekt des Zielbenutzers.
+        admin_state (bool): True zum Befördern, False zum Degradieren.
+    """
+    action_text = "zum Admin befördert" if admin_state else "zum Benutzer degradiert"
+    role_text = "Benutzer" if admin_state else "Admin"
+    if toggle_user_admin(target_user_id, admin_state):
+        flash(f'{role_text} "{target_user.get("nachname", "")}, {target_user.get("vorname", "")}" (ID {target_user_id}) wurde {action_text}.', 'success')
+    else:
+        flash(f'Fehler beim {"Befördern" if admin_state else "Degradieren"} des {role_text.lower()}s.', 'error')
+
+def _handle_delete_target_user(target_user_id, target_user, logged_in_user_id):
+    """
+    Verarbeitet die Löschanfrage für einen Benutzer. Verhindert Selbstlöschung.
+
+    Args:
+        target_user_id (int): Die ID des zu löschenden Benutzers.
+        target_user (dict): Das Benutzerobjekt des zu löschenden Benutzers.
+        logged_in_user_id (int): Die ID des aktuell angemeldeten Admin-Benutzers.
+
+    Returns:
+        bool: True, wenn der Benutzer gelöscht wurde und eine Weiterleitung zum Dashboard erfolgen soll, sonst False.
+    """
+    if target_user_id == logged_in_user_id:
+        flash("Sie können sich nicht selbst löschen.", "warning")
+        return False # Keine Weiterleitung zum Dashboard
+
+    if delete_user(target_user_id): # delete_user löscht auch Transaktionen durch DB CASCADE
+        flash(f'Benutzer "{target_user.get("nachname", "")}, {target_user.get("vorname", "")}" (ID {target_user_id}) wurde gelöscht.', 'success')
+        return True # Weiterleitung zum Dashboard
+    flash('Fehler beim Löschen des Benutzers.', 'error')
+    return False
+
+def _handle_add_user_nfc_token_admin(form_data, target_user_id):
+    """
+    Verarbeitet das Hinzufügen eines NFC-Tokens für einen Benutzer durch einen Admin.
+
+    Args:
+        form_data (werkzeug.datastructures.ImmutableMultiDict): Die Formulardaten.
+        target_user_id (int): Die ID des Benutzers, für den der Token hinzugefügt wird.
+    """
+    nfc_token_name = form_data.get('nfc_token_name')
+    nfc_token_daten = form_data.get('nfc_token_daten') # HEX Format erwartet
+    if not nfc_token_name or not nfc_token_daten:
+        flash('Token Name und Token Daten (HEX) dürfen nicht leer sein.', 'error')
+    # Die Funktion add_user_nfc_token flasht bereits Fehlermeldungen bei ungültigen Daten
+    elif add_user_nfc_token(target_user_id, nfc_token_name, nfc_token_daten):
+        flash('NFC-Token erfolgreich hinzugefügt.', 'success')
+
+def _handle_update_user_comment_admin(form_data, target_user_id):
+    """
+    Verarbeitet die Aktualisierung des Kommentars eines Benutzers durch einen Admin.
+
+    Args:
+        form_data (werkzeug.datastructures.ImmutableMultiDict): Die Formulardaten.
+        target_user_id (int): Die ID des Benutzers, dessen Kommentar aktualisiert wird.
+    """
+    comment = form_data.get('kommentar')
+    # Leerer Kommentar ist erlaubt, um ihn zu löschen. Validierung hier ggf. anpassen.
+    # Die DB-Funktion sollte leere Strings handhaben können (z.B. als NULL speichern oder leer).
+    if update_user_comment(target_user_id, comment if comment is not None else ""):
+        flash('Kommentar erfolgreich aktualisiert.', 'success')
+    else:
+        flash('Fehler beim Aktualisieren des Kommentars.', 'error') # Fallback, falls DB-Funktion nicht flasht
+
+def _handle_update_user_email_admin(form_data, target_user_id):
+    """
+    Verarbeitet die Aktualisierung der E-Mail-Adresse eines Benutzers durch einen Admin.
+
+    Args:
+        form_data (werkzeug.datastructures.ImmutableMultiDict): Die Formulardaten.
+        target_user_id (int): Die ID des Benutzers, dessen E-Mail aktualisiert wird.
+    """
+    email = form_data.get('email')
+    if not email: # E-Mail sollte nicht leer sein, ggf. Validierung für Format hinzufügen
+        flash('Emailadresse darf nicht leer sein.', 'error')
+    elif update_user_email(target_user_id, email):
+        flash('Emailadresse erfolgreich aktualisiert.', 'success')
+    else:
+        flash('Fehler beim Aktualisieren der Emailadresse.', 'error') # Fallback
+
+def _handle_delete_user_nfc_token_admin(form_data, target_user_id):
+    """
+    Verarbeitet das Löschen eines NFC-Tokens eines Benutzers durch einen Admin.
+
+    Args:
+        form_data (werkzeug.datastructures.ImmutableMultiDict): Die Formulardaten.
+        target_user_id (int): Die ID des Benutzers, dessen Token gelöscht wird.
+                               (Wird in delete_user_nfc_token zur Sicherheit mitgeprüft)
+    """
+    nfc_token_id = form_data.get('nfc_token_id')
+    if not nfc_token_id:
+        flash('Keine Token ID zum Löschen übergeben.', 'error')
+    # Die Funktion delete_user_nfc_token flasht bereits Fehlermeldungen
+    elif delete_user_nfc_token(target_user_id, nfc_token_id):
+        flash('NFC-Token erfolgreich entfernt.', 'success')
+
+
+# --- Flask Routen ---
 
 @app.route('/', methods=['GET', 'POST'])
 def login():
@@ -509,24 +1040,30 @@ def login():
     Bei fehlgeschlagener Anmeldung wird eine Fehlermeldung angezeigt.
 
     Returns:
-        str: Die gerenderte Login-Seite (login.html) mit optionaler Fehlermeldung.
+        str oder werkzeug.wrappers.response.Response: Die gerenderte Login-Seite (login.html)
+        mit optionaler Fehlermeldung oder eine Weiterleitung.
     """
 
-    # Wenn der Benutzer bereits eingeloggt ist, weiterleiten
     if 'user_id' in session:
-        print("Benutzercookie gefunden, leite weiter.")
+        user = get_user_by_id(session['user_id'])
+        if user and user.get('is_locked'): # Prüfen ob User gesperrt ist
+            session.pop('user_id', None)
+            flash('Ihr Konto wurde gesperrt. Bitte kontaktieren Sie einen Administrator.', 'error')
+            return render_template('login.html')
         return redirect(BASE_URL + url_for('user_info'))
 
     if request.method == 'POST':
         code = request.form['code']
         password = request.form['password']
         user = fetch_user(code)
-        if user and check_password_hash(user['password'], password):
+        if user and not user['is_locked'] and check_password_hash(user['password'], password): # Prüfen ob User gesperrt ist
             session['user_id'] = user['id']
             session.permanent = True
-            print("Redirecting: " + (BASE_URL + url_for('user_info')))
             return redirect(BASE_URL + url_for('user_info'))
-        return render_template('login.html', error='Ungültiger Benutzername oder Passwort')
+        if user and user['is_locked']:
+            flash('Ihr Konto ist gesperrt. Bitte kontaktieren Sie einen Administrator.', 'error')
+        else:
+            flash('Ungültiger Benutzername oder Passwort', 'error')
     return render_template('login.html')
 
 
@@ -540,7 +1077,8 @@ def user_info():
     das neue Passwort validiert, gehasht und in der Datenbank aktualisiert.
 
     Returns:
-        str: Die gerenderte Benutzerinformationsseite (user_info.html).
+        str oder werkzeug.wrappers.response.Response: Die gerenderte Benutzerinformationsseite (user_info.html)
+        oder eine Weiterleitung zur Login-Seite.
     """
 
     user_id = session.get('user_id')
@@ -548,18 +1086,25 @@ def user_info():
         return redirect(BASE_URL + url_for('login'))
 
     user = get_user_by_id(user_id)
+    if not user:
+        session.pop('user_id', None)
+        flash('Benutzer nicht gefunden oder Sitzung abgelaufen.', 'error')
+        return redirect(BASE_URL + url_for('login'))
+
+    if user.get('is_locked'): # Erneut prüfen, falls Sperrung während Session erfolgt
+        session.pop('user_id', None)
+        flash('Ihr Konto wurde gesperrt. Bitte kontaktieren Sie einen Administrator.', 'error')
+        return redirect(BASE_URL + url_for('login'))
+
     nfc_tokens = get_user_nfc_tokens(user_id)
     transactions = get_user_transactions(user_id)
     saldo = sum(t['saldo_aenderung'] for t in transactions) if transactions else 0
 
     if request.method == 'POST':
         if 'change_password' in request.form:
-
             current_password = request.form['current_password']
             new_password = request.form['new_password']
             confirm_new_password = request.form['confirm_new_password']
-
-            print("Passwortänderungsformular wurde abgeschickt.") # Debug-Ausgabe
 
             if not check_password_hash(user['password'], current_password):
                 flash('Falsches aktuelles Passwort.', 'error')
@@ -571,8 +1116,13 @@ def user_info():
                 new_password_hash = generate_password_hash(new_password)
                 if update_password(user_id, new_password_hash):
                     flash('Passwort erfolgreich geändert.', 'success')
-                    return redirect(BASE_URL + url_for('user_info'))
-                flash('Fehler beim Ändern des Passworts.', 'error')
+                    # Wichtig: Passwort im lokalen user-Objekt aktualisieren, falls es weiter verwendet wird
+                    user['password'] = new_password_hash # type: ignore
+                else:
+                    flash('Fehler beim Ändern des Passworts.', 'error')
+            # Nach der Passwortänderung (erfolgreich oder nicht) die Seite neu laden, um Messages anzuzeigen
+            return redirect(BASE_URL + url_for('user_info'))
+
 
     return render_template('user_info.html', user=user, nfc_tokens=nfc_tokens, transactions=transactions, saldo=saldo)
 
@@ -585,88 +1135,469 @@ def admin_dashboard():
     Benötigt einen angemeldeten Admin-Benutzer.
 
     Returns:
-        str: Die gerenderte Admin-Dashboard-Seite (admin_dashboard.html) oder eine Weiterleitung zur Login-Seite,
-             falls der Benutzer nicht angemeldet oder kein Admin ist.
+        str oder werkzeug.wrappers.response.Response: Die gerenderte Admin-Dashboard-Seite (admin_dashboard.html)
+        oder eine Weiterleitung zur Login-Seite, falls der Benutzer nicht angemeldet oder kein Admin ist.
     """
 
     user_id = session.get('user_id')
-    if user_id:
-        admin_user = get_user_by_id(user_id)
-        if admin_user and admin_user['is_admin']:
-            users = get_all_users()
-            saldo_by_user = get_saldo_by_user()
-            return render_template('admin_dashboard.html', user=admin_user, users=users, saldo_by_user=saldo_by_user)
-    return redirect(BASE_URL + url_for('login'))
-
-
-@app.route('/admin/user/<int:user_id>/transactions', methods=['GET', 'POST'])
-def admin_user_modification(user_id):
-    """
-    Zeigt die Transaktionen eines bestimmten Benutzers an und ermöglicht das Hinzufügen und Löschen von Transaktionen
-    sowie das Löschen des Benutzers selbst.  Benötigt einen angemeldeten Admin-Benutzer.
-
-    Args:
-        user_id (int): Die ID des Benutzers, dessen Transaktionen angezeigt werden sollen.
-
-    Returns:
-        str: Die gerenderte Seite mit den Transaktionen des Benutzers (admin_user_modification.html)
-             oder eine Weiterleitung zur Login-Seite, falls der Benutzer nicht angemeldet oder kein Admin ist.
-    """
-
-    logged_in_user_id = session.get('user_id')
-    if not logged_in_user_id or not get_user_by_id(logged_in_user_id)['is_admin']:
+    if not user_id:
+        flash("Bitte zuerst einloggen.", "info")
         return redirect(BASE_URL + url_for('login'))
 
-    target_user = get_user_by_id(user_id)
-    nfc_tokens = get_user_nfc_tokens(user_id)
-    transactions = get_user_transactions(user_id)
-    saldo = get_saldo_for_user(user_id)
+    admin_user = get_user_by_id(user_id)
+    if not (admin_user and admin_user['is_admin']):
+        flash("Zugriff verweigert. Admin-Rechte erforderlich.", "error")
+        return redirect(BASE_URL + url_for('user_info')) # Zur User-Info statt Login, falls kein Admin
 
-    print(request.form)
+    if admin_user.get('is_locked'):
+        session.pop('user_id', None)
+        flash('Ihr Administratorkonto wurde gesperrt.', 'error')
+        return redirect(BASE_URL + url_for('login'))
+
+    users = get_all_users()
+    saldo_by_user = get_saldo_by_user()
+    return render_template('admin_dashboard.html', user=admin_user, users=users, saldo_by_user=saldo_by_user)
+
+
+def _validate_add_user_form(form_data):
+    """
+    Validiert die Formulardaten für das Hinzufügen eines neuen Benutzers.
+
+    Args:
+        form_data (werkzeug.datastructures.ImmutableMultiDict): Die Formulardaten.
+
+    Returns:
+        bool: True, wenn die Daten gültig sind, sonst False. Fehlermeldungen werden geflasht.
+    """
+    errors = False
+    required_fields = ['code', 'nachname', 'vorname', 'password', 'confirm_password']
+    for field in required_fields:
+        if not form_data.get(field):
+            flash(f"Bitte füllen Sie das Pflichtfeld '{field}' aus.", "error")
+            errors = True
+            # Nicht nach erstem Fehler abbrechen, um alle fehlenden Felder zu melden (optional)
+
+    if errors: # Wenn schon Pflichtfelder fehlen, sind die folgenden Prüfungen ggf. nicht sinnvoll
+        if not all(form_data.get(field) for field in ['password', 'confirm_password']): # Sicherstellen, dass beide PW-Felder existieren
+            flash("Passwortfelder dürfen nicht leer sein.", "error") # Redundand, aber zur Sicherheit
+        return False # Frühzeitiger Ausstieg bei fehlenden Pflichtfeldern
+
+    if form_data.get('password') != form_data.get('confirm_password'):
+        flash("Die Passwörter stimmen nicht überein.", "error")
+        errors = True
+    if form_data.get('password') and len(form_data.get('password')) < 8: # type: ignore
+        flash('Das Passwort muss mindestens 8 Zeichen lang sein.', 'error')
+        errors = True
+    # fetch_user benötigt code, der oben schon als Pflichtfeld geprüft wurde
+    if form_data.get('code') and fetch_user(form_data.get('code')):
+        flash(f"Der Code '{form_data.get('code')}' wird bereits verwendet. Bitte wählen Sie einen anderen.", "error")
+        errors = True
+    return not errors
+
+
+@app.route('/admin/add_user', methods=['GET', 'POST'])
+def add_user():
+    """
+    Verarbeitet das Hinzufügen eines neuen regulären Benutzers (Frontend-Benutzer).
+    Zugriff nur für Admins.
+
+    Returns:
+        str oder werkzeug.wrappers.response.Response: Die gerenderte Seite zum Hinzufügen
+        eines Benutzers oder eine Weiterleitung.
+    """
+    user_id = session.get('user_id')
+    if not user_id:
+        flash("Bitte zuerst einloggen.", "info")
+        return redirect(BASE_URL + url_for('login'))
+
+    admin_user = get_user_by_id(user_id)
+    if not (admin_user and admin_user['is_admin']):
+        flash("Zugriff verweigert. Admin-Rechte erforderlich.", "error")
+        return redirect(BASE_URL + url_for('user_info'))
+
+    if admin_user.get('is_locked'):
+        session.pop('user_id', None)
+        flash('Ihr Administratorkonto wurde gesperrt.', 'error')
+        return redirect(BASE_URL + url_for('login'))
+
     if request.method == 'POST':
-        if 'delete_transactions' in request.form:
-            if delete_all_transactions(user_id):
-                flash('Alle Transaktionen für diesen Benutzer wurden gelöscht.', 'success')
-                return redirect(BASE_URL + url_for('admin_user_modification', user_id=user_id))
-            flash('Fehler beim Löschen der Transaktionen.', 'error')
-        elif 'add_transaction' in request.form:
-            beschreibung = request.form['beschreibung']
-            saldo_aenderung = int(request.form['saldo_aenderung'])
-            if add_transaction(user_id, beschreibung, saldo_aenderung):
-                flash('Transaktion erfolgreich hinzugefügt.', 'success')
-                return redirect(BASE_URL + url_for('admin_user_modification', user_id=user_id))
-        elif 'lock_user' in request.form:
-            if toggle_user_lock(user_id, True):
-                flash(f'Benutzer "{target_user["nachname"]}, {target_user["vorname"]}" (ID {user_id}) wurde gesperrt.', 'success')
-                return redirect(BASE_URL + url_for('admin_user_modification', user_id=user_id))
-            flash(f'Fehler beim Sperren des Benutzers "{target_user["nachname"]}, {target_user["vorname"]}" (ID {user_id}).', 'error')
-        elif 'unlock_user' in request.form:
-            if toggle_user_lock(user_id, False):
-                flash(f'Benutzer "{target_user["nachname"]}, {target_user["vorname"]}" (ID {user_id}) wurde entsperrt.', 'success')
-                return redirect(BASE_URL + url_for('admin_user_modification', user_id=user_id))
-            flash(f'Fehler beim Entsperren des Benutzers "{target_user["nachname"]}, {target_user["vorname"]}" (ID {user_id}).', 'error')
-        elif 'delete_user' in request.form:
-            if delete_user(user_id):
-                flash(f'Benutzer "{target_user["nachname"]}, {target_user["vorname"]}" (ID {user_id}) wurde gelöscht.', 'success')
-                return redirect(BASE_URL + url_for('admin_dashboard')) # Zurück zur Benutzerübersicht
-            flash(f'Fehler beim Löschen des Benutzers "{target_user["nachname"]}, {target_user["vorname"]}" (ID {user_id}).', 'error')
-        elif 'add_user_nfc_token' in request.form:
-            nfc_token_name = request.form['nfc_token_name']
-            nfc_token_daten = request.form['nfc_token_daten']
-            if add_user_nfc_token(user_id, nfc_token_name, nfc_token_daten):
-                flash('NFC-Token erfolgreich hinzugefügt.', 'success')
-                return redirect(BASE_URL + url_for('admin_user_modification', user_id=user_id))
-            flash('Fehler beim Hinzufügen des NFC-Tokens.', 'error')
-        elif 'delete_user_nfc_token' in request.form:
-            nfc_token_id = request.form['nfc_token_id']
-            if delete_user_nfc_token(user_id, nfc_token_id):
-                flash('NFC-Token erfolgreich entfernt.', 'success')
-                return redirect(BASE_URL + url_for('admin_user_modification', user_id=user_id))
-            flash('Fehler beim Entfernen des NFC-Tokens.', 'error')
-        else:
-            flash('Ungültige Anfrage.', 'error')
+        form_data = request.form
+        if _validate_add_user_form(form_data):
+            user_details = {
+                'code': form_data.get('code'),
+                'nachname': form_data.get('nachname'),
+                'vorname': form_data.get('vorname'),
+                'password': form_data.get('password'),
+                'email': form_data.get('email'),
+                'kommentar': form_data.get('kommentar'),
+                'is_admin': 'is_admin' in form_data
+            }
+            if add_regular_user_db(user_details):
+                flash(f"Benutzer '{user_details['vorname']} {user_details['nachname']}' erfolgreich hinzugefügt.", "success")
+                return redirect(BASE_URL + url_for('admin_dashboard'))
+        # Bei Validierungsfehler oder DB-Fehler (geflasht in add_regular_user_db oder _validate_add_user_form),
+        # das Formular mit den eingegebenen Daten erneut anzeigen
+        return render_template('user_add.html',
+                               user=admin_user,
+                               current_code=form_data.get('code'), # Den vom User eingegebenen Code wiederverwenden
+                               form_data=form_data
+                              )
 
-    return render_template('admin_user_modification.html', user=target_user, nfc_tokens=nfc_tokens, transactions=transactions, saldo=saldo)
+    # GET Request
+    generated_code = None
+    for _ in range(100): # Max 100 attempts
+        potential_code = ''.join(random.choices(string.digits, k=10))
+        if not fetch_user(potential_code):
+            generated_code = potential_code
+            break
+    if not generated_code:
+        flash("Konnte keinen eindeutigen Code generieren. Bitte versuchen Sie es manuell oder später erneut.", "warning")
+        generated_code = "" # Fallback
+
+    return render_template('user_add.html', user=admin_user, current_code=generated_code, form_data=None)
+
+
+@app.route('/admin/api_users', methods=['GET', 'POST'])
+def admin_api_user_manage():
+    """
+    Verwaltet API-Benutzer, zeigt eine Liste an und erlaubt das Hinzufügen neuer.
+
+    Diese Route ist nur für Administratoren zugänglich. Bei einer GET-Anfrage
+    wird eine Seite mit einer Liste aller API-Benutzer und einem Formular zum
+    Hinzufügen eines neuen API-Benutzers angezeigt. Bei einer POST-Anfrage (aus
+    dem Hinzufügen-Formular) wird versucht, den neuen API-Benutzer zu erstellen.
+
+    Returns:
+        str oder werkzeug.wrappers.response.Response: Bei GET das gerenderte Template
+        `admin_api_user_manage.html`. Bei POST eine Weiterleitung zurück zur
+        gleichen Seite (`admin_api_user_manage`) mit entsprechenden
+        Erfolgs- oder Fehlermeldungen. Bei Authentifizierungs-/Autorisierungsfehlern
+        erfolgt eine Weiterleitung zur Login- bzw. Benutzerinformationsseite.
+    """
+
+    user_id = session.get('user_id')
+    if not user_id:
+        flash("Bitte zuerst einloggen.", "info")
+        return redirect(BASE_URL + url_for('login'))
+
+    admin_user = get_user_by_id(user_id)
+    if not (admin_user and admin_user['is_admin']):
+        flash("Zugriff verweigert. Admin-Rechte erforderlich.", "error")
+        return redirect(BASE_URL + url_for('user_info'))
+
+    if admin_user.get('is_locked'):
+        session.pop('user_id', None)
+        flash('Ihr Administratorkonto wurde gesperrt.', 'error')
+        return redirect(BASE_URL + url_for('login'))
+
+    if request.method == 'POST':
+        # Hinzufügen eines neuen API-Benutzers
+        username = request.form.get('username')
+        if not username:
+            flash("API-Benutzername darf nicht leer sein.", "error")
+        else:
+            new_api_user_id = add_api_user_db(username)
+            if new_api_user_id:
+                flash(f"API-Benutzer '{username}' erfolgreich hinzugefügt.", "success")
+                # Optional: Direkt zur Detailseite des neuen Users weiterleiten
+                # return redirect(BASE_URL + url_for('admin_api_user_detail', api_user_id=new_api_user_id))
+            # Fehler (z.B. doppelter Name) wird in add_api_user_db geflasht
+        return redirect(BASE_URL + url_for('admin_api_user_manage')) # Nach POST zur gleichen Seite zurück
+
+    api_users_list = get_all_api_users()
+    return render_template('admin_api_user_manage.html', user=admin_user, api_users=api_users_list)
+
+
+@app.route('/admin/api_user/<int:api_user_id_route>')
+def admin_api_user_detail(api_user_id_route):
+    """
+    Zeigt die Detailansicht für einen spezifischen API-Benutzer inklusive seiner API-Keys.
+
+    Diese Route ist nur für Administratoren zugänglich. Sie prüft, ob der
+    anfragende Benutzer ein eingeloggter, aktiver Administrator ist.
+    Die Details des API-Benutzers und seiner zugehörigen API-Keys werden aus
+    der Datenbank geladen und im Template `admin_api_user_detail.html` dargestellt.
+
+    Args:
+        api_user_id_route (int): Die ID des anzuzeigenden API-Benutzers aus der URL.
+
+    Returns:
+        str oder werkzeug.wrappers.response.Response: Das gerenderte Template
+        `admin_api_user_detail.html` mit den API-Benutzerdaten.
+        Bei Authentifizierungs-/Autorisierungsfehlern oder wenn der API-Benutzer
+        nicht gefunden wird, erfolgen entsprechende Weiterleitungen mit Flash-Nachrichten.
+    """
+
+    user_id = session.get('user_id')
+    if not user_id:
+        flash("Bitte zuerst einloggen.", "info")
+        return redirect(BASE_URL + url_for('login'))
+
+    admin_user = get_user_by_id(user_id)
+    if not (admin_user and admin_user['is_admin']):
+        flash("Zugriff verweigert. Admin-Rechte erforderlich.", "error")
+        return redirect(BASE_URL + url_for('user_info'))
+
+    if admin_user.get('is_locked'):
+        session.pop('user_id', None)
+        flash('Ihr Administratorkonto wurde gesperrt.', 'error')
+        return redirect(BASE_URL + url_for('login'))
+
+    target_api_user = get_api_user_by_id(api_user_id_route)
+    if not target_api_user:
+        flash("API-Benutzer nicht gefunden.", "error")
+        return redirect(BASE_URL + url_for('admin_api_user_manage'))
+
+    api_keys_list = get_api_keys_for_api_user(api_user_id_route)
+    return render_template('admin_api_user_detail.html', user=admin_user, api_user=target_api_user, api_keys=api_keys_list)
+
+
+@app.route('/admin/api_user/<int:api_user_id_route>/generate_key', methods=['POST'])
+def admin_generate_api_key_for_user(api_user_id_route):
+    """
+    Generiert einen neuen API-Key für einen spezifischen API-Benutzer.
+
+    Diese Route ist nur für Administratoren zugänglich und erfordert eine POST-Anfrage.
+    Sie prüft, ob der anfragende Benutzer ein eingeloggter, aktiver Administrator ist.
+    Der API-Benutzer, für den ein Key generiert wird, wird durch `api_user_id_route`
+    identifiziert. Der neu generierte Key wird einmalig per Flash-Nachricht
+    angezeigt und muss vom Administrator sofort kopiert werden.
+
+    Args:
+        api_user_id_route (int): Die ID des API-Benutzers aus der URL, für den ein Key generiert werden soll.
+
+    Returns:
+        werkzeug.wrappers.response.Response: Eine Weiterleitung zur Detailseite des
+        betreffenden API-Benutzers. Bei Authentifizierungs-/Autorisierungsfehlern
+        oder wenn der API-Benutzer nicht gefunden wird, erfolgen entsprechende
+        Weiterleitungen mit Flash-Nachrichten.
+    """
+
+    user_id = session.get('user_id')
+    if not user_id:
+        flash("Bitte zuerst einloggen.", "info")
+        return redirect(BASE_URL + url_for('login'))
+
+    admin_user = get_user_by_id(user_id)
+    if not (admin_user and admin_user['is_admin']):
+        flash("Zugriff verweigert. Admin-Rechte erforderlich.", "error")
+        return redirect(BASE_URL + url_for('user_info'))
+
+    if admin_user.get('is_locked'):
+        session.pop('user_id', None)
+        flash('Ihr Administratorkonto wurde gesperrt.', 'error')
+        return redirect(BASE_URL + url_for('login'))
+
+    target_api_user = get_api_user_by_id(api_user_id_route)
+    if not target_api_user:
+        flash("API-Benutzer nicht gefunden, für den ein Key generiert werden soll.", "error")
+        return redirect(BASE_URL + url_for('admin_api_user_manage'))
+
+    new_key_string = generate_api_key_string()
+    if add_api_key_for_user_db(api_user_id_route, new_key_string):
+        # WICHTIG: Den Key nur dieses eine Mal anzeigen!
+        flash(f"Neuer API-Key für '{target_api_user['username']}' generiert: {new_key_string}. Bitte sofort sicher kopieren!", "success")
+    else:
+        # Fehler wurde bereits in add_api_key_for_user_db geflasht
+        pass
+
+    return redirect(BASE_URL + url_for('admin_api_user_detail', api_user_id_route=api_user_id_route))
+
+
+@app.route('/admin/api_key/<int:api_key_id_route>/delete', methods=['POST'])
+def admin_delete_api_key(api_key_id_route):
+    """
+    Löscht einen spezifischen API-Key.
+
+    Diese Route ist nur für Administratoren zugänglich und erfordert eine POST-Anfrage.
+    Sie prüft, ob der anfragende Benutzer ein eingeloggter, aktiver Administrator ist.
+    Der zu löschende API-Key wird durch `api_key_id_route` identifiziert.
+    Die ID des zugehörigen API-Benutzers (`api_user_id_for_redirect`) wird aus dem
+    Formular erwartet, um korrekt zur Detailseite des API-Benutzers zurückleiten
+    zu können.
+
+    Args:
+        api_key_id_route (int): Die ID des zu löschenden API-Keys aus der URL.
+
+    Returns:
+        werkzeug.wrappers.response.Response: Eine Weiterleitung zur Detailseite des
+        betreffenden API-Benutzers oder zur API-Benutzerverwaltungsseite als Fallback.
+        Bei Authentifizierungs-/Autorisierungsfehlern erfolgt eine Weiterleitung
+        zur Login- bzw. Benutzerinformationsseite.
+    """
+
+    user_id = session.get('user_id')
+    if not user_id:
+        flash("Bitte zuerst einloggen.", "info")
+        return redirect(BASE_URL + url_for('login'))
+
+    admin_user = get_user_by_id(user_id)
+    if not (admin_user and admin_user['is_admin']):
+        flash("Zugriff verweigert. Admin-Rechte erforderlich.", "error")
+        return redirect(BASE_URL + url_for('user_info'))
+
+    if admin_user.get('is_locked'):
+        session.pop('user_id', None)
+        flash('Ihr Administratorkonto wurde gesperrt.', 'error')
+        return redirect(BASE_URL + url_for('login'))
+
+    api_user_id_for_redirect = request.form.get('api_user_id_for_redirect')
+
+    if delete_api_key_db(api_key_id_route):
+        flash(f"API-Key (ID: {api_key_id_route}) erfolgreich gelöscht.", "success")
+    else:
+        # Fehler wurde bereits in delete_api_key_db geflasht, oder der Key existierte nicht
+        flash(f"API-Key (ID: {api_key_id_route}) konnte nicht gelöscht werden oder wurde nicht gefunden.", "warning")
+
+    if api_user_id_for_redirect:
+        try:
+            # Sicherstellen, dass es eine gültige ID ist, bevor umgeleitet wird
+            api_user_id_int = int(api_user_id_for_redirect)
+            return redirect(BASE_URL + url_for('admin_api_user_detail', api_user_id_route=api_user_id_int))
+        except ValueError:
+            flash("Ungültige API User ID für Weiterleitung.", "error")
+    # Fallback, falls die api_user_id nicht ermittelt werden konnte oder ungültig war
+    return redirect(BASE_URL + url_for('admin_api_user_manage'))
+
+
+@app.route('/admin/api_user/<int:api_user_id_route>/delete', methods=['POST']) # Nur POST für Löschaktionen
+def admin_delete_api_user(api_user_id_route):
+    """
+    Löscht einen API-Benutzer und alle zugehörigen API-Keys.
+
+    Diese Route ist nur für Administratoren zugänglich und erfordert eine POST-Anfrage.
+    Vor dem Löschen wird geprüft, ob der anfragende Benutzer ein eingeloggter,
+    aktiver Administrator ist. Der zu löschende API-Benutzer wird anhand der
+    `api_user_id_route` identifiziert. Nach erfolgreichem Löschen oder bei Fehlern
+    erfolgt eine Weiterleitung zur API-Benutzerverwaltungsseite mit einer
+    entsprechenden Flash-Nachricht.
+
+    Args:
+        api_user_id_route (int): Die ID des zu löschenden API-Benutzers aus der URL.
+
+    Returns:
+        werkzeug.wrappers.response.Response: Eine Weiterleitung zur
+        API-Benutzerverwaltungsseite (`admin_api_user_manage`) oder zur Login- bzw.
+        Benutzerinformationsseite bei Authentifizierungs-/Autorisierungsfehlern.
+    """
+
+    user_id = session.get('user_id')
+    if not user_id:
+        flash("Bitte zuerst einloggen.", "info")
+        return redirect(BASE_URL + url_for('login'))
+
+    admin_user = get_user_by_id(user_id)
+    if not (admin_user and admin_user['is_admin']):
+        flash("Zugriff verweigert. Admin-Rechte erforderlich.", "error")
+        return redirect(BASE_URL + url_for('user_info'))
+
+    if admin_user.get('is_locked'):
+        session.pop('user_id', None)
+        flash('Ihr Administratorkonto wurde gesperrt.', 'error')
+        return redirect(BASE_URL + url_for('login'))
+
+    api_user_to_delete = get_api_user_by_id(api_user_id_route)
+    if not api_user_to_delete:
+        flash("Zu löschender API-Benutzer nicht gefunden.", "error")
+        return redirect(BASE_URL + url_for('admin_api_user_manage'))
+
+    if delete_api_user_and_keys_db(api_user_id_route):
+        flash(f"API-Benutzer '{api_user_to_delete['username']}' und zugehörige API-Keys wurden gelöscht.", "success")
+    else:
+        # Genauere Fehlermeldung kommt von DB-Funktion und wird dort geflasht
+        # flash(f"Fehler beim Löschen des API-Benutzers '{api_user_to_delete['username']}'.", "error")
+        pass
+
+
+    return redirect(BASE_URL + url_for('admin_api_user_manage'))
+
+
+@app.route('/admin/user/<int:target_user_id>/transactions', methods=['GET', 'POST'])
+def admin_user_modification(target_user_id):
+    """
+    Zeigt die Transaktionen eines bestimmten Benutzers an und ermöglicht diverse Modifikationen.
+    Benötigt einen angemeldeten Admin-Benutzer.
+
+    Args:
+        target_user_id (int): Die ID des Benutzers, dessen Daten modifiziert werden sollen.
+
+    Returns:
+        str oder werkzeug.wrappers.response.Response: Die gerenderte Seite mit den Benutzerdaten
+        (admin_user_modification.html) oder eine Weiterleitung.
+    """
+    logged_in_user_id = session.get('user_id')
+    if not logged_in_user_id:
+        flash("Bitte zuerst einloggen.", "info")
+        return redirect(BASE_URL + url_for('login'))
+
+    current_admin_user = get_user_by_id(logged_in_user_id)
+    if not (current_admin_user and current_admin_user['is_admin']):
+        flash("Zugriff verweigert. Admin-Rechte erforderlich.", "error")
+        return redirect(BASE_URL + url_for('user_info'))
+
+    if current_admin_user.get('is_locked'):
+        session.pop('user_id', None)
+        flash('Ihr Administratorkonto wurde gesperrt.', 'error')
+        return redirect(BASE_URL + url_for('login'))
+
+    target_user = get_user_by_id(target_user_id)
+    if not target_user:
+        flash("Zielbenutzer nicht gefunden.", "error")
+        return redirect(BASE_URL + url_for('admin_dashboard'))
+
+    if request.method == 'POST':
+        form_data = request.form
+        action_redirect_to_dashboard = False
+
+        if 'delete_transactions' in form_data:
+            _handle_delete_all_user_transactions(target_user_id)
+        elif 'add_transaction' in form_data:
+            _handle_add_user_transaction(form_data, target_user_id)
+        elif 'lock_user' in form_data:
+            _handle_toggle_user_lock_state(target_user_id, target_user, True)
+        elif 'unlock_user' in form_data:
+            _handle_toggle_user_lock_state(target_user_id, target_user, False)
+        elif 'promote_user' in form_data:
+            _handle_toggle_user_admin_state(target_user_id, target_user, True)
+        elif 'demote_user' in form_data:
+            _handle_toggle_user_admin_state(target_user_id, target_user, False)
+        elif 'delete_user' in form_data:
+            if _handle_delete_target_user(target_user_id, target_user, logged_in_user_id):
+                action_redirect_to_dashboard = True
+        elif 'add_user_nfc_token' in form_data:
+            _handle_add_user_nfc_token_admin(form_data, target_user_id)
+        elif 'update_user_comment' in form_data:
+            _handle_update_user_comment_admin(form_data, target_user_id)
+        elif 'update_user_email' in form_data:
+            _handle_update_user_email_admin(form_data, target_user_id)
+        elif 'delete_user_nfc_token' in form_data:
+            _handle_delete_user_nfc_token_admin(form_data, target_user_id)
+        else:
+            flash('Ungültige oder fehlende Aktion.', 'error')
+
+        if action_redirect_to_dashboard:
+            return redirect(BASE_URL + url_for('admin_dashboard'))
+        return redirect(BASE_URL + url_for('admin_user_modification', target_user_id=target_user_id))
+
+    # GET Request
+    nfc_tokens = get_user_nfc_tokens(target_user_id)
+    transactions = get_user_transactions(target_user_id)
+    saldo = get_saldo_for_user(target_user_id)
+    # Target_user wurde oben bereits neu geladen für den Fall von Änderungen (z.B. Lock-Status)
+    # die direkt im POST verarbeitet und dann für das Rendering im GET relevant sind.
+    # Für den GET-Request holen wir target_user ggf. erneut, um den aktuellsten Stand zu haben.
+    refreshed_target_user = get_user_by_id(target_user_id)
+    if not refreshed_target_user: #Sollte nicht passieren, wenn oben erfolgreich
+        flash("Zielbenutzer konnte nicht erneut geladen werden.", "error")
+        return redirect(BASE_URL + url_for('admin_dashboard'))
+
+
+    return render_template('admin_user_modification.html',
+                           user=refreshed_target_user, # Den aktualisierten Benutzer übergeben
+                           nfc_tokens=nfc_tokens,
+                           transactions=transactions,
+                           saldo=saldo,
+                           admin_user=current_admin_user)
 
 
 @app.route('/logout')
@@ -675,13 +1606,18 @@ def logout():
     Meldet den Benutzer ab, indem die Benutzer-ID aus der Session entfernt wird.
 
     Returns:
-        str: Eine Weiterleitung zur Login-Seite.
+        werkzeug.wrappers.response.Response: Eine Weiterleitung zur Login-Seite.
     """
 
     session.pop('user_id', None)
+    flash("Erfolgreich abgemeldet.", "info")
     return redirect(BASE_URL + url_for('login'))
 
 
 if __name__ == '__main__':
     debug_mode = os.getenv('FLASK_DEBUG', 'False').lower() in ['true', '1', 'yes']
-    app.run(port=5001, debug=debug_mode)
+    # Port kann auch über Umgebungsvariable PORT gesteuert werden, mit Fallback auf 5001
+    port = int(os.getenv('PORT', "5001"))
+    # Host kann auch über Umgebungsvariable HOST gesteuert werden, mit Fallback auf 127.0.0.1
+    host = os.getenv('HOST', '127.0.0.1')
+    app.run(host=host, port=port, debug=debug_mode)
