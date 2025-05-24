@@ -78,7 +78,7 @@ pigar generate --question-answer yes --enable-feature requirement-annotations
 
 ```bash
 git clone https://github.com/magenbrot/Feuerwehr-Versorgungs-Helfer-API.git
-cd Feuerwehr-Versorgungs-Helfer
+cd Feuerwehr-Versorgungs-Helfer-API
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
