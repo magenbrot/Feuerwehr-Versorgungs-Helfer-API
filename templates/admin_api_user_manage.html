@@ -40,9 +40,9 @@
                         {% for api_u in api_users %}
                         <tr>
                             <td>{{ api_u.id }}</td>
-                            <td><a href="{{ url_for('admin_api_user_detail', api_user_id=api_u.id) }}">{{ api_u.username }}</a></td>
+                            <td><a href="{{ url_for('admin_api_user_detail', api_user_id_route=api_u.id) }}">{{ api_u.username }}</a></td>
                             <td>
-                                <form method="POST" action="{{ url_for('admin_delete_api_user', api_user_id=api_u.id) }}" class="compact-delete-form" onsubmit="return confirm('Möchtest du diesen API-User wirklich löschen?');">
+                                <form method="POST" action="{{ url_for('admin_delete_api_user', api_user_id_route=api_u.id) }}" class="compact-delete-form" onsubmit="return confirm('Möchtest du diesen API-User wirklich löschen?');">
                                     <button type="submit" name="delete_api_user_button" class="red-button">Löschen</button> </form>
                             </td>
                         </tr>
