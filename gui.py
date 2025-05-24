@@ -1051,7 +1051,7 @@ def add_user():
                 return redirect(BASE_URL + url_for('admin_dashboard'))
         # Bei Validierungsfehler oder DB-Fehler (geflasht in add_regular_user_db),
         # das Formular mit den eingegebenen Daten erneut anzeigen
-        return render_template('add_user.html',
+        return render_template('user_add.html',
                                user=admin_user,
                                current_code=form_data.get('code'), # Den vom User eingegebenen Code wiederverwenden
                                form_data=form_data
@@ -1068,11 +1068,11 @@ def add_user():
         flash("Konnte keinen eindeutigen Code generieren. Bitte versuchen Sie es manuell oder später erneut.", "error")
         generated_code = "" # Fallback
 
-    return render_template('add_user.html', user=admin_user, current_code=generated_code, form_data=None)
+    return render_template('user_add.html', user=admin_user, current_code=generated_code, form_data=None)
 
 
 @app.route('/admin/api_users', methods=['GET', 'POST'])
-def admin_manage_api_users():
+def admin_api_user_manage():
     """
     Verwaltet API-Benutzer, zeigt eine Liste an und erlaubt das Hinzufügen neuer.
 
@@ -1083,8 +1083,8 @@ def admin_manage_api_users():
 
     Returns:
         werkzeug.wrappers.response.Response: Bei GET das gerenderte Template
-        `admin_manage_api_users.html`. Bei POST eine Weiterleitung zurück zur
-        gleichen Seite (`admin_manage_api_users`) mit entsprechenden
+        `admin_api_user_manage.html`. Bei POST eine Weiterleitung zurück zur
+        gleichen Seite (`admin_api_user_manage`) mit entsprechenden
         Erfolgs- oder Fehlermeldungen. Bei Authentifizierungs-/Autorisierungsfehlern
         erfolgt eine Weiterleitung zur Login- bzw. Benutzerinformationsseite.
     """
@@ -1116,10 +1116,10 @@ def admin_manage_api_users():
                 # Optional: Direkt zur Detailseite des neuen Users weiterleiten
                 # return redirect(BASE_URL + url_for('admin_api_user_detail', api_user_id=new_api_user_id))
             # Fehler (z.B. doppelter Name) wird in add_api_user_db geflasht
-        return redirect(BASE_URL + url_for('admin_manage_api_users')) # Nach POST zur gleichen Seite zurück
+        return redirect(BASE_URL + url_for('admin_api_user_manage')) # Nach POST zur gleichen Seite zurück
 
     api_users = get_all_api_users()
-    return render_template('admin_manage_api_users.html', user=admin_user, api_users=api_users)
+    return render_template('admin_api_user_manage.html', user=admin_user, api_users=api_users)
 
 
 @app.route('/admin/api_user/<int:api_user_id>')
@@ -1160,7 +1160,7 @@ def admin_api_user_detail(api_user_id):
     target_api_user = get_api_user_by_id(api_user_id)
     if not target_api_user:
         flash("API-Benutzer nicht gefunden.", "error")
-        return redirect(BASE_URL + url_for('admin_manage_api_users'))
+        return redirect(BASE_URL + url_for('admin_api_user_manage'))
 
     api_keys = get_api_keys_for_api_user(api_user_id)
     return render_template('admin_api_user_detail.html', user=admin_user, api_user=target_api_user, api_keys=api_keys)
@@ -1205,7 +1205,7 @@ def admin_generate_api_key_for_user(api_user_id):
     target_api_user = get_api_user_by_id(api_user_id)
     if not target_api_user:
         flash("API-Benutzer nicht gefunden, für den ein Key generiert werden soll.", "error")
-        return redirect(BASE_URL + url_for('admin_manage_api_users'))
+        return redirect(BASE_URL + url_for('admin_api_user_manage'))
 
     new_key_string = generate_api_key_string()
     if add_api_key_for_user_db(api_user_id, new_key_string):
@@ -1266,7 +1266,7 @@ def admin_delete_api_key(api_key_id):
     if api_user_id_for_redirect:
         return redirect(BASE_URL + url_for('admin_api_user_detail', api_user_id=api_user_id_for_redirect))
     # Fallback, falls die api_user_id nicht ermittelt werden konnte
-    return redirect(BASE_URL + url_for('admin_manage_api_users'))
+    return redirect(BASE_URL + url_for('admin_api_user_manage'))
 
 
 @app.route('/admin/api_user/<int:api_user_id>/delete', methods=['POST']) # Nur POST für Löschaktionen
@@ -1286,7 +1286,7 @@ def admin_delete_api_user(api_user_id):
 
     Returns:
         werkzeug.wrappers.response.Response: Eine Weiterleitung zur
-        API-Benutzerverwaltungsseite (`admin_manage_api_users`) oder zur Login- bzw.
+        API-Benutzerverwaltungsseite (`admin_api_user_manage`) oder zur Login- bzw.
         Benutzerinformationsseite bei Authentifizierungs-/Autorisierungsfehlern.
     """
 
@@ -1308,14 +1308,14 @@ def admin_delete_api_user(api_user_id):
     api_user_to_delete = get_api_user_by_id(api_user_id)
     if not api_user_to_delete:
         flash("Zu löschender API-Benutzer nicht gefunden.", "error")
-        return redirect(BASE_URL + url_for('admin_manage_api_users'))
+        return redirect(BASE_URL + url_for('admin_api_user_manage'))
 
     if delete_api_user_and_keys_db(api_user_id):
         flash(f"API-Benutzer '{api_user_to_delete['username']}' und zugehörige API-Keys wurden gelöscht.", "success")
     else:
         flash(f"Fehler beim Löschen des API-Benutzers '{api_user_to_delete['username']}'.", "error") # Genauere Fehlermeldung kommt von DB-Funktion
 
-    return redirect(BASE_URL + url_for('admin_manage_api_users'))
+    return redirect(BASE_URL + url_for('admin_api_user_manage'))
 
 
 @app.route('/admin/user/<int:target_user_id>/transactions', methods=['GET', 'POST'])
