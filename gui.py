@@ -1636,8 +1636,8 @@ def logout():
 
 if __name__ == '__main__':
     debug_mode = os.getenv('FLASK_DEBUG', 'False').lower() in ['true', '1', 'yes']
-    # Port kann auch über Umgebungsvariable PORT gesteuert werden, mit Fallback auf 5001
-    port = int(os.getenv('PORT', "5001"))
     # Host kann auch über Umgebungsvariable HOST gesteuert werden, mit Fallback auf 127.0.0.1
     host = os.getenv('HOST', '127.0.0.1')
+    # Port kann auch über Umgebungsvariable PORT gesteuert werden, mit Fallback auf 5001
+    port = int(os.getenv('PORT', "5000"))
     app.run(host=host, port=port, debug=debug_mode)
