@@ -49,6 +49,7 @@ label {
     font-size: 0.9em;
 }
 
+input[type="email"],
 input[type="text"],
 input[type="password"],
 input[type="number"] {
@@ -342,12 +343,30 @@ form.inline-form-transaction label {
      /* Flexbox 'align-items: center' auf dem Formular kümmert sich um die vertikale Ausrichtung */
 }
 
+form.inline-form-transaction input[type="text2column"],
+form.inline-form-transaction input[type="number2column"] {
+     /* Input-Felder sind jetzt auch Flex-Items */
+     /* Die allgemeine width: calc(100% - 12px) passt hier nicht mehr, da sie sich auf den Container (das Formular) bezieht */
+     width: auto; /* Setzt die Breite automatisch basierend auf Inhalt und Flexbox-Regeln */
+     max-width: 150px;
+     flex-grow: 1; /* Optional: Lässt die Input-Felder wachsen und den verfügbaren Platz füllen */
+
+
+     /* Behalten Sie Padding, Border, etc. bei */
+     padding: 8px;
+     border: 1px solid #ccc;
+     border-radius: 4px;
+     box-sizing: border-box;
+     font-size: 1em; /* Von Ihrer bestehenden Regel */
+}
+
+form.inline-form-transaction input[type="email"],
 form.inline-form-transaction input[type="text"],
 form.inline-form-transaction input[type="number"] {
      /* Input-Felder sind jetzt auch Flex-Items */
      /* Die allgemeine width: calc(100% - 12px) passt hier nicht mehr, da sie sich auf den Container (das Formular) bezieht */
      width: auto; /* Setzt die Breite automatisch basierend auf Inhalt und Flexbox-Regeln */
-     max-width: 150px;
+     /* max-width: 150px; */
      flex-grow: 1; /* Optional: Lässt die Input-Felder wachsen und den verfügbaren Platz füllen */
 
 
