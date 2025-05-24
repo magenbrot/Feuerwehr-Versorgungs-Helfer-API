@@ -122,6 +122,8 @@ python3 gui.py
 
 Bei lokalem Debugging ist die GUI unter [http://127.0.0.1:5000/](http://127.0.0.1:5000/) erreichbar. Die Listen-IP und der Port können in der .env Datei konfiguriert werden.
 
+Für den ersten Login ist der Benutzer "9999999999" mit dem Passwort "pahvikoo9ieje.th9jee" angelegt. Bitte dann einen eigenen Benutzer anlegen und den Default-User löschen.
+
 ### Installation API+GUI als nginx UWSGI Dienst mittels systemd
 
 1. Die Applikationen sollten bereits lauffähig sein (also ein Python3 venv existieren und die benötigten Module installiert sein).
