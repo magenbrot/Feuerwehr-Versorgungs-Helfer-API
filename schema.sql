@@ -69,3 +69,6 @@ ALTER TABLE api_keys
 
 ALTER TABLE transactions
   ADD CONSTRAINT transactions_ibfk_1 FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE RESTRICT;
+
+INSERT INTO `users` (`id`, `code`, `nachname`, `vorname`, `password`, `email`, `kommentar`, `is_locked`, `is_admin`) VALUES
+(1, '9999999999', 'Administrator', 'Admin', 'scrypt:32768:8:1$ggOvLlu4mzw7kF1u$2d353529e952fa9793f794c9570146f0226f4b2d7222d1b76d984234c144c39326321ed6fc122c14e1c31d11903cee7289c5f3bd4cd54d6eed46048ae41dfa4d', '', 'Admin', 0, 1);
