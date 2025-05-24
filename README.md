@@ -54,7 +54,7 @@ Die API dient als Schnittstelle für die Client-Anwendung und bietet unter ander
 Die zugehörige Client-Anwendung, mit der die Endbenutzer dann tatsächlich ihre "Striche machen" (also Guthaben abbuchen), indem sie z.B. einen QR-Code scannen oder ihr Handy bzw. einen anderen NFC-Token an ein Lesegerät halten, finden Sie im folgenden Repository:
 [https://github.com/magenbrot/Feuerwehr-Versorgungs-Helfer](https://github.com/magenbrot/Feuerwehr-Versorgungs-Helfer)
 
-## Technische Hinweise 🔧💡
+## Technische Hinweise 💡
 
 * Die Anwendung ist in Python mit Flask geschrieben.
 * Für die Datenbankverbindung wird `mysql.connector` verwendet, wobei ein Verbindungspool genutzt wird.
@@ -72,7 +72,7 @@ Um diese Funktion zu aktivieren, verwende den folgenden Befehl:
 pigar generate --question-answer yes --enable-feature requirement-annotations
 ```
 
-## Installation und Update
+## Installation und Update 🔧
 
 ### Checkout, venv und requirements installieren
 
