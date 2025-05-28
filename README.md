@@ -84,6 +84,11 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+### MySQL-Datenbank erstellen und Schema anlegen
+
+1. Datenbank und Benutzer anlegen, passende Rechte vergeben
+2. Schema anlegen mit ```mysql -h <host> -u <user> -p <database> < schema.sql```
+
 ### Konfiguration
 
 ```bash
@@ -104,24 +109,20 @@ SMTP_USER=""
 SMTP_PASSWORD=""
 SMTP_SENDER=""
 
-# Ab diesem Saldo wird eine Erinnerungsmail ausgelöst
-SALDO_GRENZWERT="-10"
-
 # ggf. BASE_URL und STATIC_URL_PREFIX anpassen (nicht notwendig wenn die Applikation im Hauptverzeichnis läuft, Funktion zudem bisher ungetestet und möglicherweise defekt)
 #BASE_URL="/"
 #STATIC_URL_PREFIX=""
 
-# FLASK_DEBUG nur auf True setzen wenn der Server nicht öffentlich erreichbar ist. Auf den Debug-Seiten könnten
-# unerwünscht Informationen veröffentlicht werden.
-#FLASK_DEBUG=False
-#HOST=127.0.0.1
-#PORT=5000
+# DEBUG nur auf True setzen wenn der Server nicht öffentlich erreichbar ist. Auf den Debug-Seiten könnten
+# unerwünscht Informationen veröffentlicht werden. Die Werte hier sind die Standardwerte.
+#API_DEBUG=False
+#API_HOST=127.0.0.1
+#API_PORT=5000
+
+#GUI_DEBUG=False
+#GUI_HOST=127.0.0.1
+#GUI_PORT=5001
 ```
-
-### MySQL-Datenbank erstellen und Schema anlegen
-
-1. Datenbank und Benutzer anlegen, passende Rechte vergeben
-2. Schema anlegen mit ```mysql -h <host> -u <user> -p <database> < schema.sql```
 
 ### Erstmalig manuell starten
 
