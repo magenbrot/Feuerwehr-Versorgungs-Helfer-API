@@ -21,4 +21,14 @@ smtp_config = {
     'sender': os.getenv("SMTP_SENDER"),
 }
 
-saldo_grenzwert = int(os.getenv("SALDO_GRENZWERT"))
+api_config = {
+    'host': os.getenv("API_HOST", "127.0.0.1"),
+    'port': os.getenv("API_PORT", "5000"),
+    'debug_mode': os.getenv('API_DEBUG', 'False').lower() in ['true', '1', 'yes'],
+}
+
+gui_config = {
+    'host': os.getenv("GUI_HOST", "127.0.0.1"),
+    'port': os.getenv("GUI_PORT", "5001"),
+    'debug_mode': os.getenv('GUI_DEBUG', 'False').lower() in ['true', '1', 'yes']
+}

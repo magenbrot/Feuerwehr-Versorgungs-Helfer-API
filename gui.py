@@ -35,11 +35,12 @@ except Error:
     print("Fehler beim Starten der Datenbankverbindung.")
     sys.exit(1)
 
-
 def generate_api_key_string(length=32):
-    """Generiert einen sicheren, zufälligen API-Key-String."""
-    return secrets.token_hex(length)
+    """
+    Generiert einen sicheren, zufälligen API-Key-String.
+    """
 
+    return secrets.token_hex(length)
 
 def hex_to_binary(hex_string):
     """
@@ -66,7 +67,180 @@ def hex_to_binary(hex_string):
         print(f"Fehler bei der Hexadezimal-Konvertierung: Ungültiger Typ für Hexadezimalstring: {type(hex_string)}")
         return None
 
+# Benachrichtigungseinstellungen
+def get_all_notification_types():
+    """
+    Ruft alle verfügbaren Benachrichtigungstypen aus der Datenbank ab.
 
+    Returns:
+        list: Eine Liste von Dictionaries, wobei jedes Dictionary einen Benachrichtigungstyp
+              repräsentiert (enthält 'id', 'event_schluessel', 'beschreibung').
+              Gibt eine leere Liste zurück, falls ein Fehler auftritt oder keine Typen vorhanden sind.
+    """
+
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
+    if cnx:
+        cursor = cnx.cursor(dictionary=True)
+        try:
+            query = "SELECT id, event_schluessel, beschreibung FROM benachrichtigungstypen ORDER BY id"
+            cursor.execute(query)
+            types = cursor.fetchall()
+            return types
+        except Error as err:
+            print(f"Datenbankfehler beim Abrufen aller Benachrichtigungstypen: {err}")
+            return []
+        finally:
+            if cursor:
+                cursor.close()
+            db_utils.DatabaseConnectionPool.close_connection(cnx)
+    return []
+
+def get_user_notification_settings(user_id):
+    """
+    Ruft die aktuellen E-Mail-Benachrichtigungseinstellungen für einen bestimmten Benutzer ab.
+
+    Args:
+        user_id (int): Die ID des Benutzers.
+
+    Returns:
+        dict: Ein Dictionary, das die Einstellungen des Benutzers abbildet.
+              Der Schlüssel ist die 'typ_id' (ID des Benachrichtigungstyps) und
+              der Wert ist ein Boolean, der angibt, ob E-Mail-Benachrichtigungen für diesen Typ
+              aktiviert ('True') oder deaktiviert ('False') sind.
+              Gibt ein leeres Dictionary zurück, wenn keine Einstellungen gefunden werden oder ein Fehler auftritt.
+    """
+
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
+    settings = {} # Key: typ_id, Value: email_aktiviert (True/False)
+    if cnx:
+        cursor = cnx.cursor(dictionary=True)
+        try:
+            query = "SELECT typ_id, email_aktiviert FROM benutzer_benachrichtigungseinstellungen WHERE benutzer_id = %s"
+            cursor.execute(query, (user_id,))
+            for row in cursor.fetchall():
+                settings[row['typ_id']] = bool(row['email_aktiviert'])
+            return settings
+        except Error as err:
+            print(f"Datenbankfehler beim Abrufen der Benutzereinstellungen für Benachrichtigungen: {err}")
+            return {}
+        finally:
+            if cursor:
+                cursor.close()
+            db_utils.DatabaseConnectionPool.close_connection(cnx)
+    return {}
+
+def update_user_notification_settings(user_id, active_notification_type_ids_int):
+    """
+    Aktualisiert die E-Mail-Benachrichtigungseinstellungen für einen Benutzer.
+
+    Diese Funktion setzt die Einstellungen für alle verfügbaren Benachrichtigungstypen.
+    Typen, deren IDs in `active_notification_type_ids_int` enthalten sind, werden als
+    aktiviert (email_aktiviert = 1) markiert. Alle anderen bekannten Typen werden
+    für diesen Benutzer deaktiviert (email_aktiviert = 0).
+    Verwendet `INSERT ... ON DUPLICATE KEY UPDATE`, um Einträge zu erstellen oder zu aktualisieren.
+
+    Args:
+        user_id (int): Die ID des Benutzers, dessen Einstellungen aktualisiert werden sollen.
+        active_notification_type_ids_int (list): Eine Liste von Integer-IDs der Benachrichtigungstypen,
+                                                   die für den Benutzer aktiviert werden sollen.
+
+    Returns:
+        bool: True bei Erfolg, False bei einem Fehler.
+    """
+
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
+    if not cnx:
+        flash("Datenbankverbindung konnte nicht hergestellt werden.", "error")
+        return False
+
+    cursor = cnx.cursor()
+    try:
+        # Alle verfügbaren Benachrichtigungstyp-IDs abrufen
+        cursor.execute("SELECT id FROM benachrichtigungstypen")
+        all_available_type_ids = [row[0] for row in cursor.fetchall()]
+
+        for type_id in all_available_type_ids:
+            is_enabled = 1 if type_id in active_notification_type_ids_int else 0
+            query = """
+                INSERT INTO benutzer_benachrichtigungseinstellungen (benutzer_id, typ_id, email_aktiviert)
+                VALUES (%s, %s, %s)
+                ON DUPLICATE KEY UPDATE email_aktiviert = VALUES(email_aktiviert)
+            """
+            cursor.execute(query, (user_id, type_id, is_enabled))
+        cnx.commit()
+        return True
+    except Error as err:
+        print(f"Fehler beim Aktualisieren der Benutzereinstellungen für Benachrichtigungen: {err}")
+        flash("Fehler beim Speichern der Benachrichtigungseinstellungen.", "error")
+        cnx.rollback()
+        return False
+    finally:
+        cursor.close()
+        db_utils.DatabaseConnectionPool.close_connection(cnx)
+
+# Systemeinstellungen (Admin)
+def get_all_system_settings():
+    """
+    Ruft alle Systemeinstellungen aus der Datenbank ab.
+
+    Returns:
+        dict: Ein Dictionary, wobei der Schlüssel der 'einstellung_schluessel' ist
+              und der Wert ein weiteres Dictionary mit 'wert' und 'beschreibung' der Einstellung ist.
+              Gibt ein leeres Dictionary zurück bei Fehlern oder wenn keine Einstellungen vorhanden sind.
+    """
+
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
+    settings = {} # Key: einstellung_schluessel, Value: {'wert': ..., 'beschreibung': ...}
+    if cnx:
+        cursor = cnx.cursor(dictionary=True)
+        try:
+            query = "SELECT einstellung_schluessel, einstellung_wert, beschreibung FROM system_einstellungen"
+            cursor.execute(query)
+            for row in cursor.fetchall():
+                settings[row['einstellung_schluessel']] = {'wert': row['einstellung_wert'], 'beschreibung': row['beschreibung']}
+            return settings
+        except Error as err:
+            print(f"Datenbankfehler beim Abrufen der Systemeinstellungen: {err}")
+            return {}
+        finally:
+            if cursor:
+                cursor.close()
+            db_utils.DatabaseConnectionPool.close_connection(cnx)
+    return {}
+
+def update_system_setting(einstellung_schluessel, einstellung_wert):
+    """
+    Aktualisiert den Wert einer spezifischen Systemeinstellung in der Datenbank.
+
+    Args:
+        einstellung_schluessel (str): Der Schlüssel der zu aktualisierenden Einstellung.
+        einstellung_wert (str): Der neue Wert für die Einstellung.
+
+    Returns:
+        bool: True, wenn die Aktualisierung erfolgreich war (mindestens eine Zeile betroffen),
+              False andernfalls (z.B. bei Datenbankfehlern oder wenn der Schlüssel nicht existiert).
+    """
+
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
+    if cnx:
+        cursor = cnx.cursor()
+        try:
+            query = "UPDATE system_einstellungen SET einstellung_wert = %s WHERE einstellung_schluessel = %s"
+            cursor.execute(query, (einstellung_wert, einstellung_schluessel))
+            cnx.commit()
+            return cursor.rowcount > 0 # True wenn eine Zeile aktualisiert wurde
+        except Error as err:
+            print(f"Fehler beim Aktualisieren der Systemeinstellung '{einstellung_schluessel}': {err}")
+            flash(f"Datenbankfehler beim Speichern der Einstellung '{einstellung_schluessel}'.", "error")
+            cnx.rollback()
+            return False
+        finally:
+            if cursor:
+                cursor.close()
+            db_utils.DatabaseConnectionPool.close_connection(cnx)
+    return False
+
+# NFC-Token Handling
 def add_user_nfc_token(user_id, token_name, token_hex):
     """
     Fügt einen neuen NFC-Token der Datenbank hinzu.
@@ -102,7 +276,6 @@ def add_user_nfc_token(user_id, token_name, token_hex):
             return False
     return False
 
-
 def delete_user_nfc_token(user_id, token_id):
     """
     Entfernt einen NFC-Token aus der Datenbank.
@@ -137,7 +310,72 @@ def delete_user_nfc_token(user_id, token_id):
             return False
     return False
 
+def get_user_nfc_tokens(user_id):
+    """
+    Ruft alle Tokens eines Benutzer ab, absteigend sortiert nach dem Zeitpunkt der letzten Verwendung.
 
+    Args:
+        user_id (int): Die ID des Benutzers.
+
+    Returns:
+        list: Eine Liste von Dictionaries, wobei jedes Dictionary einen Token repräsentiert
+              (token_id, token_name, token_daten, last_used, last_used_days_ago).
+              Gibt None zurück, falls ein Fehler auftritt.
+    """
+
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
+    if cnx:
+        cursor = cnx.cursor(dictionary=True)
+        try:
+            query = """
+                SELECT token_id, token_name, token_daten as token_daten, last_used, DATEDIFF(CURDATE(), DATE(last_used)) AS last_used_days_ago
+                FROM nfc_token WHERE user_id = %s ORDER BY last_used DESC
+            """
+            cursor.execute(query, (user_id,))
+            nfc_tokens = cursor.fetchall()
+            return nfc_tokens
+        except Error as err:
+            print(f"Datenbankfehler beim Abrufen der Benutzer NFC Tokens: {err}")
+            return None
+        finally:
+            if cursor:
+                cursor.close()
+            db_utils.DatabaseConnectionPool.close_connection(cnx)
+    return None
+
+def _handle_add_user_nfc_token_admin(form_data, target_user_id):
+    """
+    Verarbeitet das Hinzufügen eines NFC-Tokens für einen Benutzer durch einen Admin.
+
+    Args:
+        form_data (werkzeug.datastructures.ImmutableMultiDict): Die Formulardaten.
+        target_user_id (int): Die ID des Benutzers, für den der Token hinzugefügt wird.
+    """
+    nfc_token_name = form_data.get('nfc_token_name')
+    nfc_token_daten = form_data.get('nfc_token_daten') # HEX Format erwartet
+    if not nfc_token_name or not nfc_token_daten:
+        flash('Token Name und Token Daten (HEX) dürfen nicht leer sein.', 'error')
+    # Die Funktion add_user_nfc_token flasht bereits Fehlermeldungen bei ungültigen Daten
+    elif add_user_nfc_token(target_user_id, nfc_token_name, nfc_token_daten):
+        flash('NFC-Token erfolgreich hinzugefügt.', 'success')
+
+def _handle_delete_user_nfc_token_admin(form_data, target_user_id):
+    """
+    Verarbeitet das Löschen eines NFC-Tokens eines Benutzers durch einen Admin.
+
+    Args:
+        form_data (werkzeug.datastructures.ImmutableMultiDict): Die Formulardaten.
+        target_user_id (int): Die ID des Benutzers, dessen Token gelöscht wird.
+                               (Wird in delete_user_nfc_token zur Sicherheit mitgeprüft)
+    """
+    nfc_token_id = form_data.get('nfc_token_id')
+    if not nfc_token_id:
+        flash('Keine Token ID zum Löschen übergeben.', 'error')
+    # Die Funktion delete_user_nfc_token flasht bereits Fehlermeldungen
+    elif delete_user_nfc_token(target_user_id, nfc_token_id):
+        flash('NFC-Token erfolgreich entfernt.', 'success')
+
+# Benutzerfunktionen
 def delete_user(user_id):
     """
     Löscht einen Benutzer anhand seiner ID.
@@ -165,7 +403,6 @@ def delete_user(user_id):
             cursor.close()
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return False
-
 
 def toggle_user_admin(user_id, admin_state):
     """
@@ -199,7 +436,6 @@ def toggle_user_admin(user_id, admin_state):
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return False
 
-
 def toggle_user_lock(user_id, lock_state):
     """
     Sperrt einen Benutzer anhand seiner ID oder entsperrt ihn.
@@ -232,7 +468,6 @@ def toggle_user_lock(user_id, lock_state):
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return False
 
-
 def update_user_comment(user_id, comment):
     """
     Ändert den Kommentar eines Benutzer anhand seiner ID.
@@ -261,7 +496,6 @@ def update_user_comment(user_id, comment):
             cursor.close()
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return False
-
 
 def update_user_email(user_id, email):
     """
@@ -292,7 +526,6 @@ def update_user_email(user_id, email):
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return False
 
-
 def fetch_user(code):
     """
     Ruft einen Benutzer aus der Datenbank anhand seines Codes ab.
@@ -321,7 +554,6 @@ def fetch_user(code):
                 cursor.close()
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return None
-
 
 def get_user_by_id(user_id):
     """
@@ -356,7 +588,6 @@ def get_user_by_id(user_id):
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return None
 
-
 def get_saldo_for_user(user_id):
     """
     Berechnet das Saldo für den Benutzer mit der übergebenen user_id.
@@ -385,7 +616,6 @@ def get_saldo_for_user(user_id):
                 cursor.close()
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return 0
-
 
 def get_saldo_by_user():
     """
@@ -418,7 +648,6 @@ def get_saldo_by_user():
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return {}
 
-
 def get_all_users():
     """
     Ruft alle Benutzer aus der Datenbank ab, sortiert nach Namen.
@@ -450,7 +679,6 @@ def get_all_users():
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return []
 
-
 def get_all_api_users():
     """
     Ruft alle API-Benutzer aus der Datenbank ab, sortiert nach Username.
@@ -475,7 +703,6 @@ def get_all_api_users():
                 cursor.close()
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return []
-
 
 def get_api_user_by_id(api_user_id):
     """
@@ -505,7 +732,6 @@ def get_api_user_by_id(api_user_id):
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return None
 
-
 def get_api_keys_for_api_user(api_user_id):
     """
     Ruft alle API-Keys für einen bestimmten API-Benutzer ab.
@@ -533,41 +759,6 @@ def get_api_keys_for_api_user(api_user_id):
                 cursor.close()
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return []
-
-
-def get_user_nfc_tokens(user_id):
-    """
-    Ruft alle Tokens eines Benutzer ab, absteigend sortiert nach dem Zeitpunkt der letzten Verwendung.
-
-    Args:
-        user_id (int): Die ID des Benutzers.
-
-    Returns:
-        list: Eine Liste von Dictionaries, wobei jedes Dictionary einen Token repräsentiert
-              (token_id, token_name, token_daten, last_used, last_used_days_ago).
-              Gibt None zurück, falls ein Fehler auftritt.
-    """
-
-    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
-    if cnx:
-        cursor = cnx.cursor(dictionary=True)
-        try:
-            query = """
-                SELECT token_id, token_name, token_daten as token_daten, last_used, DATEDIFF(CURDATE(), DATE(last_used)) AS last_used_days_ago
-                FROM nfc_token WHERE user_id = %s ORDER BY last_used DESC
-            """
-            cursor.execute(query, (user_id,))
-            nfc_tokens = cursor.fetchall()
-            return nfc_tokens
-        except Error as err:
-            print(f"Datenbankfehler beim Abrufen der Benutzer NFC Tokens: {err}")
-            return None
-        finally:
-            if cursor:
-                cursor.close()
-            db_utils.DatabaseConnectionPool.close_connection(cnx)
-    return None
-
 
 def get_user_transactions(user_id):
     """
@@ -597,7 +788,6 @@ def get_user_transactions(user_id):
                 cursor.close()
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return None
-
 
 def add_transaction(user_id, beschreibung, saldo_aenderung):
     """
@@ -631,7 +821,6 @@ def add_transaction(user_id, beschreibung, saldo_aenderung):
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return False
 
-
 def delete_all_transactions(user_id):
     """
     Löscht alle Transaktionen eines Benutzers.
@@ -660,7 +849,6 @@ def delete_all_transactions(user_id):
                 cursor.close()
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return False
-
 
 def update_password(user_id, new_password_hash):
     """
@@ -691,7 +879,6 @@ def update_password(user_id, new_password_hash):
                 cursor.close()
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return False
-
 
 def add_regular_user_db(user_data):
     """
@@ -744,7 +931,6 @@ def add_regular_user_db(user_data):
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return False
 
-
 def add_api_user_db(username):
     """
     Fügt einen neuen API-Benutzer der Datenbank hinzu.
@@ -776,7 +962,6 @@ def add_api_user_db(username):
             cursor.close()
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return None
-
 
 def add_api_key_for_user_db(api_user_id, api_key_string):
     """
@@ -811,7 +996,6 @@ def add_api_key_for_user_db(api_user_id, api_key_string):
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return False
 
-
 def delete_api_key_db(api_key_id):
     """
     Löscht einen spezifischen API-Key anhand seiner ID.
@@ -840,7 +1024,6 @@ def delete_api_key_db(api_key_id):
             cursor.close()
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return False
-
 
 def delete_api_user_and_keys_db(api_user_id):
     """
@@ -876,9 +1059,6 @@ def delete_api_user_and_keys_db(api_user_id):
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return False
 
-
-# --- Helper Funktionen ---
-
 def _handle_delete_all_user_transactions(target_user_id):
     """
     Verarbeitet die Löschanfrage für alle Transaktionen eines Benutzers.
@@ -890,7 +1070,6 @@ def _handle_delete_all_user_transactions(target_user_id):
         flash('Alle Transaktionen für diesen Benutzer wurden gelöscht.', 'success')
     else:
         flash('Fehler beim Löschen der Transaktionen.', 'error')
-
 
 def _handle_add_user_transaction(form_data, target_user_id):
     """
@@ -915,7 +1094,6 @@ def _handle_add_user_transaction(form_data, target_user_id):
         except ValueError:
             flash('Ungültiger Wert für Saldoänderung. Es muss eine Zahl sein.', 'error')
 
-
 def _handle_toggle_user_lock_state(target_user_id, target_user, lock_state):
     """
     Verarbeitet das Sperren oder Entsperren eines Benutzers.
@@ -930,7 +1108,6 @@ def _handle_toggle_user_lock_state(target_user_id, target_user, lock_state):
         flash(f'Benutzer "{target_user.get("nachname", "")}, {target_user.get("vorname", "")}" (ID {target_user_id}) wurde {action_text}.', 'success')
     else:
         flash(f'Fehler beim {action_text} des Benutzers.', 'error')
-
 
 def _handle_toggle_user_admin_state(target_user_id, target_user, admin_state):
     """
@@ -947,7 +1124,6 @@ def _handle_toggle_user_admin_state(target_user_id, target_user, admin_state):
         flash(f'{role_text} "{target_user.get("nachname", "")}, {target_user.get("vorname", "")}" (ID {target_user_id}) wurde {action_text}.', 'success')
     else:
         flash(f'Fehler beim {"Befördern" if admin_state else "Degradieren"} des {role_text.lower()}s.', 'error')
-
 
 def _handle_delete_target_user(target_user_id, target_user, logged_in_user_id):
     """
@@ -971,24 +1147,6 @@ def _handle_delete_target_user(target_user_id, target_user, logged_in_user_id):
     flash('Fehler beim Löschen des Benutzers.', 'error')
     return False
 
-
-def _handle_add_user_nfc_token_admin(form_data, target_user_id):
-    """
-    Verarbeitet das Hinzufügen eines NFC-Tokens für einen Benutzer durch einen Admin.
-
-    Args:
-        form_data (werkzeug.datastructures.ImmutableMultiDict): Die Formulardaten.
-        target_user_id (int): Die ID des Benutzers, für den der Token hinzugefügt wird.
-    """
-    nfc_token_name = form_data.get('nfc_token_name')
-    nfc_token_daten = form_data.get('nfc_token_daten') # HEX Format erwartet
-    if not nfc_token_name or not nfc_token_daten:
-        flash('Token Name und Token Daten (HEX) dürfen nicht leer sein.', 'error')
-    # Die Funktion add_user_nfc_token flasht bereits Fehlermeldungen bei ungültigen Daten
-    elif add_user_nfc_token(target_user_id, nfc_token_name, nfc_token_daten):
-        flash('NFC-Token erfolgreich hinzugefügt.', 'success')
-
-
 def _handle_update_user_comment_admin(form_data, target_user_id):
     """
     Verarbeitet die Aktualisierung des Kommentars eines Benutzers durch einen Admin.
@@ -1005,7 +1163,6 @@ def _handle_update_user_comment_admin(form_data, target_user_id):
     else:
         flash('Fehler beim Aktualisieren des Kommentars.', 'error') # Fallback, falls DB-Funktion nicht flasht
 
-
 def _handle_update_user_email_admin(form_data, target_user_id):
     """
     Verarbeitet die Aktualisierung der E-Mail-Adresse eines Benutzers durch einen Admin.
@@ -1019,24 +1176,6 @@ def _handle_update_user_email_admin(form_data, target_user_id):
         flash('Emailadresse erfolgreich aktualisiert.', 'success')
     else:
         flash('Fehler beim Aktualisieren der Emailadresse.', 'error') # Fallback
-
-
-def _handle_delete_user_nfc_token_admin(form_data, target_user_id):
-    """
-    Verarbeitet das Löschen eines NFC-Tokens eines Benutzers durch einen Admin.
-
-    Args:
-        form_data (werkzeug.datastructures.ImmutableMultiDict): Die Formulardaten.
-        target_user_id (int): Die ID des Benutzers, dessen Token gelöscht wird.
-                               (Wird in delete_user_nfc_token zur Sicherheit mitgeprüft)
-    """
-    nfc_token_id = form_data.get('nfc_token_id')
-    if not nfc_token_id:
-        flash('Keine Token ID zum Löschen übergeben.', 'error')
-    # Die Funktion delete_user_nfc_token flasht bereits Fehlermeldungen
-    elif delete_user_nfc_token(target_user_id, nfc_token_id):
-        flash('NFC-Token erfolgreich entfernt.', 'success')
-
 
 def _validate_add_user_form(form_data):
     """
@@ -1072,7 +1211,6 @@ def _validate_add_user_form(form_data):
         flash(f"Der Code '{form_data.get('code')}' wird bereits verwendet. Bitte wählen Sie einen anderen.", "error")
         errors = True
     return not errors
-
 
 # --- Flask Routen ---
 
@@ -1112,111 +1250,169 @@ def login():
             flash('Ungültiger Benutzername oder Passwort', 'error')
     return render_template('login.html')
 
-
 @app.route('/user_info', methods=['GET', 'POST'])
 def user_info():
     """
-    Zeigt die Benutzerinformationen an und verarbeitet die Passwortänderung sowie Emailänderung.
+    Zeigt die Benutzerinformationen an und verarbeitet Passwortänderung, E-Mail-Änderung
+    sowie die Verwaltung der E-Mail-Benachrichtigungseinstellungen.
 
-    Wenn die Methode GET ist, werden die Benutzerinformationen, Transaktionen und der Saldo abgerufen und angezeigt.
-    Wenn die Methode POST ist, wird entweder das Passwortänderungs- oder Emailänderungsformular verarbeitet.
+    Bei GET-Anfragen werden Benutzerdaten, Transaktionen, Saldo, NFC-Token, verfügbare
+    Benachrichtigungstypen und die aktuellen Einstellungen des Benutzers geladen und angezeigt.
+    Bei POST-Anfragen werden Formulare für Passwortänderung, E-Mail-Änderung oder
+    Aktualisierung der Benachrichtigungseinstellungen verarbeitet.
 
     Returns:
-        str oder werkzeug.wrappers.response.Response: Die gerenderte Benutzerinformationsseite (user_info.html)
-        oder eine Weiterleitung zur Login-Seite.
+        str oder werkzeug.wrappers.response.Response: Die gerenderte Benutzerinformationsseite (`user_info.html`)
+        oder eine Weiterleitung zur Login-Seite bei Fehlern oder wenn nicht eingeloggt.
     """
-
     user_id = session.get('user_id')
     if not user_id:
         return redirect(BASE_URL + url_for('login'))
 
-    user = get_user_by_id(user_id)
+    user = get_user_by_id(user_id) #
     if not user:
-        session.pop('user_id', None)
-        flash('Benutzer nicht gefunden oder Sitzung abgelaufen.', 'error')
-        return redirect(BASE_URL + url_for('login'))
+        session.pop('user_id', None) #
+        flash('Benutzer nicht gefunden oder Sitzung abgelaufen.', 'error') #
+        return redirect(BASE_URL + url_for('login')) #
 
-    if user.get('is_locked'): # Erneut prüfen, falls Sperrung während Session erfolgt
-        session.pop('user_id', None)
-        flash('Ihr Konto wurde gesperrt. Bitte kontaktieren Sie einen Administrator.', 'error')
-        return redirect(BASE_URL + url_for('login'))
+    if user.get('is_locked'): #
+        session.pop('user_id', None) #
+        flash('Ihr Konto wurde gesperrt. Bitte kontaktieren Sie einen Administrator.', 'error') #
+        return redirect(BASE_URL + url_for('login')) #
 
     if request.method == 'POST':
-        if 'change_password' in request.form:
-            current_password = request.form['current_password']
-            new_password = request.form['new_password']
-            confirm_new_password = request.form['confirm_new_password']
+        if 'change_password' in request.form: #
+            current_password = request.form['current_password'] #
+            new_password = request.form['new_password'] #
+            confirm_new_password = request.form['confirm_new_password'] #
 
-            if not check_password_hash(user['password'], current_password):
-                flash('Falsches aktuelles Passwort.', 'error')
-            elif new_password != confirm_new_password:
-                flash('Die neuen Passwörter stimmen nicht überein.', 'error')
-            elif len(new_password) < 8:
-                flash('Das neue Passwort muss mindestens 8 Zeichen lang sein.', 'error')
+            if not check_password_hash(user['password'], current_password): #
+                flash('Falsches aktuelles Passwort.', 'error') #
+            elif new_password != confirm_new_password: #
+                flash('Die neuen Passwörter stimmen nicht überein.', 'error') #
+            elif len(new_password) < 8: #
+                flash('Das neue Passwort muss mindestens 8 Zeichen lang sein.', 'error') #
             else:
-                new_password_hash = generate_password_hash(new_password)
-                if update_password(user_id, new_password_hash):
-                    flash('Passwort erfolgreich geändert.', 'success')
-                    user['password'] = new_password_hash # type: ignore
+                new_password_hash = generate_password_hash(new_password) #
+                if update_password(user_id, new_password_hash): #
+                    flash('Passwort erfolgreich geändert.', 'success') #
                 else:
-                    flash('Fehler beim Ändern des Passworts.', 'error')
-            return redirect(BASE_URL + url_for('user_info'))
+                    flash('Fehler beim Ändern des Passworts.', 'error') #
+            return redirect(BASE_URL + url_for('user_info')) #
 
-        if 'change_email' in request.form:
-            new_email = request.form.get('new_email', '').strip() # .strip() entfernt führende/nachfolgende Leerzeichen
-            if update_user_email(user_id, new_email):
-                flash('Emailadresse erfolgreich geändert.', 'success')
-                user['email'] = new_email # Aktualisiere die E-Mail im lokalen user-Objekt
+        if 'change_email' in request.form: #
+            new_email = request.form.get('new_email', '').strip() #
+            if update_user_email(user_id, new_email): #
+                flash('Emailadresse erfolgreich geändert.', 'success') #
             else:
-                # update_user_email gibt bei DB-Fehler False zurück und loggt den Fehler
-                flash('Fehler beim Ändern der Emailadresse.', 'error')
+                flash('Fehler beim Ändern der Emailadresse.', 'error') #
+            return redirect(BASE_URL + url_for('user_info')) #
+
+        if 'update_notification_settings' in request.form:
+            all_notification_types_db = get_all_notification_types() # Ruft alle Typen aus DB ab.
+            active_type_ids = []
+            for n_type in all_notification_types_db: # Durchläuft alle in der DB definierten Typen.
+                # Prüft, ob für den aktuellen Typ eine Checkbox gesendet wurde (und damit aktiviert ist).
+                # Der `value` der Checkbox im HTML wurde auf `n_type.id` gesetzt.
+                if request.form.get(f'notification_type_{n_type["id"]}'):
+                    active_type_ids.append(n_type["id"])
+
+            if update_user_notification_settings(user_id, active_type_ids):
+                flash('Benachrichtigungseinstellungen erfolgreich gespeichert.', 'success')
+            # Fehler werden in update_user_notification_settings selbst geflasht.
             return redirect(BASE_URL + url_for('user_info'))
 
     # GET Request oder nach POST redirect
-    # User Daten neu laden, falls sie im POST geändert wurden (z.B. Email)
-    # Dies stellt sicher, dass die angezeigten Daten aktuell sind.
-    user = get_user_by_id(user_id)
-    if not user: # Sicherheitscheck, falls User zwischenzeitlich gelöscht wurde
-        session.pop('user_id', None)
-        flash('Benutzer nicht mehr vorhanden.', 'error')
-        return redirect(BASE_URL + url_for('login'))
+    user = get_user_by_id(user_id) # Erneut laden für aktuelle Daten
+    if not user: # Sicherheitscheck
+        session.pop('user_id', None) #
+        flash('Benutzer nicht mehr vorhanden.', 'error') #
+        return redirect(BASE_URL + url_for('login')) #
 
-    nfc_tokens = get_user_nfc_tokens(user_id)
-    transactions = get_user_transactions(user_id)
-    saldo = sum(t['saldo_aenderung'] for t in transactions) if transactions else 0
+    nfc_tokens = get_user_nfc_tokens(user_id) #
+    transactions = get_user_transactions(user_id) #
+    saldo = sum(t['saldo_aenderung'] for t in transactions) if transactions else 0 #
 
-    return render_template('user_info.html', user=user, nfc_tokens=nfc_tokens, transactions=transactions, saldo=saldo)
+    # Für Benachrichtigungseinstellungen
+    all_notification_types_data = get_all_notification_types()
+    user_notification_settings_data = get_user_notification_settings(user_id)
 
+    return render_template('user_info.html',
+                           user=user,
+                           nfc_tokens=nfc_tokens,
+                           transactions=transactions,
+                           saldo=saldo,
+                           all_notification_types=all_notification_types_data, # Korrigierter Variablenname
+                           user_notification_settings=user_notification_settings_data) # Korrigierter Variablenname
 
-@app.route('/admin')
+@app.route('/admin', methods=['GET', 'POST']) # Wichtig: POST hinzugefügt
 def admin_dashboard():
     """
-    Zeigt das Admin-Dashboard an, mit einer Übersicht über alle Benutzer und deren Saldo.
+    Zeigt das Admin-Dashboard mit einer Benutzerübersicht und deren Salden.
+    Ermöglicht Admins zudem die Verwaltung von globalen Systemeinstellungen.
+
+    Bei GET-Anfragen werden Benutzerdaten und aktuelle Systemeinstellungen geladen.
+    Bei POST-Anfragen können Systemeinstellungen aktualisiert werden.
+    Erfordert Admin-Rechte und eine aktive Benutzersitzung.
 
     Returns:
-        str oder werkzeug.wrappers.response.Response: Die gerenderte Admin-Dashboard-Seite (admin_dashboard.html)
-        oder eine Weiterleitung zur Login-Seite, falls der Benutzer nicht angemeldet oder kein Admin ist.
+        str oder werkzeug.wrappers.response.Response: Die gerenderte Admin-Dashboard-Seite (`admin_dashboard.html`)
+        oder eine Weiterleitung bei fehlenden Rechten, Fehlern oder wenn nicht eingeloggt.
     """
-
-    user_id = session.get('user_id')
+    user_id = session.get('user_id') #
     if not user_id:
-        flash("Bitte zuerst einloggen.", "info")
-        return redirect(BASE_URL + url_for('login'))
+        flash("Bitte zuerst einloggen.", "info") #
+        return redirect(BASE_URL + url_for('login')) #
 
-    admin_user = get_user_by_id(user_id)
-    if not (admin_user and admin_user['is_admin']):
-        flash("Zugriff verweigert. Admin-Rechte erforderlich.", "error")
-        return redirect(BASE_URL + url_for('user_info')) # Zur User-Info statt Login, falls kein Admin
+    admin_user = get_user_by_id(user_id) #
+    if not (admin_user and admin_user['is_admin']): #
+        flash("Zugriff verweigert. Admin-Rechte erforderlich.", "error") #
+        return redirect(BASE_URL + url_for('user_info')) #
 
-    if admin_user.get('is_locked'):
-        session.pop('user_id', None)
-        flash('Ihr Administratorkonto wurde gesperrt.', 'error')
-        return redirect(BASE_URL + url_for('login'))
+    if admin_user.get('is_locked'): #
+        session.pop('user_id', None) #
+        flash('Ihr Administratorkonto wurde gesperrt.', 'error') #
+        return redirect(BASE_URL + url_for('login')) #
 
-    users = get_all_users()
-    saldo_by_user = get_saldo_by_user()
-    return render_template('admin_dashboard.html', user=admin_user, users=users, saldo_by_user=saldo_by_user)
+    if request.method == 'POST':
+        if 'update_system_settings' in request.form:
+            current_system_settings_keys = get_all_system_settings().keys() # Nur die Schlüssel für die Iteration holen
+            settings_updated_successfully = True
 
+            for key in current_system_settings_keys:
+                if key in request.form: # Nur verarbeiten, wenn das Feld im Formular gesendet wurde
+                    new_value = request.form[key].strip()
+
+                    if key == 'MAX_NEGATIVSALDO':
+                        try:
+                            val_int = int(new_value)
+                            if val_int > 0:
+                                flash("Der Wert für 'Maximale Negativsaldo-Grenze' muss 0 oder negativ sein.", "error")
+                                settings_updated_successfully = False
+                                continue
+                        except ValueError:
+                            flash("Der Wert für 'Maximale Negativsaldo-Grenze' muss eine ganze Zahl sein.", "error")
+                            settings_updated_successfully = False
+                            continue
+
+                    if not update_system_setting(key, new_value):
+                        settings_updated_successfully = False
+
+            if settings_updated_successfully:
+                flash("Systemeinstellungen erfolgreich aktualisiert.", "success")
+            # Individuelle Fehler oder keine Änderungen wurden bereits geflasht
+            return redirect(BASE_URL + url_for('admin_dashboard'))
+
+    # GET Request
+    users_data = get_all_users() #
+    saldo_by_user_data = get_saldo_by_user() #
+    system_settings_data = get_all_system_settings()
+
+    return render_template('admin_dashboard.html',
+                           user=admin_user,
+                           users=users_data, # Korrigierter Variablenname
+                           saldo_by_user=saldo_by_user_data, # Korrigierter Variablenname
+                           system_settings=system_settings_data) # Korrigierter Variablenname
 
 @app.route('/admin/add_user', methods=['GET', 'POST'])
 def add_user():
@@ -1278,7 +1474,6 @@ def add_user():
 
     return render_template('user_add.html', user=admin_user, current_code=generated_code, form_data=None)
 
-
 @app.route('/admin/api_users', methods=['GET', 'POST'])
 def admin_api_user_manage():
     """
@@ -1329,7 +1524,6 @@ def admin_api_user_manage():
     api_users_list = get_all_api_users()
     return render_template('admin_api_user_manage.html', user=admin_user, api_users=api_users_list)
 
-
 @app.route('/admin/api_user/<int:api_user_id_route>')
 def admin_api_user_detail(api_user_id_route):
     """
@@ -1371,7 +1565,6 @@ def admin_api_user_detail(api_user_id_route):
 
     api_keys_list = get_api_keys_for_api_user(api_user_id_route)
     return render_template('admin_api_user_detail.html', user=admin_user, api_user=target_api_user, api_keys=api_keys_list)
-
 
 @app.route('/admin/api_user/<int:api_user_id_route>/generate_key', methods=['POST'])
 def admin_generate_api_key_for_user(api_user_id_route):
@@ -1424,7 +1617,6 @@ def admin_generate_api_key_for_user(api_user_id_route):
         pass
 
     return redirect(BASE_URL + url_for('admin_api_user_detail', api_user_id_route=api_user_id_route))
-
 
 @app.route('/admin/api_key/<int:api_key_id_route>/delete', methods=['POST'])
 def admin_delete_api_key(api_key_id_route):
@@ -1481,7 +1673,6 @@ def admin_delete_api_key(api_key_id_route):
     # Fallback, falls die api_user_id nicht ermittelt werden konnte oder ungültig war
     return redirect(BASE_URL + url_for('admin_api_user_manage'))
 
-
 @app.route('/admin/api_user/<int:api_user_id_route>/delete', methods=['POST']) # Nur POST für Löschaktionen
 def admin_delete_api_user(api_user_id_route):
     """
@@ -1529,9 +1720,7 @@ def admin_delete_api_user(api_user_id_route):
         # flash(f"Fehler beim Löschen des API-Benutzers '{api_user_to_delete['username']}'.", "error")
         pass
 
-
     return redirect(BASE_URL + url_for('admin_api_user_manage'))
-
 
 @app.route('/admin/user/<int:target_user_id>/transactions', methods=['GET', 'POST'])
 def admin_user_modification(target_user_id):
@@ -1611,14 +1800,12 @@ def admin_user_modification(target_user_id):
         flash("Zielbenutzer konnte nicht erneut geladen werden.", "error")
         return redirect(BASE_URL + url_for('admin_dashboard'))
 
-
     return render_template('admin_user_modification.html',
                            user=refreshed_target_user, # Den aktualisierten Benutzer übergeben
                            nfc_tokens=nfc_tokens,
                            transactions=transactions,
                            saldo=saldo,
                            admin_user=current_admin_user)
-
 
 @app.route('/logout')
 def logout():
@@ -1633,7 +1820,6 @@ def logout():
     flash("Erfolgreich abgemeldet.", "info")
     return redirect(BASE_URL + url_for('login'))
 
-
 if __name__ == '__main__':
     if not all(key in config.db_config and config.db_config[key] is not None for key in ['host', 'port', 'user', 'password', 'database']):
         print("Fehler: Nicht alle Datenbank-Konfigurationsvariablen (MYSQL_HOST, MYSQL_PORT, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DB) sind in der .env Datei oder Umgebung gesetzt.")
@@ -1645,9 +1831,4 @@ if __name__ == '__main__':
         print(f"Fehler: Datenbank-Port '{config.db_config['port']}' ist keine gültige Zahl.")
         sys.exit()
 
-    debug_mode = os.getenv('FLASK_DEBUG', 'False').lower() in ['true', '1', 'yes']
-    # Host kann auch über Umgebungsvariable HOST gesteuert werden, mit Fallback auf 127.0.0.1
-    host = os.getenv('HOST', '127.0.0.1')
-    # Port kann auch über Umgebungsvariable PORT gesteuert werden, mit Fallback auf 5001
-    port = int(os.getenv('PORT', "5000"))
-    app.run(host=host, port=port, debug=debug_mode)
+    app.run(host=config.gui_config['host'], port=config.gui_config['port'], debug=config.gui_config['debug_mode'])
