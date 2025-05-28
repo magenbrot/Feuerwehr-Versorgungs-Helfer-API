@@ -89,10 +89,33 @@ pip install -r requirements.txt
 ```bash
 cp .env.dist .env
 vi .env
-# MySQL Zugangsdaten einfügen
-# ggf. BASE_URL und STATIC_URL_PREFIX anpassen (nicht notwendig wenn die Applikation im Hauptverzeichnis läuft)
+
+# MySQL Zugangsdaten konfigurieren
+MYSQL_HOST=""
+MYSQL_PORT=3306
+MYSQL_USER=""
+MYSQL_PASSWORD=""
+MYSQL_DB=""
+
+# SMTP Mailrelay Zugangsdaten konfigurieren
+SMTP_HOST=""
+SMTP_PORT=""
+SMTP_USER=""
+SMTP_PASSWORD=""
+SMTP_SENDER=""
+
+# Ab diesem Saldo wird eine Erinnerungsmail ausgelöst
+SALDO_GRENZWERT="-10"
+
+# ggf. BASE_URL und STATIC_URL_PREFIX anpassen (nicht notwendig wenn die Applikation im Hauptverzeichnis läuft, Funktion zudem bisher ungetestet und möglicherweise defekt)
+#BASE_URL="/"
+#STATIC_URL_PREFIX=""
+
 # FLASK_DEBUG nur auf True setzen wenn der Server nicht öffentlich erreichbar ist. Auf den Debug-Seiten könnten
 # unerwünscht Informationen veröffentlicht werden.
+#FLASK_DEBUG=False
+#HOST=127.0.0.1
+#PORT=5000
 ```
 
 ### MySQL-Datenbank erstellen und Schema anlegen
