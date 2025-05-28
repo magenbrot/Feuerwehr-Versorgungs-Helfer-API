@@ -3,10 +3,12 @@
 import base64
 import sys
 from functools import wraps
-from flask import Flask, jsonify, request # pigar: required-packages=uWSGI
+from pathlib import Path # Für die Logo-Pfadprüfung
+from flask import Flask, jsonify, request, render_template # pigar: required-packages=uWSGI
 from mysql.connector import Error
 import config
 import db_utils
+import email_sender
 
 app = Flask(__name__)
 
@@ -19,6 +21,129 @@ try:
 except Error:
     print("Fehler beim Starten der Datenbankverbindung.")
     sys.exit(1)
+
+
+def prepare_and_send_email(email_params: dict, smtp_cfg: dict) -> bool:
+    """
+    Bereitet eine E-Mail mit Flasks render_template vor und versendet sie.
+    Die Argumente für die E-Mail-Details sind in einem Dictionary zusammengefasst.
+
+    Args:
+        email_params: Ein Dictionary mit den Details für die E-Mail.
+            Erwartete Schlüssel:
+                'empfaenger_email' (str): E-Mail-Adresse des Empfängers.
+                'betreff' (str): Betreff der E-Mail.
+                'template_name_html' (str): Dateiname des HTML-Templates (im Flask templates Ordner).
+                'template_name_text' (str): Dateiname des Text-Templates (im Flask templates Ordner).
+                'template_context' (dict): Dictionary mit Daten für die Templates.
+                'logo_dateipfad' (str, optional): Pfad zur Logo-Datei.
+        smtp_cfg: SMTP-Konfigurationsdictionary.
+
+    Returns:
+        bool: True bei Erfolg, sonst False.
+    """
+
+    empfaenger_email = email_params.get('empfaenger_email')
+    betreff = email_params.get('betreff')
+    template_name_html = email_params.get('template_name_html')
+    template_name_text = email_params.get('template_name_text')
+    template_context = email_params.get('template_context', {})
+    logo_dateipfad = email_params.get('logo_dateipfad')
+
+    if not all([empfaenger_email, betreff, template_name_html, template_name_text]):
+        app.logger.error("Fehler: Unvollständige E-Mail-Parameter. Benötigt: empfaenger_email, betreff, template_name_html, template_name_text.")
+        return False
+
+    try:
+        # Kontext für Templates erweitern
+        template_context_final = template_context.copy()
+        template_context_final['logo_exists_fuer_template'] = bool(logo_dateipfad and Path(logo_dateipfad).is_file())
+
+        # Templates mit Flasks render_template rendern
+        with app.app_context(): # Stellt sicher, dass render_template funktioniert
+            final_html_body = render_template(template_name_html, **template_context_final)
+            final_text_body = render_template(template_name_text, **template_context_final)
+
+    except Exception as e:  # pylint: disable=W0718
+        print(f"Fehler beim Rendern der E-Mail-Templates: {e}")
+        return False
+
+    email_content_dict = {
+        'html': final_html_body,
+        'text': final_text_body,
+        'logo_pfad': logo_dateipfad if logo_dateipfad and Path(logo_dateipfad).is_file() else None
+    }
+
+    return email_sender.sende_formatierte_email(
+        empfaenger_email=empfaenger_email,
+        betreff=betreff,
+        content=email_content_dict,
+        smtp_cfg=smtp_cfg
+    )
+
+
+def send_friendly_reminder_mail(email, vorname, saldo):
+    """
+    Versendet eine freundliche Erinnerungs-E-Mail mit Saldoinformationen.
+
+    Verwendet vordefinierte Templates (email_friendly_reminder.html/.txt)
+    und ein Logo, um eine formatierte E-Mail zu erstellen. Die SMTP-Konfiguration
+    wird aus `config.smtp_config` bezogen.
+
+    Args:
+        email (str): Die E-Mail-Adresse des Empfängers.
+        vorname (str): Der Vorname des Empfängers für die persönliche Anrede.
+        saldo (str): Der aktuelle Saldo des Empfängers, der in der E-Mail angezeigt wird.
+
+    Returns:
+        bool: True, wenn die E-Mail erfolgreich versendet wurde, sonst False.
+    """
+
+    logo_pfad = Path("static/logo/logo-80x109.png")
+
+    # Parameter für die E-Mail
+    email_details = {
+        'empfaenger_email': email,
+        'betreff': "Kleiner Hinweis zu deinem Guthaben (Getränke & Essen)",
+        'template_name_html': "email_friendly_reminder.html",
+        'template_name_text': "email_friendly_reminder.txt",
+        'template_context': {
+            "vorname": vorname,
+            "saldo": saldo,
+        },
+        'logo_dateipfad': str(logo_pfad) if logo_pfad.is_file() else None,
+    }
+
+    erfolg = prepare_and_send_email(email_params=email_details, smtp_cfg=config.smtp_config)
+
+    if erfolg:
+        return True
+    return False
+
+
+def aktuellen_saldo_pruefen(user_id):
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
+    if not cnx:
+        return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
+    cursor = cnx.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            "SELECT u.nachname AS nachname, u.vorname AS vorname, u.email AS email, SUM(t.saldo_aenderung) AS saldo " \
+            "FROM transactions AS t INNER JOIN users AS u ON t.user_id = u.id WHERE u.id = %s GROUP BY u.nachname, u.vorname", (user_id,))
+        person = cursor.fetchone()
+        if person:
+            print(f"Person mit UID {user_id} gefunden: {person['nachname']}, {person['vorname']} (Email: {person['email']}) - Saldo {person['saldo']}")
+            if person['saldo'] <= config.saldo_grenzwert: # Email nur senden wenn der Saldo unter dem Grenzwert liegt
+                send_friendly_reminder_mail(person['email'], person['vorname'], person['saldo'])
+            return jsonify(person)
+        print(f"Person mit UID {user_id} hat noch keine Transaktionen durchgeführt.")
+        return jsonify({'error': 'Person hat noch keine Transaktionen durchgeführt.'}), 200
+    except Error as err:
+        print(f"Fehler beim Lesen der Daten: {err}")
+        return jsonify({'error': 'Fehler beim Lesen der Daten.'}), 500
+    finally:
+        cursor.close()
+        db_utils.DatabaseConnectionPool.close_connection(cnx)
 
 
 def get_user_by_api_key(api_key):
@@ -266,6 +391,7 @@ def nfc_transaction(user_id, username):
                 "FROM transactions AS t INNER JOIN users AS u ON t.user_id = u.id WHERE u.id = %s", (benutzer['id'],))
             person = cursor.fetchone()
             if person:
+                aktuellen_saldo_pruefen(benutzer['id']) # löst ggf. eine Email an den Benutzer aus
                 print(f"Benutzer ID {benutzer['id']} gefunden: {benutzer['vorname']} {benutzer['nachname']} - Aktueller Saldo: {person['saldo']}")
                 return jsonify({'message': f"Danke {benutzer['vorname']}. Dein aktueller Saldo beträgt: {person['saldo']}."}), 200
             return jsonify({'message': f"Transaktion für {benutzer['vorname']} {benutzer['nachname']} erfolgreich erstellt (Saldo {saldo_aenderung})."}), 200 # dieser Code sollte nie erreicht werden
@@ -552,6 +678,7 @@ def person_bearbeiten(user_id, username, code):
             cursor.execute(sql_transaktion, werte_transaktion)
             cnx.commit()
             print("Transaktion erfolgreich erstellt.")
+            aktuellen_saldo_pruefen(user_id) # löst ggf. eine Email an den Benutzer aus
             return jsonify({'message': 'Transaktion erfolgreich erstellt.'}), 201
         print(f"Person mit diesem Code nicht gefunden: {code}")
         return jsonify({'error': 'Person mit diesem Code nicht gefunden.'}), 404
@@ -613,4 +740,24 @@ def person_transaktionen_loeschen(user_id, username, code):
 
 
 if __name__ == '__main__':
+    if not all(key in config.db_config and config.db_config[key] is not None for key in ['host', 'port', 'user', 'password', 'database']):
+        print("Fehler: Nicht alle Datenbank-Konfigurationsvariablen (MYSQL_HOST, MYSQL_PORT, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DB) sind in der .env Datei oder Umgebung gesetzt.")
+        sys.exit()
+
+    try:
+        config.db_config['port'] = int(config.db_config['port'])
+    except ValueError:
+        print(f"Fehler: Datenbank-Port '{config.db_config['port']}' ist keine gültige Zahl.")
+        sys.exit()
+
+    if not all(key in config.smtp_config and config.smtp_config[key] is not None for key in ['host', 'port', 'user', 'password', 'sender']):
+        print("Fehler: Nicht alle SMTP-Konfigurationsvariablen (SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_SENDER) sind in der .env Datei oder Umgebung gesetzt.")
+        sys.exit()
+
+    try:
+        config.smtp_config['port'] = int(config.smtp_config['port'])
+    except ValueError:
+        print(f"Fehler: SMTP_PORT '{config.smtp_config['port']}' ist keine gültige Zahl.")
+        sys.exit()
+
     app.run()

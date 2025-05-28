@@ -1635,6 +1635,16 @@ def logout():
 
 
 if __name__ == '__main__':
+    if not all(key in config.db_config and config.db_config[key] is not None for key in ['host', 'port', 'user', 'password', 'database']):
+        print("Fehler: Nicht alle Datenbank-Konfigurationsvariablen (MYSQL_HOST, MYSQL_PORT, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DB) sind in der .env Datei oder Umgebung gesetzt.")
+        sys.exit()
+
+    try:
+        config.db_config['port'] = int(config.db_config['port'])
+    except ValueError:
+        print(f"Fehler: Datenbank-Port '{config.db_config['port']}' ist keine gültige Zahl.")
+        sys.exit()
+
     debug_mode = os.getenv('FLASK_DEBUG', 'False').lower() in ['true', '1', 'yes']
     # Host kann auch über Umgebungsvariable HOST gesteuert werden, mit Fallback auf 127.0.0.1
     host = os.getenv('HOST', '127.0.0.1')

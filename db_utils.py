@@ -107,31 +107,3 @@ class DatabaseConnectionPool:
         """
         if cnx:
             cnx.close()
-
-
-if __name__ == "__main__":
-    # Beispielhafte Verwendung (zum Testen des Moduls)
-    db_config = {
-        "host": "localhost",  # Ersetze durch deinen Host
-        "user": "youruser",  # Ersetze durch deinen Datenbankbenutzer
-        "password": "yourpassword",  # Ersetze durch dein Datenbankpasswort
-        "database": "yourdatabase",  # Ersetze durch deinen Datenbanknamen
-    }
-
-    try:
-        conn = DatabaseConnectionPool.get_connection(
-            db_config
-        )
-        if conn:
-            print("Verbindung erfolgreich hergestellt!")
-            conn.cursor().execute("SELECT 1")
-            print(conn.cursor().fetchone())
-            DatabaseConnectionPool.close_connection(conn)
-        else:
-            print("Konnte keine Verbindung aus dem Pool abrufen.")
-    except (mysql.connector.Error, RuntimeError) as e:  # Spezifischere Exceptions fangen
-        print(f"Ein Datenbank- oder Laufzeitfehler ist aufgetreten: {e}")
-        sys.exit(1)
-    except Exception as e: # pylint: disable=W0718
-        print(f"Ein unerwarteter Fehler ist aufgetreten: {e}")
-        sys.exit(1)
