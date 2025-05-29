@@ -68,20 +68,22 @@ def _create_mime_message(empfaenger_email: str, betreff: str, content: Dict[str,
     msg_alternative.attach(html_part)
 
     if logo_pfad_content:
-        logo_file = Path(logo_pfad_content)
-        if logo_file.is_file():
-            try:
-                with open(logo_file, 'rb') as fp:
-                    img = MIMEImage(fp.read(), name=logo_file.name)
-                img.add_header('Content-ID', f'<{logo_cid}>')
-                img.add_header('Content-Disposition', 'inline', filename=logo_file.name)
-                msg.attach(img)
-            except FileNotFoundError:
-                logger.warning("Logo-Datei nicht gefunden unter %s (trotz vorheriger Prüfung).", logo_pfad_content)
-            except Exception as e:  # pylint: disable=W0718
-                logger.error("Fehler beim Einbetten des Logos '%s': %s.", logo_pfad_content, e, exc_info=True)
-        else:
-            pass
+        try:
+            safe_root = Path("static/logo").resolve()
+            logo_file = Path(logo_pfad_content).resolve()
+            if not str(logo_file).startswith(str(safe_root)) or not logo_file.is_file():
+                raise ValueError("Unsicherer oder ungültiger Pfad.")
+            with open(logo_file, 'rb') as fp:
+                img = MIMEImage(fp.read(), name=logo_file.name)
+            img.add_header('Content-ID', f'<{logo_cid}>')
+            img.add_header('Content-Disposition', 'inline', filename=logo_file.name)
+            msg.attach(img)
+        except FileNotFoundError:
+            logger.warning("Logo-Datei nicht gefunden unter %s (trotz vorheriger Prüfung).", logo_pfad_content)
+        except ValueError as e:
+            logger.warning("Ungültiger logo_pfad ('%s'): %s", logo_pfad_content, e)
+        except Exception as e:  # pylint: disable=W0718
+            logger.error("Fehler beim Einbetten des Logos '%s': %s.", logo_pfad_content, e, exc_info=True)
     return msg
 
 def _send_email_via_smtp(msg: MIMEMultipart, smtp_cfg: Dict[str, Any], empfaenger_email: str) -> bool:

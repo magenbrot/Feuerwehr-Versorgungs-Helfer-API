@@ -62,6 +62,7 @@ def prepare_and_send_email(email_params: dict, smtp_cfg: dict) -> bool:
             logo_path_obj = Path(logo_dateipfad_str).resolve()
             if not str(logo_path_obj).startswith(str(safe_root)) or not logo_path_obj.is_file():
                 raise ValueError("Unsicherer oder ungültiger Pfad.")
+            email_params['logo_dateipfad'] = str(logo_path_obj)  # Ensure validated path is used downstream.
             logo_exists = True
         except Exception as e:
             app.logger.warning("Ungültiger logo_dateipfad ('%s'): %s", logo_dateipfad_str, e)
