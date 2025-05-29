@@ -29,20 +29,12 @@ def _prepare_html_with_logo(html_content: str, logo_pfad_content: Optional[str],
     """Bereitet den HTML-Inhalt vor, ersetzt ggf. Logo-CID oder entfernt Logo-Referenz."""
 
     html_to_send = html_content
-    safe_root = Path("static/logo").resolve()
-    if logo_pfad_content:
-        try:
-            logo_path = Path(logo_pfad_content).resolve()
-            if not str(logo_path).startswith(str(safe_root)) or not logo_path.is_file():
-                raise ValueError("Unsicherer oder ungültiger Pfad.")
-            # Ersetze cid:logo nur, wenn Logo vorhanden und gültig
-            html_to_send = html_to_send.replace('cid:logo', f'cid:{logo_cid}')
-        except Exception as e:
-            logger.warning("Ungültiger logo_pfad ('%s'): %s. Logo-Referenz wird entfernt.", logo_pfad_content, e)
-            html_to_send = re.sub(r'<img[^>]*src\s*=\s*["\']cid:logo["\'][^>]*>', '', html_content, flags=re.IGNORECASE)
+    if logo_pfad_content and Path(logo_pfad_content).is_file():
+        # Ersetze cid:logo nur, wenn Logo vorhanden und gültig
+        html_to_send = html_to_send.replace('cid:logo', f'cid:{logo_cid}')
     elif 'cid:logo' in html_to_send:
         # Logo-Platzhalter ist da, aber kein gültiges Logo
-        logger.warning("Logo-Platzhalter 'cid:logo' im HTML gefunden, aber kein gültiger logo_pfad ('%s'). Logo-Referenz wird entfernt.", logo_pfad_content)
+        logger.warning("Logo-Platzhalter 'cid:logo' im HTML gefunden, aber kein gültiger logo_pfad ('%s') oder Datei nicht gefunden. Logo-Referenz wird entfernt.", logo_pfad_content)
         html_to_send = re.sub(r'<img[^>]*src\s*=\s*["\']cid:logo["\'][^>]*>', '', html_content, flags=re.IGNORECASE)
     return html_to_send
 
@@ -68,22 +60,20 @@ def _create_mime_message(empfaenger_email: str, betreff: str, content: Dict[str,
     msg_alternative.attach(html_part)
 
     if logo_pfad_content:
-        try:
-            safe_root = Path("static/logo").resolve()
-            logo_file = Path(logo_pfad_content).resolve()
-            if not str(logo_file).startswith(str(safe_root)) or not logo_file.is_file():
-                raise ValueError("Unsicherer oder ungültiger Pfad.")
-            with open(logo_file, 'rb') as fp:
-                img = MIMEImage(fp.read(), name=logo_file.name)
-            img.add_header('Content-ID', f'<{logo_cid}>')
-            img.add_header('Content-Disposition', 'inline', filename=logo_file.name)
-            msg.attach(img)
-        except FileNotFoundError:
-            logger.warning("Logo-Datei nicht gefunden unter %s (trotz vorheriger Prüfung).", logo_pfad_content)
-        except ValueError as e:
-            logger.warning("Ungültiger logo_pfad ('%s'): %s", logo_pfad_content, e)
-        except Exception as e:  # pylint: disable=W0718
-            logger.error("Fehler beim Einbetten des Logos '%s': %s.", logo_pfad_content, e, exc_info=True)
+        logo_file = Path(logo_pfad_content)
+        if logo_file.is_file():
+            try:
+                with open(logo_file, 'rb') as fp:
+                    img = MIMEImage(fp.read(), name=logo_file.name)
+                img.add_header('Content-ID', f'<{logo_cid}>')
+                img.add_header('Content-Disposition', 'inline', filename=logo_file.name)
+                msg.attach(img)
+            except FileNotFoundError:
+                logger.warning("Logo-Datei nicht gefunden unter %s (trotz vorheriger Prüfung).", logo_pfad_content)
+            except Exception as e:  # pylint: disable=W0718
+                logger.error("Fehler beim Einbetten des Logos '%s': %s.", logo_pfad_content, e, exc_info=True)
+        else:
+            pass
     return msg
 
 def _send_email_via_smtp(msg: MIMEMultipart, smtp_cfg: Dict[str, Any], empfaenger_email: str) -> bool:
