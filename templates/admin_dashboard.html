@@ -20,43 +20,80 @@
       {% endif %}
     {% endwith %}
 
-    <h2>Benutzerverwaltung</h2>
-    <div class="admin-link">
-        <a href="{{ url_for('add_user') }}">Neuen regulären Benutzer hinzufügen</a> |
-        <a href="{{ url_for('admin_api_user_manage') }}">API-Benutzer verwalten</a>
+
+    <div class="container">
+        <div class="column left-column">
+            <h2>Benutzerverwaltung</h2>
+            <div class="admin-link">
+                <a href="{{ url_for('add_user') }}">Neuen regulären Benutzer hinzufügen</a> |
+                <a href="{{ url_for('admin_api_user_manage') }}">API-Benutzer verwalten</a>
+            </div>
+
+            <h3>Übersicht der Benutzer:</h3>
+            {% if users %}
+            <table class="zebra-table">
+                <thead>
+                    <tr>
+                        <th>Code</th>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Kommentar</th>
+                        <th>Status</th>
+                        <th>Admin</th>
+                        <th>Saldo</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for u in users %}
+                    <tr>
+                        <td><a href="{{ url_for('admin_user_modification', target_user_id=u.id) }}">{{ u.code }}</a></td>
+                        <td>{{ u.nachname }}, {{ u.vorname }}</td>
+                        <td>{{ u.email }}</td>
+                        <td>{{ u.kommentar }}</td>
+                        <td>{% if u.is_locked %}Gesperrt{% else %}Aktiv{% endif %}</td>
+                        <td>{% if u.is_admin %}Ja{% else %}Nein{% endif %}</td>
+                        <td>{{ saldo_by_user.get(u.id, 0) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p>Keine Benutzer vorhanden.</p>
+            {% endif %}
+
+        </div>
+
+        <div class="column right-column">
+
+            <h2>Einstellungen:</h2>
+            <div class="form-section" style="margin-top: 20px;">
+                <h3>Systemeinstellungen</h3>
+                <form method="POST" action="{{ url_for('admin_dashboard') }}">
+                    <input type="hidden" name="update_system_settings" value="true">
+                    {% if system_settings %}
+                        {% for key, setting_data in system_settings.items() %}
+                        <div class="form-group" style="margin-bottom: 15px;">
+                            <label for="{{ key }}" style="font-weight: bold;">{{ setting_data.beschreibung or key.replace('_', ' ')|title }}:</label>
+                            {% if key == 'MAX_NEGATIVSALDO' %}
+                            <input type="number" id="{{ key }}" name="{{ key }}" value="{{ setting_data.wert }}" required class="form-control" style="width: 100px; padding: 8px; margin-top: 5px;">
+                            {% else %}
+                            <input type="text" id="{{ key }}" name="{{ key }}" value="{{ setting_data.wert }}" required class="form-control" style="padding: 8px; margin-top: 5px;">
+                            {% endif %}
+                            {% if setting_data.beschreibung and key != 'MAX_NEGATIVSALDO' %}
+                            <small style="display: block; color: #666; margin-top: 3px;">{{ setting_data.beschreibung }}</small>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                        <button type="submit" class="button" style="margin-top: 10px;">Systemeinstellungen speichern</button>
+                    {% else %}
+                        <p>Keine Systemeinstellungen zum Konfigurieren vorhanden oder sie konnten nicht geladen werden.</p>
+                    {% endif %}
+                </form>
+            </div>
+
+        </div>
     </div>
 
-    <h3>Übersicht der Benutzer:</h3>
-    {% if users %}
-    <table class="zebra-table">
-        <thead>
-            <tr>
-                <th>Code</th>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Kommentar</th>
-                <th>Status</th>
-                <th>Admin</th>
-                <th>Saldo</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for u in users %}
-            <tr>
-                <td><a href="{{ url_for('admin_user_modification', target_user_id=u.id) }}">{{ u.code }}</a></td>
-                <td>{{ u.nachname }}, {{ u.vorname }}</td>
-                <td>{{ u.email }}</td>
-                <td>{{ u.kommentar }}</td>
-                <td>{% if u.is_locked %}Gesperrt{% else %}Aktiv{% endif %}</td>
-                <td>{% if u.is_admin %}Ja{% else %}Nein{% endif %}</td>
-                <td>{{ saldo_by_user.get(u.id, 0) }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    {% else %}
-    <p>Keine Benutzer vorhanden.</p>
-    {% endif %}
 
     <div class="admin-link">
         <a href="{{ url_for('user_info') }}">Zur eigenen Benutzeransicht</a> |

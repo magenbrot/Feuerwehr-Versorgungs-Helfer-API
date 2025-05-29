@@ -426,7 +426,8 @@ form.inline-form-transaction button[type="submit"]:hover {
 
 .right-column {
     flex: 1; /* Passt sich an */
-    min-width: 300px; /* Mindestbreite für die rechte Spalte */
+    min-width: 100px; /* Mindestbreite für die rechte Spalte */
+    max-width: 350px;;
 }
 
 /* Spezifische Formular-Stylings für die rechte Spalte */
