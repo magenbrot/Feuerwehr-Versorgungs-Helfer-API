@@ -1,0 +1,8 @@
+Hallo {{ vorname }},
+
+wir hoffen, es geht dir gut!
+
+Du wolltest von uns informiert werden, sobald dein Saldo 0 € erreicht. Das ist jetzt der Fall.
+
+Viele Grüße
+Dein Team von der Abteilung Getränke

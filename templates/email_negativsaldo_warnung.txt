@@ -1,0 +1,13 @@
+Hallo {{ vorname }},
+
+wir hoffen, es geht dir gut!
+
+Kurze Info von uns: Dein Konto für Getränke und Essen ist aktuell bei {{ saldo }} €.
+
+Bitte denk doch daran, es bei deinem nächsten Dienst oder bei Gelegenheit wieder auszugleichen. Sprich uns dafür einfach kurz an!
+
+Danke dir und viele Grüße
+Dein Team von der Abteilung Getränke
+
+PS: Wusstest du, dass du uns auch eine Einzugsermächtigung erteilen kannst?
+    So können wir das Guthaben auch einfach und bequem von deinem Konto abbuchen!
