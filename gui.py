@@ -351,6 +351,7 @@ def _handle_add_user_nfc_token_admin(form_data, target_user_id):
         form_data (werkzeug.datastructures.ImmutableMultiDict): Die Formulardaten.
         target_user_id (int): Die ID des Benutzers, für den der Token hinzugefügt wird.
     """
+
     nfc_token_name = form_data.get('nfc_token_name')
     nfc_token_daten = form_data.get('nfc_token_daten') # HEX Format erwartet
     if not nfc_token_name or not nfc_token_daten:
@@ -368,6 +369,7 @@ def _handle_delete_user_nfc_token_admin(form_data, target_user_id):
         target_user_id (int): Die ID des Benutzers, dessen Token gelöscht wird.
                                (Wird in delete_user_nfc_token zur Sicherheit mitgeprüft)
     """
+
     nfc_token_id = form_data.get('nfc_token_id')
     if not nfc_token_id:
         flash('Keine Token ID zum Löschen übergeben.', 'error')
@@ -687,6 +689,7 @@ def get_all_api_users():
         list: Eine Liste von Dictionaries, wobei jedes Dictionary einen API-Benutzer repräsentiert
               (id, username). Gibt eine leere Liste zurück, falls ein Fehler auftritt.
     """
+
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if cnx:
         cursor = cnx.cursor(dictionary=True)
@@ -715,6 +718,7 @@ def get_api_user_by_id(api_user_id):
         dict: Ein Dictionary mit den API-Benutzerdaten (id, username)
               oder None, falls kein API-Benutzer gefunden wird.
     """
+
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if cnx:
         cursor = cnx.cursor(dictionary=True)
@@ -743,6 +747,7 @@ def get_api_keys_for_api_user(api_user_id):
         list: Eine Liste von Dictionaries, wobei jedes Dictionary einen API-Key repräsentiert
               (id, api_key). Gibt eine leere Liste zurück, falls keine Keys gefunden werden oder ein Fehler auftritt.
     """
+
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if cnx:
         cursor = cnx.cursor(dictionary=True)
@@ -897,6 +902,7 @@ def add_regular_user_db(user_data):
     Returns:
         bool: True bei Erfolg, False bei Fehler (z.B. Datenbankfehler, doppelter Code).
     """
+
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if cnx:
         cursor = cnx.cursor()
@@ -941,6 +947,7 @@ def add_api_user_db(username):
     Returns:
         int or None: Die ID des neu erstellten API-Benutzers bei Erfolg, sonst None.
     """
+
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if cnx:
         cursor = cnx.cursor()
@@ -974,6 +981,7 @@ def add_api_key_for_user_db(api_user_id, api_key_string):
     Returns:
         bool: True bei Erfolg, False bei Fehler.
     """
+
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if cnx:
         cursor = cnx.cursor()
@@ -1006,6 +1014,7 @@ def delete_api_key_db(api_key_id):
     Returns:
         bool: True bei Erfolg, False bei Fehler.
     """
+
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if cnx:
         cursor = cnx.cursor()
@@ -1035,6 +1044,7 @@ def delete_api_user_and_keys_db(api_user_id):
     Returns:
         bool: True bei Erfolg, False bei Fehler.
     """
+
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if cnx:
         cursor = cnx.cursor()
@@ -1066,6 +1076,7 @@ def _handle_delete_all_user_transactions(target_user_id):
     Args:
         target_user_id (int): Die ID des Benutzers, dessen Transaktionen gelöscht werden sollen.
     """
+
     if delete_all_transactions(target_user_id):
         flash('Alle Transaktionen für diesen Benutzer wurden gelöscht.', 'success')
     else:
@@ -1079,6 +1090,7 @@ def _handle_add_user_transaction(form_data, target_user_id):
         form_data (werkzeug.datastructures.ImmutableMultiDict): Die Formulardaten.
         target_user_id (int): Die ID des Benutzers, für den die Transaktion hinzugefügt wird.
     """
+
     beschreibung = form_data.get('beschreibung', '')
     saldo_aenderung_str = form_data.get('saldo_aenderung')
     if not beschreibung:
@@ -1103,6 +1115,7 @@ def _handle_toggle_user_lock_state(target_user_id, target_user, lock_state):
         target_user (dict): Das Benutzerobjekt des Zielbenutzers.
         lock_state (bool): True zum Sperren, False zum Entsperren.
     """
+
     action_text = "gesperrt" if lock_state else "entsperrt"
     if toggle_user_lock(target_user_id, lock_state):
         flash(f'Benutzer "{target_user.get("nachname", "")}, {target_user.get("vorname", "")}" (ID {target_user_id}) wurde {action_text}.', 'success')
@@ -1118,6 +1131,7 @@ def _handle_toggle_user_admin_state(target_user_id, target_user, admin_state):
         target_user (dict): Das Benutzerobjekt des Zielbenutzers.
         admin_state (bool): True zum Befördern, False zum Degradieren.
     """
+
     action_text = "zum Admin befördert" if admin_state else "zum Benutzer degradiert"
     role_text = "Benutzer" if admin_state else "Admin"
     if toggle_user_admin(target_user_id, admin_state):
@@ -1137,6 +1151,7 @@ def _handle_delete_target_user(target_user_id, target_user, logged_in_user_id):
     Returns:
         bool: True, wenn der Benutzer gelöscht wurde und eine Weiterleitung zum Dashboard erfolgen soll, sonst False.
     """
+
     if target_user_id == logged_in_user_id:
         flash("Sie können sich nicht selbst löschen.", "warning")
         return False # Keine Weiterleitung zum Dashboard
@@ -1155,6 +1170,7 @@ def _handle_update_user_comment_admin(form_data, target_user_id):
         form_data (werkzeug.datastructures.ImmutableMultiDict): Die Formulardaten.
         target_user_id (int): Die ID des Benutzers, dessen Kommentar aktualisiert wird.
     """
+
     comment = form_data.get('kommentar')
     # Leerer Kommentar ist erlaubt, um ihn zu löschen. Validierung hier ggf. anpassen.
     # Die DB-Funktion sollte leere Strings handhaben können (z.B. als NULL speichern oder leer).
@@ -1171,6 +1187,7 @@ def _handle_update_user_email_admin(form_data, target_user_id):
         form_data (werkzeug.datastructures.ImmutableMultiDict): Die Formulardaten.
         target_user_id (int): Die ID des Benutzers, dessen E-Mail aktualisiert wird.
     """
+
     email = form_data.get('email')
     if update_user_email(target_user_id, email):
         flash('Emailadresse erfolgreich aktualisiert.', 'success')
@@ -1187,6 +1204,7 @@ def _validate_add_user_form(form_data):
     Returns:
         bool: True, wenn die Daten gültig sind, sonst False. Fehlermeldungen werden geflasht.
     """
+
     errors = False
     required_fields = ['code', 'nachname', 'vorname', 'password', 'confirm_password']
     for field in required_fields:
@@ -1197,7 +1215,7 @@ def _validate_add_user_form(form_data):
 
     if errors: # Wenn schon Pflichtfelder fehlen, sind die folgenden Prüfungen ggf. nicht sinnvoll
         if not all(form_data.get(field) for field in ['password', 'confirm_password']): # Sicherstellen, dass beide PW-Felder existieren
-            flash("Passwortfelder dürfen nicht leer sein.", "error") # Redundand, aber zur Sicherheit
+            flash("Passwortfelder dürfen nicht leer sein.", "error") # Redundant, aber zur Sicherheit
         return False # Frühzeitiger Ausstieg bei fehlenden Pflichtfeldern
 
     if form_data.get('password') != form_data.get('confirm_password'):
@@ -1211,6 +1229,33 @@ def _validate_add_user_form(form_data):
         flash(f"Der Code '{form_data.get('code')}' wird bereits verwendet. Bitte wählen Sie einen anderen.", "error")
         errors = True
     return not errors
+
+def _process_system_setting_update(key, new_value_str):
+    """
+    Verarbeitet die Aktualisierung einer einzelnen Systemeinstellung.
+    Beinhaltet Validierung für MAX_NEGATIVSALDO.
+
+    Args:
+        key (str): Der Schlüssel der Systemeinstellung.
+        new_value_str (str): Der neue Wert als String.
+
+    Returns:
+        bool: True, wenn die Aktualisierung für diese Einstellung erfolgreich war, sonst False.
+    """
+    if key == 'MAX_NEGATIVSALDO':
+        try:
+            val_int = int(new_value_str)
+            if val_int > 0:
+                flash("Der Wert für 'Maximale Negativsaldo-Grenze' muss 0 oder negativ sein.", "error")
+                return False
+        except ValueError:
+            flash("Der Wert für 'Maximale Negativsaldo-Grenze' muss eine ganze Zahl sein.", "error")
+            return False
+
+    if not update_system_setting(key, new_value_str):
+        # Fehler wird bereits in update_system_setting geflasht
+        return False
+    return True
 
 # --- Flask Routen ---
 
@@ -1265,6 +1310,7 @@ def user_info():
         str oder werkzeug.wrappers.response.Response: Die gerenderte Benutzerinformationsseite (`user_info.html`)
         oder eine Weiterleitung zur Login-Seite bei Fehlern oder wenn nicht eingeloggt.
     """
+
     user_id = session.get('user_id')
     if not user_id:
         return redirect(BASE_URL + url_for('login'))
@@ -1345,11 +1391,12 @@ def user_info():
                            all_notification_types=all_notification_types_data, # Korrigierter Variablenname
                            user_notification_settings=user_notification_settings_data) # Korrigierter Variablenname
 
-@app.route('/admin', methods=['GET', 'POST']) # Wichtig: POST hinzugefügt
+@app.route('/admin', methods=['GET', 'POST'])
 def admin_dashboard():
     """
     Zeigt das Admin-Dashboard mit einer Benutzerübersicht und deren Salden.
     Ermöglicht Admins zudem die Verwaltung von globalen Systemeinstellungen.
+    Refaktorisiert, um die Verschachtelungstiefe im POST-Block zu reduzieren.
 
     Bei GET-Anfragen werden Benutzerdaten und aktuelle Systemeinstellungen geladen.
     Bei POST-Anfragen können Systemeinstellungen aktualisiert werden.
@@ -1359,60 +1406,52 @@ def admin_dashboard():
         str oder werkzeug.wrappers.response.Response: Die gerenderte Admin-Dashboard-Seite (`admin_dashboard.html`)
         oder eine Weiterleitung bei fehlenden Rechten, Fehlern oder wenn nicht eingeloggt.
     """
-    user_id = session.get('user_id') #
+
+    user_id = session.get('user_id')
     if not user_id:
-        flash("Bitte zuerst einloggen.", "info") #
-        return redirect(BASE_URL + url_for('login')) #
+        flash("Bitte zuerst einloggen.", "info")
+        return redirect(BASE_URL + url_for('login'))
 
-    admin_user = get_user_by_id(user_id) #
-    if not (admin_user and admin_user['is_admin']): #
-        flash("Zugriff verweigert. Admin-Rechte erforderlich.", "error") #
-        return redirect(BASE_URL + url_for('user_info')) #
+    admin_user = get_user_by_id(user_id)
+    if not (admin_user and admin_user['is_admin']):
+        flash("Zugriff verweigert. Admin-Rechte erforderlich.", "error")
+        return redirect(BASE_URL + url_for('user_info'))
 
-    if admin_user.get('is_locked'): #
-        session.pop('user_id', None) #
-        flash('Ihr Administratorkonto wurde gesperrt.', 'error') #
-        return redirect(BASE_URL + url_for('login')) #
+    if admin_user.get('is_locked'):
+        session.pop('user_id', None)
+        flash('Ihr Administratorkonto wurde gesperrt.', 'error')
+        return redirect(BASE_URL + url_for('login'))
 
     if request.method == 'POST':
         if 'update_system_settings' in request.form:
-            current_system_settings_keys = get_all_system_settings().keys() # Nur die Schlüssel für die Iteration holen
-            settings_updated_successfully = True
+            settings_updated_successfully = True # Gesamterfolg aller Einstellungen
 
-            for key in current_system_settings_keys:
+            # Hole alle Schlüssel aus der DB, um sicherzustellen, dass nur existierende verarbeitet werden
+            # und um die Reihenfolge der Verarbeitung ggf. zu steuern (obwohl hier nicht kritisch)
+            all_db_setting_keys = get_all_system_settings().keys()
+
+            for key in all_db_setting_keys:
                 if key in request.form: # Nur verarbeiten, wenn das Feld im Formular gesendet wurde
                     new_value = request.form[key].strip()
-
-                    if key == 'MAX_NEGATIVSALDO':
-                        try:
-                            val_int = int(new_value)
-                            if val_int > 0:
-                                flash("Der Wert für 'Maximale Negativsaldo-Grenze' muss 0 oder negativ sein.", "error")
-                                settings_updated_successfully = False
-                                continue
-                        except ValueError:
-                            flash("Der Wert für 'Maximale Negativsaldo-Grenze' muss eine ganze Zahl sein.", "error")
-                            settings_updated_successfully = False
-                            continue
-
-                    if not update_system_setting(key, new_value):
+                    if not _process_system_setting_update(key, new_value):
                         settings_updated_successfully = False
+                        # Optional: Hier `break` einfügen, wenn bei erstem Fehler abgebrochen werden soll
 
             if settings_updated_successfully:
                 flash("Systemeinstellungen erfolgreich aktualisiert.", "success")
-            # Individuelle Fehler oder keine Änderungen wurden bereits geflasht
-            return redirect(BASE_URL + url_for('admin_dashboard'))
+            # Individuelle Fehler wurden bereits in _process_system_setting_update oder update_system_setting geflasht
+        return redirect(BASE_URL + url_for('admin_dashboard'))
 
     # GET Request
-    users_data = get_all_users() #
-    saldo_by_user_data = get_saldo_by_user() #
+    users_data = get_all_users()
+    saldo_by_user_data = get_saldo_by_user()
     system_settings_data = get_all_system_settings()
 
     return render_template('admin_dashboard.html',
                            user=admin_user,
-                           users=users_data, # Korrigierter Variablenname
-                           saldo_by_user=saldo_by_user_data, # Korrigierter Variablenname
-                           system_settings=system_settings_data) # Korrigierter Variablenname
+                           users=users_data,
+                           saldo_by_user=saldo_by_user_data,
+                           system_settings=system_settings_data)
 
 @app.route('/admin/add_user', methods=['GET', 'POST'])
 def add_user():
@@ -1423,6 +1462,7 @@ def add_user():
         str oder werkzeug.wrappers.response.Response: Die gerenderte Seite zum Hinzufügen
         eines Benutzers oder eine Weiterleitung.
     """
+
     user_id = session.get('user_id')
     if not user_id:
         flash("Bitte zuerst einloggen.", "info")
@@ -1756,52 +1796,52 @@ def admin_user_modification(target_user_id):
 
     if request.method == 'POST':
         form_data = request.form
-        action_redirect_to_dashboard = False
+        action_handled = False
+        # Standard-Weiterleitung nach einer Aktion (außer Benutzerlöschung)
+        redirect_url = BASE_URL + url_for('admin_user_modification', target_user_id=target_user_id)
 
-        if 'delete_transactions' in form_data:
-            _handle_delete_all_user_transactions(target_user_id)
-        elif 'add_transaction' in form_data:
-            _handle_add_user_transaction(form_data, target_user_id)
-        elif 'lock_user' in form_data:
-            _handle_toggle_user_lock_state(target_user_id, target_user, True)
-        elif 'unlock_user' in form_data:
-            _handle_toggle_user_lock_state(target_user_id, target_user, False)
-        elif 'promote_user' in form_data:
-            _handle_toggle_user_admin_state(target_user_id, target_user, True)
-        elif 'demote_user' in form_data:
-            _handle_toggle_user_admin_state(target_user_id, target_user, False)
-        elif 'delete_user' in form_data:
+        action_handlers = {
+            'delete_transactions': lambda: _handle_delete_all_user_transactions(target_user_id),
+            'add_transaction': lambda: _handle_add_user_transaction(form_data, target_user_id),
+            'lock_user': lambda: _handle_toggle_user_lock_state(target_user_id, target_user, True),
+            'unlock_user': lambda: _handle_toggle_user_lock_state(target_user_id, target_user, False),
+            'promote_user': lambda: _handle_toggle_user_admin_state(target_user_id, target_user, True),
+            'demote_user': lambda: _handle_toggle_user_admin_state(target_user_id, target_user, False),
+            'add_user_nfc_token': lambda: _handle_add_user_nfc_token_admin(form_data, target_user_id),
+            'update_user_comment': lambda: _handle_update_user_comment_admin(form_data, target_user_id),
+            'update_user_email': lambda: _handle_update_user_email_admin(form_data, target_user_id),
+            'delete_user_nfc_token': lambda: _handle_delete_user_nfc_token_admin(form_data, target_user_id),
+        }
+
+        for action_key, handler_func in action_handlers.items():
+            if action_key in form_data:
+                handler_func()
+                action_handled = True
+                break # Nur eine Aktion pro POST-Request annehmen
+
+        # Spezielle Behandlung für 'delete_user', da es die Weiterleitungs-URL ändern kann
+        if 'delete_user' in form_data and not action_handled: # 'not action_handled' zur Sicherheit
             if _handle_delete_target_user(target_user_id, target_user, logged_in_user_id):
-                action_redirect_to_dashboard = True
-        elif 'add_user_nfc_token' in form_data:
-            _handle_add_user_nfc_token_admin(form_data, target_user_id)
-        elif 'update_user_comment' in form_data:
-            _handle_update_user_comment_admin(form_data, target_user_id)
-        elif 'update_user_email' in form_data:
-            _handle_update_user_email_admin(form_data, target_user_id)
-        elif 'delete_user_nfc_token' in form_data:
-            _handle_delete_user_nfc_token_admin(form_data, target_user_id)
-        else:
+                redirect_url = BASE_URL + url_for('admin_dashboard')
+            action_handled = True
+
+        if not action_handled:
             flash('Ungültige oder fehlende Aktion.', 'error')
 
-        if action_redirect_to_dashboard:
-            return redirect(BASE_URL + url_for('admin_dashboard'))
-        return redirect(BASE_URL + url_for('admin_user_modification', target_user_id=target_user_id))
+        return redirect(redirect_url)
 
     # GET Request
     nfc_tokens = get_user_nfc_tokens(target_user_id)
     transactions = get_user_transactions(target_user_id)
     saldo = get_saldo_for_user(target_user_id)
-    # Target_user wurde oben bereits neu geladen für den Fall von Änderungen (z.B. Lock-Status)
-    # die direkt im POST verarbeitet und dann für das Rendering im GET relevant sind.
-    # Für den GET-Request holen wir target_user ggf. erneut, um den aktuellsten Stand zu haben.
-    refreshed_target_user = get_user_by_id(target_user_id)
-    if not refreshed_target_user: #Sollte nicht passieren, wenn oben erfolgreich
+
+    refreshed_target_user = get_user_by_id(target_user_id) # Für aktuelle Daten im Template
+    if not refreshed_target_user:
         flash("Zielbenutzer konnte nicht erneut geladen werden.", "error")
         return redirect(BASE_URL + url_for('admin_dashboard'))
 
     return render_template('admin_user_modification.html',
-                           user=refreshed_target_user, # Den aktualisierten Benutzer übergeben
+                           user=refreshed_target_user,
                            nfc_tokens=nfc_tokens,
                            transactions=transactions,
                            saldo=saldo,

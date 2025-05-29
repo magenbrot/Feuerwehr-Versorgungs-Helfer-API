@@ -4,10 +4,9 @@ import base64
 import sys
 from functools import wraps
 from pathlib import Path
-from typing import Optional # Hinzugefügt für Type Hints
-
+from typing import Optional, Dict, Any
 from flask import Flask, jsonify, request, render_template
-from mysql.connector import Error # type: ignore
+from mysql.connector import Error
 import config
 import db_utils
 import email_sender
@@ -243,8 +242,8 @@ def aktuellen_saldo_pruefen_und_benachrichtigen(target_user_id: int):
         app.logger.warning("Benutzerdetails für ID %s nicht gefunden in aktuellen_saldo_pruefen_und_benachrichtigen.", target_user_id)
         return
 
-    user_vorname = user_details['vorname']
-    user_email = user_details['email']
+    user_vorname = user_details.get('vorname', '') # Default, falls 'vorname' fehlt
+    user_email = user_details.get('email')
 
     if not user_email:
         app.logger.info("Benutzer %s hat keine E-Mail-Adresse hinterlegt. Keine Saldo-Benachrichtigungen möglich.", target_user_id)
@@ -273,6 +272,7 @@ def aktuellen_saldo_pruefen_und_benachrichtigen(target_user_id: int):
     finally:
         if cnx:
             db_utils.DatabaseConnectionPool.close_connection(cnx)
+
 
 def get_user_by_api_key(api_key_value: str) -> Optional[tuple[int, str]]: # api_key umbenannt
     """
@@ -369,26 +369,34 @@ def finde_benutzer_zu_nfc_token(token_base64: str) -> Optional[dict]:
         if cnx:
             db_utils.DatabaseConnectionPool.close_connection(cnx)
 
-def _send_new_transaction_email(user_email: str, user_vorname: str, user_id: int,
-                                trans_beschreibung: str, trans_saldo_aenderung: float, neuer_saldo_aktuell: float):
-    """Hilfsfunktion zum Senden der "Neue Transaktion" E-Mail."""
+def _send_new_transaction_email(user_details: Dict[str, Any], transaction_details: Dict[str, Any]):
+    """
+    Hilfsfunktion zum Senden der "Neue Transaktion" E-Mail.
+    Nimmt Benutzer- und Transaktionsdetails als Dictionaries entgegen.
+
+    Args:
+        user_details (Dict[str, Any]): Enthält 'email', 'vorname', 'id' des Benutzers.
+        transaction_details (Dict[str, Any]): Enthält 'beschreibung', 'saldo_aenderung', 'neuer_saldo'.
+    """
+
     email_params = {
-        'empfaenger_email': user_email,
+        'empfaenger_email': user_details['email'],
         'betreff': "Neue Transaktion auf deinem Konto",
         'template_name_html': "email_neue_transaktion.html",
         'template_name_text': "email_neue_transaktion.txt",
         'template_context': {
-            "vorname": user_vorname,
-            "beschreibung_transaktion": trans_beschreibung,
-            "saldo_aenderung": trans_saldo_aenderung,
-            "neuer_saldo": neuer_saldo_aktuell
+            "vorname": user_details['vorname'],
+            "beschreibung_transaktion": transaction_details['beschreibung'],
+            "saldo_aenderung": transaction_details['saldo_aenderung'],
+            "neuer_saldo": transaction_details['neuer_saldo']
         },
         'logo_dateipfad': str(Path("static/logo/logo-80x109.png"))
     }
     if prepare_and_send_email(email_params, config.smtp_config):
-        app.logger.info("Neue Transaktion E-Mail an %s (ID: %s) gesendet.", user_email, user_id)
+        app.logger.info("Neue Transaktion E-Mail an %s (ID: %s) gesendet.", user_details['email'], user_details['id'])
     else:
-        app.logger.error("Fehler beim Senden der Neue Transaktion E-Mail an %s (ID: %s).", user_email, user_id)
+        app.logger.error("Fehler beim Senden der Neue Transaktion E-Mail an %s (ID: %s).", user_details['email'], user_details['id'])
+
 
 @app.route('/health-protected', methods=['GET'])
 @api_key_required
@@ -504,11 +512,17 @@ def nfc_transaction(api_user_id_auth: int, api_username_auth: str):
 
         # Außerhalb des 'with cursor' Blocks, da DB Operationen darin abgeschlossen sein sollten.
         if benutzer_info.get('email') and get_user_notification_preference(benutzer_info['id'], 'NEUE_TRANSAKTION'):
-            _send_new_transaction_email(
-                user_email=benutzer_info['email'], user_vorname=benutzer_info['vorname'], user_id=benutzer_info['id'],
-                trans_beschreibung=daten['beschreibung'], trans_saldo_aenderung=trans_saldo_aenderung,
-                neuer_saldo_aktuell=neuer_saldo
-            )
+            user_details_for_email = {
+                'email': benutzer_info['email'],
+                'vorname': benutzer_info.get('vorname', ''),
+                'id': benutzer_info['id']
+            }
+            transaction_details_for_email = {
+                'beschreibung': daten['beschreibung'],
+                'saldo_aenderung': trans_saldo_aenderung,
+                'neuer_saldo': neuer_saldo
+            }
+            _send_new_transaction_email(user_details_for_email, transaction_details_for_email)
         aktuellen_saldo_pruefen_und_benachrichtigen(benutzer_info['id'])
 
         return jsonify({'message': f"Danke {benutzer_info['vorname']}. Dein aktueller Saldo beträgt: {neuer_saldo}."}), 200
@@ -570,11 +584,17 @@ def person_transaktion_erstellen(api_user_id_auth: int, api_username_auth: str, 
 
         # Außerhalb des 'with cursor' Blocks
         if user_info.get('email') and get_user_notification_preference(user_info['id'], 'NEUE_TRANSAKTION'):
-            _send_new_transaction_email(
-                user_email=user_info['email'], user_vorname=user_info['vorname'], user_id=user_info['id'],
-                trans_beschreibung=daten['beschreibung'], trans_saldo_aenderung=saldo_aenderung_val,
-                neuer_saldo_aktuell=neuer_saldo
-            )
+            user_details_for_email = {
+                'email': user_info['email'],
+                'vorname': user_info.get('vorname', ''),
+                'id': user_info['id']
+            }
+            transaction_details_for_email = {
+                'beschreibung': daten['beschreibung'],
+                'saldo_aenderung': saldo_aenderung_val,
+                'neuer_saldo': neuer_saldo
+            }
+            _send_new_transaction_email(user_details_for_email, transaction_details_for_email)
         aktuellen_saldo_pruefen_und_benachrichtigen(user_info['id'])
 
         return jsonify({'message': f'Transaktion für {user_info["vorname"]} (Code {code}) erfolgreich erstellt. Neuer Saldo: {neuer_saldo}.'}), 201
@@ -615,7 +635,7 @@ def get_user_details_for_notification_by_code(code_val: str) -> Optional[dict]: 
 
 @app.route('/saldo-alle', methods=['GET'])
 @api_key_required
-def get_alle_summe(api_user_id: int, api_username: str): # Parameter umbenannt
+def get_alle_summe(api_user_id: int, api_username: str):
     """
     Gibt das Saldo aller Personen in der Datenbank zurück (nur für authentifizierte API-Benutzer).
 
@@ -633,9 +653,9 @@ def get_alle_summe(api_user_id: int, api_username: str): # Parameter umbenannt
     try:
         with cnx.cursor(dictionary=True) as cursor:
             cursor.execute(
-                "SELECT u.nachname AS nachname, u.vorname AS vorname, SUM(t.saldo_aenderung) AS saldo " \
-                "FROM transactions AS t INNER JOIN users AS u ON t.user_id = u.id GROUP BY u.id, u.nachname, u.vorname ORDER BY saldo DESC;") # u.id zu GROUP BY hinzugefügt
-            personen_saldo = cursor.fetchall() # Umbenannt
+                "SELECT u.id, u.nachname AS nachname, u.vorname AS vorname, SUM(t.saldo_aenderung) AS saldo " \
+                "FROM users AS u LEFT JOIN transactions AS t ON u.id = t.user_id GROUP BY u.id, u.nachname, u.vorname ORDER BY saldo DESC, u.nachname, u.vorname;")
+            personen_saldo = cursor.fetchall()
         app.logger.info("Saldo aller Personen wurde ermittelt (%s Einträge).", len(personen_saldo))
         return jsonify(personen_saldo)
     except Error as err:
