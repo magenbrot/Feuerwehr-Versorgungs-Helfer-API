@@ -1396,7 +1396,6 @@ def admin_dashboard():
     """
     Zeigt das Admin-Dashboard mit einer Benutzerübersicht und deren Salden.
     Ermöglicht Admins zudem die Verwaltung von globalen Systemeinstellungen.
-    Refaktorisiert, um die Verschachtelungstiefe im POST-Block zu reduzieren.
 
     Bei GET-Anfragen werden Benutzerdaten und aktuelle Systemeinstellungen geladen.
     Bei POST-Anfragen können Systemeinstellungen aktualisiert werden.

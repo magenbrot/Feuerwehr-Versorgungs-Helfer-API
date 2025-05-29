@@ -108,7 +108,6 @@ def sende_formatierte_email(empfaenger_email: str, betreff: str, content: Dict[s
     """
     Versendet eine formatierte HTML-E-Mail mit optionalem Logo und Text-Fallback.
     Verwendet Dictionaries für Inhalt und SMTP-Konfiguration.
-    Refaktorisiert zur Reduzierung von lokalen Variablen und Anweisungen.
 
     Args:
         empfaenger_email: Die E-Mail-Adresse des Empfängers.
