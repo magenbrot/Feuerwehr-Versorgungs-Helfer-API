@@ -2,26 +2,25 @@
 
 import smtplib
 import re
+#import traceback # Beibehalten für detaillierteres Logging bei Bedarf
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.image import MIMEImage
 from pathlib import Path
 from typing import Dict, Any, Optional
-
-import logging
-logger = logging.getLogger(__name__) # Erstellt einen Logger für dieses Modul
+from flask import current_app
 
 def _validate_smtp_config(smtp_cfg: Dict[str, Any]) -> bool:
     """Prüft die SMTP-Konfiguration auf Vollständigkeit und korrekten Port-Typ."""
 
     required_keys = ['host', 'port', 'user', 'password', 'sender']
     if not all(key in smtp_cfg and smtp_cfg[key] is not None for key in required_keys):
-        logger.error("Unvollständige SMTP-Konfiguration. Benötigt: %s.", ", ".join(required_keys))
+        current_app.logger.error("Unvollständige SMTP-Konfiguration. Benötigt: %s.", ", ".join(required_keys))
         return False
     try:
-        int(smtp_cfg['port'])
+        int(smtp_cfg['port']) # Prüft, ob Port eine Zahl ist
     except ValueError:
-        logger.error("SMTP-Port '%s' ist keine gültige Zahl.", smtp_cfg.get('port'))
+        current_app.logger.error("SMTP-Port '%s' ist keine gültige Zahl.", smtp_cfg.get('port'))
         return False
     return True
 
@@ -30,11 +29,9 @@ def _prepare_html_with_logo(html_content: str, logo_pfad_content: Optional[str],
 
     html_to_send = html_content
     if logo_pfad_content and Path(logo_pfad_content).is_file():
-        # Ersetze cid:logo nur, wenn Logo vorhanden und gültig
         html_to_send = html_to_send.replace('cid:logo', f'cid:{logo_cid}')
     elif 'cid:logo' in html_to_send:
-        # Logo-Platzhalter ist da, aber kein gültiges Logo
-        logger.warning("Logo-Platzhalter 'cid:logo' im HTML gefunden, aber kein gültiger logo_pfad ('%s') oder Datei nicht gefunden. Logo-Referenz wird entfernt.", logo_pfad_content)
+        current_app.logger.warning("Logo-Platzhalter 'cid:logo' im HTML gefunden, aber kein gültiger logo_pfad ('%s') oder Datei nicht gefunden. Logo-Referenz wird entfernt.", logo_pfad_content)
         html_to_send = re.sub(r'<img[^>]*src\s*=\s*["\']cid:logo["\'][^>]*>', '', html_content, flags=re.IGNORECASE)
     return html_to_send
 
@@ -52,7 +49,7 @@ def _create_mime_message(empfaenger_email: str, betreff: str, content: Dict[str,
     text_part = MIMEText(content.get('text', ''), 'plain', 'utf-8')
     msg_alternative.attach(text_part)
 
-    logo_cid = 'logoimage_cid_01' # Eindeutige CID
+    logo_cid = 'logoimage_cid_01'
     logo_pfad_content = content.get('logo_pfad')
 
     html_final_content = _prepare_html_with_logo(content.get('html', ''), logo_pfad_content, logo_cid)
@@ -69,9 +66,9 @@ def _create_mime_message(empfaenger_email: str, betreff: str, content: Dict[str,
                 img.add_header('Content-Disposition', 'inline', filename=logo_file.name)
                 msg.attach(img)
             except FileNotFoundError:
-                logger.warning("Logo-Datei nicht gefunden unter %s (trotz vorheriger Prüfung).", logo_pfad_content)
+                current_app.logger.warning("Logo-Datei nicht gefunden unter %s (trotz vorheriger Prüfung).", logo_pfad_content)
             except Exception as e:  # pylint: disable=W0718
-                logger.error("Fehler beim Einbetten des Logos '%s': %s.", logo_pfad_content, e, exc_info=True)
+                current_app.logger.error("Fehler beim Einbetten des Logos '%s': %s.", logo_pfad_content, e, exc_info=True)
         else:
             pass
     return msg
@@ -84,27 +81,28 @@ def _send_email_via_smtp(msg: MIMEMultipart, smtp_cfg: Dict[str, Any], empfaenge
             server.starttls()
             server.login(smtp_cfg['user'], smtp_cfg['password'])
             server.sendmail(smtp_cfg['sender'], empfaenger_email, msg.as_string())
-        logger.info("E-Mail erfolgreich an %s gesendet!", empfaenger_email)
+        current_app.logger.info("E-Mail erfolgreich an %s gesendet!", empfaenger_email)
         return True
     except smtplib.SMTPAuthenticationError:
-        logger.error("SMTP Authentifizierungsfehler für Benutzer %s. Überprüfe Anmeldedaten.", smtp_cfg.get('user'))
+        current_app.logger.error("SMTP Authentifizierungsfehler für Benutzer %s. Überprüfe Anmeldedaten.", smtp_cfg.get('user'))
     except smtplib.SMTPServerDisconnected:
-        logger.error("Die Verbindung zum SMTP-Server wurde unerwartet getrennt.")
+        current_app.logger.error("Die Verbindung zum SMTP-Server wurde unerwartet getrennt.")
     except smtplib.SMTPConnectError as e:
-        logger.error("Fehler beim Verbinden mit dem SMTP-Server %s:%s. Fehler: %s", smtp_cfg.get('host'), smtp_cfg.get('port'), e)
+        current_app.logger.error("Fehler beim Verbinden mit dem SMTP-Server %s:%s. Fehler: %s", smtp_cfg.get('host'), smtp_cfg.get('port'), e)
     except smtplib.SMTPHeloError as e:
-        logger.error("Der Server hat auf HELO/EHLO nicht korrekt geantwortet: %s", e)
+        current_app.logger.error("Der Server hat auf HELO/EHLO nicht korrekt geantwortet: %s", e)
     except smtplib.SMTPRecipientsRefused as e:
-        logger.error("Alle Empfänger wurden abgelehnt: %s", e.recipients) # type: ignore
+        current_app.logger.error("Alle Empfänger wurden abgelehnt: %s", e.recipients) # type: ignore
     except smtplib.SMTPSenderRefused as e:
-        logger.error("Die Absenderadresse wurde abgelehnt: %s", e.sender)
+        current_app.logger.error("Die Absenderadresse wurde abgelehnt: %s", e.sender)
     except smtplib.SMTPDataError as e:
-        logger.error("Der Server hat die Nachrichtendaten nicht akzeptiert: %s - %s", e.smtp_code, e.smtp_error)
+        current_app.logger.error("Der Server hat die Nachrichtendaten nicht akzeptiert: %s - %s", e.smtp_code, e.smtp_error)
     except ConnectionRefusedError:
-        logger.error("Verbindung zu %s:%s wurde abgelehnt. Läuft der Server und ist der Port korrekt?", smtp_cfg.get('host'), smtp_cfg.get('port'))
+        current_app.logger.error("Verbindung zu %s:%s wurde abgelehnt. Läuft der Server und ist der Port korrekt?", smtp_cfg.get('host'), smtp_cfg.get('port'))
     except Exception as e:  # pylint: disable=W0718
-        logger.error("Ein unerwarteter Fehler ist beim E-Mail-Versand aufgetreten: %s", e, exc_info=True)
+        current_app.logger.error("Ein unerwarteter Fehler ist beim E-Mail-Versand aufgetreten: %s", e, exc_info=True)
     return False
+
 
 def sende_formatierte_email(empfaenger_email: str, betreff: str, content: Dict[str, Any], smtp_cfg: Dict[str, Any]) -> bool:
     """
