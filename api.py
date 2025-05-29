@@ -597,7 +597,7 @@ def person_transaktion_erstellen(api_user_id_auth: int, api_username_auth: str, 
             _send_new_transaction_email(user_details_for_email, transaction_details_for_email)
         aktuellen_saldo_pruefen_und_benachrichtigen(user_info['id'])
 
-        return jsonify({'message': f"Transaktion für {user_info["vorname"]} (Code {code}) erfolgreich erstellt. Neuer Saldo: {neuer_saldo}."}), 201
+        return jsonify({'message': f"Transaktion für {user_info['vorname']} (Code {code}) erfolgreich erstellt. Neuer Saldo: {neuer_saldo}."}), 201
 
     except Error as err:
         if cnx.is_connected():
