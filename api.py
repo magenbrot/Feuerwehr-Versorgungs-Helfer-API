@@ -195,7 +195,7 @@ def _send_saldo_null_benachrichtigung(user_id: int, vorname: str, email: str, ak
         app.logger.error("Fehler beim Senden der Saldo-Null Benachrichtigung an %s (ID: %s).", email, user_id)
 
 def _send_negativsaldo_benachrichtigung(user_id: int, vorname: str, email: str, aktueller_saldo: float, logo_pfad: str):
-    """Hilfsfunktion zum Senden der "Negativsaldo" Benachrichtigung. Refaktorisiert für weniger Verschachtelung."""
+    """Hilfsfunktion zum Senden der "Negativsaldo" Benachrichtigung."""
     max_negativ_saldo_str = get_system_notification_setting('MAX_NEGATIVSALDO')
     if max_negativ_saldo_str is None:
         app.logger.info("MAX_NEGATIVSALDO nicht konfiguriert, keine Negativsaldo-Prüfung für User %s.", user_id)
@@ -232,7 +232,6 @@ def aktuellen_saldo_pruefen_und_benachrichtigen(target_user_id: int):
     Prüft den aktuellen Saldo eines Benutzers nach einer Transaktion und versendet ggf.
     E-Mail-Benachrichtigungen für "Saldo erreicht Null" oder "Negativsaldo-Grenze erreicht",
     basierend auf den Benutzereinstellungen und Systemeinstellungen.
-    Refaktorisiert zur Reduzierung der Code-Verschachtelung.
 
     Args:
         target_user_id (int): Die ID des Benutzers, dessen Saldo geprüft werden soll.
@@ -472,7 +471,6 @@ def nfc_transaction(api_user_id_auth: int, api_username_auth: str):
     """
     Verarbeitet eine NFC-Transaktion. Ordnet die Tokendaten einem Benutzer zu,
     verbucht -1 Saldo und löst ggf. E-Mail-Benachrichtigungen aus.
-    Refaktorisiert zur Reduzierung der Anzahl lokaler Variablen.
 
     Args:
         api_user_id_auth (int): Die ID des authentifizierten API-Benutzers.
@@ -542,7 +540,6 @@ def person_transaktion_erstellen(api_user_id_auth: int, api_username_auth: str, 
     """
     Erstellt eine manuelle Transaktion für einen Benutzer anhand seines Codes.
     Löst ggf. E-Mail-Benachrichtigungen aus.
-    Refaktorisiert zur Reduzierung der Anzahl lokaler Variablen.
 
     Args:
         api_user_id_auth (int): Die ID des authentifizierten API-Benutzers.
@@ -957,7 +954,8 @@ if __name__ == '__main__':
             log_file_path = log_dir / 'api_activity.log'
 
             file_handler = RotatingFileHandler(log_file_path, maxBytes=1024 * 1024 * 10, backupCount=5, encoding='utf-8')
-            file_handler.setLevel(logging.INFO)
+            #file_handler.setLevel(logging.INFO)
+            file_handler.setLevel(logging.DEBUG)
             formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s [in %(pathname)s:%(lineno)d]')
             file_handler.setFormatter(formatter)
 
