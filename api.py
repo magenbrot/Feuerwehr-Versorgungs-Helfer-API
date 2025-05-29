@@ -57,11 +57,14 @@ def prepare_and_send_email(email_params: dict, smtp_cfg: dict) -> bool:
 
     logo_exists = False
     if logo_dateipfad_str:
-        logo_path_obj = Path(logo_dateipfad_str)
-        if logo_path_obj.is_file():
+        safe_root = Path("static/logo").resolve()
+        try:
+            logo_path_obj = Path(logo_dateipfad_str).resolve()
+            if not str(logo_path_obj).startswith(str(safe_root)) or not logo_path_obj.is_file():
+                raise ValueError("Unsicherer oder ungültiger Pfad.")
             logo_exists = True
-        else:
-            app.logger.warning("Logo-Datei nicht gefunden unter: %s", logo_dateipfad_str)
+        except Exception as e:
+            app.logger.warning("Ungültiger logo_dateipfad ('%s'): %s", logo_dateipfad_str, e)
 
     try:
         template_context_final = template_context.copy()

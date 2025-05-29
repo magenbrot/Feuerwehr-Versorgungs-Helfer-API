@@ -29,12 +29,20 @@ def _prepare_html_with_logo(html_content: str, logo_pfad_content: Optional[str],
     """Bereitet den HTML-Inhalt vor, ersetzt ggf. Logo-CID oder entfernt Logo-Referenz."""
 
     html_to_send = html_content
-    if logo_pfad_content and Path(logo_pfad_content).is_file():
-        # Ersetze cid:logo nur, wenn Logo vorhanden und gültig
-        html_to_send = html_to_send.replace('cid:logo', f'cid:{logo_cid}')
+    safe_root = Path("static/logo").resolve()
+    if logo_pfad_content:
+        try:
+            logo_path = Path(logo_pfad_content).resolve()
+            if not str(logo_path).startswith(str(safe_root)) or not logo_path.is_file():
+                raise ValueError("Unsicherer oder ungültiger Pfad.")
+            # Ersetze cid:logo nur, wenn Logo vorhanden und gültig
+            html_to_send = html_to_send.replace('cid:logo', f'cid:{logo_cid}')
+        except Exception as e:
+            logger.warning("Ungültiger logo_pfad ('%s'): %s. Logo-Referenz wird entfernt.", logo_pfad_content, e)
+            html_to_send = re.sub(r'<img[^>]*src\s*=\s*["\']cid:logo["\'][^>]*>', '', html_content, flags=re.IGNORECASE)
     elif 'cid:logo' in html_to_send:
         # Logo-Platzhalter ist da, aber kein gültiges Logo
-        logger.warning("Logo-Platzhalter 'cid:logo' im HTML gefunden, aber kein gültiger logo_pfad ('%s') oder Datei nicht gefunden. Logo-Referenz wird entfernt.", logo_pfad_content)
+        logger.warning("Logo-Platzhalter 'cid:logo' im HTML gefunden, aber kein gültiger logo_pfad ('%s'). Logo-Referenz wird entfernt.", logo_pfad_content)
         html_to_send = re.sub(r'<img[^>]*src\s*=\s*["\']cid:logo["\'][^>]*>', '', html_content, flags=re.IGNORECASE)
     return html_to_send
 
