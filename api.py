@@ -423,7 +423,7 @@ def health_protected_route(api_user_id: int, api_username: str): # Parameter umb
             cursor.execute("SELECT 1")
             cursor.fetchone()
         app.logger.debug("Datenbankverbindung erfolgreich für Healthcheck. Authentifizierter API-Benutzer: ID %s - %s", api_user_id, api_username)
-        return jsonify({'message': f'Healthcheck OK! Authentifizierter API-Benutzer ID {api_user_id} ({api_username}).'})
+        return jsonify({'message': f"Healthcheck OK! Authentifizierter API-Benutzer ID {api_user_id} ({api_username})."})
     except Error as err:
         app.logger.error("Datenbankfehler während Healthcheck: %s", err)
         return jsonify({'error': 'Datenbankfehler während Healthcheck.'}), 500
@@ -461,7 +461,7 @@ def get_all_users(api_user_id: int, api_username: str):
         return jsonify(users_list), 200
     except Error as err:
         app.logger.error("Fehler beim Abrufen aller Benutzer aus der Datenbank: %s", err)
-        return jsonify({'error': f'Fehler beim Abrufen der Benutzerdaten: {err}'}), 500
+        return jsonify({'error': f"Fehler beim Abrufen der Benutzerdaten: {err}"}), 500
     finally:
         if cnx:
             db_utils.DatabaseConnectionPool.close_connection(cnx)
@@ -487,7 +487,7 @@ def nfc_transaction(api_user_id_auth: int, api_username_auth: str):
 
     benutzer_info = finde_benutzer_zu_nfc_token(daten['token'])
     if not benutzer_info:
-        return jsonify({'error': f'Kein Benutzer mit dem Token {daten['token']} gefunden.'}), 404
+        return jsonify({'error': f"Kein Benutzer mit dem Token {daten['token']} gefunden."}), 404
 
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if not cnx:
@@ -563,7 +563,7 @@ def person_transaktion_erstellen(api_user_id_auth: int, api_username_auth: str, 
 
     user_info = get_user_details_for_notification_by_code(code)
     if not user_info:
-        return jsonify({'error': f'Person mit Code {code} nicht gefunden.'}), 404
+        return jsonify({'error': f"Person mit Code {code} nicht gefunden."}), 404
 
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if not cnx:
@@ -597,7 +597,7 @@ def person_transaktion_erstellen(api_user_id_auth: int, api_username_auth: str, 
             _send_new_transaction_email(user_details_for_email, transaction_details_for_email)
         aktuellen_saldo_pruefen_und_benachrichtigen(user_info['id'])
 
-        return jsonify({'message': f'Transaktion für {user_info["vorname"]} (Code {code}) erfolgreich erstellt. Neuer Saldo: {neuer_saldo}.'}), 201
+        return jsonify({'message': f"Transaktion für {user_info["vorname"]} (Code {code}) erfolgreich erstellt. Neuer Saldo: {neuer_saldo}."}), 201
 
     except Error as err:
         if cnx.is_connected():
@@ -770,7 +770,7 @@ def create_person(api_user_id: int, api_username: str): # Parameter umbenannt
             cursor.execute(sql, werte)
             cnx.commit()
         app.logger.info("Person mit Code %s erfolgreich hinzugefügt.", code_val)
-        return jsonify({'message': f'Person mit Code {code_val} erfolgreich hinzugefügt.'}), 201
+        return jsonify({'message': f"Person mit Code {code_val} erfolgreich hinzugefügt."}), 201
     except Error as err:
         if cnx.is_connected():
             cnx.rollback()
@@ -805,9 +805,9 @@ def delete_person(api_user_id: int, api_username: str, code: str): # Parameter u
             cnx.commit()
             if cursor.rowcount > 0:
                 app.logger.info("Person mit Code %s erfolgreich gelöscht.", code)
-                return jsonify({'message': f'Person mit Code {code} erfolgreich gelöscht.'}), 200
+                return jsonify({'message': f"Person mit Code {code} erfolgreich gelöscht."}), 200
             app.logger.warning("Keine Person mit dem Code %s zum Löschen gefunden.", code)
-            return jsonify({'error': f'Keine Person mit dem Code {code} gefunden.'}), 404
+            return jsonify({'error': f"Keine Person mit dem Code {code} gefunden."}), 404
     except Error as err:
         if cnx.is_connected():
             cnx.rollback()
