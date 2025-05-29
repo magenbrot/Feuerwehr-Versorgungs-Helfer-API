@@ -21,12 +21,14 @@ smtp_config = {
     'sender': os.getenv("SMTP_SENDER"),
 }
 
+# nur relevant wenn nicht über uWSGI gestartet
 api_config = {
     'host': os.getenv("API_HOST", "127.0.0.1"),
     'port': os.getenv("API_PORT", "5000"),
     'debug_mode': os.getenv('API_DEBUG', 'False').lower() in ['true', '1', 'yes'],
 }
 
+# nur relevant wenn nicht über uWSGI gestartet
 gui_config = {
     'host': os.getenv("GUI_HOST", "127.0.0.1"),
     'port': os.getenv("GUI_PORT", "5001"),
