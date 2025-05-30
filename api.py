@@ -1,6 +1,7 @@
 """Dieses Modul ist eine API Middleware für den Feuerwehr-Versorgungs-Helfer"""
 
 import base64
+import datetime
 import sys
 from functools import wraps
 from pathlib import Path
@@ -124,7 +125,7 @@ def get_user_notification_preference(user_id_int: int, event_schluessel: str) ->
         if cnx:
             db_utils.DatabaseConnectionPool.close_connection(cnx)
 
-def get_system_notification_setting(einstellung_schluessel: str) -> Optional[str]:
+def get_system_setting(einstellung_schluessel: str) -> Optional[str]:
     """
     Ruft den Wert einer Systemeinstellung aus der Datenbank ab.
 
@@ -136,7 +137,7 @@ def get_system_notification_setting(einstellung_schluessel: str) -> Optional[str
     """
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if not cnx:
-        app.logger.error("DB-Verbindungsfehler in get_system_notification_setting für Schlüssel %s", einstellung_schluessel)
+        app.logger.error("DB-Verbindungsfehler in get_system_setting für Schlüssel %s", einstellung_schluessel)
         return None
     try:
         with cnx.cursor(dictionary=True) as cursor:
@@ -145,7 +146,7 @@ def get_system_notification_setting(einstellung_schluessel: str) -> Optional[str
             result = cursor.fetchone()
             return result['einstellung_wert'] if result else None
     except Error as err:
-        app.logger.error("DB-Fehler in get_system_notification_setting für Schlüssel %s: %s", einstellung_schluessel, err)
+        app.logger.error("DB-Fehler in get_system_setting für Schlüssel %s: %s", einstellung_schluessel, err)
         return None
     finally:
         if cnx:
@@ -196,7 +197,7 @@ def _send_saldo_null_benachrichtigung(user_id: int, vorname: str, email: str, ak
 
 def _send_negativsaldo_benachrichtigung(user_id: int, vorname: str, email: str, aktueller_saldo: float, logo_pfad: str):
     """Hilfsfunktion zum Senden der "Negativsaldo" Benachrichtigung."""
-    max_negativ_saldo_str = get_system_notification_setting('MAX_NEGATIVSALDO')
+    max_negativ_saldo_str = get_system_setting('MAX_NEGATIVSALDO')
     if max_negativ_saldo_str is None:
         app.logger.info("MAX_NEGATIVSALDO nicht konfiguriert, keine Negativsaldo-Prüfung für User %s.", user_id)
         return
@@ -387,7 +388,9 @@ def _send_new_transaction_email(user_details: Dict[str, Any], transaction_detail
             "vorname": user_details['vorname'],
             "beschreibung_transaktion": transaction_details['beschreibung'],
             "saldo_aenderung": transaction_details['saldo_aenderung'],
-            "neuer_saldo": transaction_details['neuer_saldo']
+            "neuer_saldo": transaction_details['neuer_saldo'],
+            "datum": transaction_details['datum'],
+            "uhrzeit": transaction_details['uhrzeit']
         },
         'logo_dateipfad': str(Path("static/logo/logo-80x109.png"))
     }
@@ -491,13 +494,22 @@ def nfc_transaction(api_user_id_auth: int, api_username_auth: str):
     if not cnx:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
 
-    neuer_saldo = 0.0 # Default Wert
+    neuer_saldo = 0 # Default Wert
     try:
         with cnx.cursor(dictionary=True) as cursor:
             cursor.execute("UPDATE nfc_token SET last_used = NOW() WHERE token_id = %s", (int(benutzer_info['token_id']),))
 
-            # Feste Saldoänderung für NFC-Transaktion
-            trans_saldo_aenderung = -1.0
+            trans_saldo_aenderung_str = get_system_setting('TRANSACTION_SALDO_CHANGE')
+            if trans_saldo_aenderung_str is None:
+                app.logger.info("TRANSACTION_SALDO_CHANGE nicht konfiguriert, keine Saldo-Änderung für User %s.", user_id)
+                return
+
+            try:
+                trans_saldo_aenderung = int(trans_saldo_aenderung_str)
+            except ValueError:
+                app.logger.error("Ungültiger Wert für TRANSACTION_SALDO_CHANGE ('%s') in system_einstellungen.", trans_saldo_aenderung_str)
+                return
+
             cursor.execute("INSERT INTO transactions (user_id, beschreibung, saldo_aenderung) VALUES (%s, %s, %s)",
                            (benutzer_info['id'], daten['beschreibung'], trans_saldo_aenderung))
             cnx.commit()
@@ -506,10 +518,11 @@ def nfc_transaction(api_user_id_auth: int, api_username_auth: str):
 
             cursor.execute("SELECT SUM(saldo_aenderung) AS saldo FROM transactions WHERE user_id = %s", (benutzer_info['id'],))
             saldo_row = cursor.fetchone()
-            neuer_saldo = saldo_row['saldo'] if saldo_row and saldo_row['saldo'] is not None else 0.0
+            neuer_saldo = saldo_row['saldo'] if saldo_row and saldo_row['saldo'] is not None else 0
 
         # Außerhalb des 'with cursor' Blocks, da DB Operationen darin abgeschlossen sein sollten.
         if benutzer_info.get('email') and get_user_notification_preference(benutzer_info['id'], 'NEUE_TRANSAKTION'):
+            jetzt = datetime.datetime.now()
             user_details_for_email = {
                 'email': benutzer_info['email'],
                 'vorname': benutzer_info.get('vorname', ''),
@@ -518,7 +531,9 @@ def nfc_transaction(api_user_id_auth: int, api_username_auth: str):
             transaction_details_for_email = {
                 'beschreibung': daten['beschreibung'],
                 'saldo_aenderung': trans_saldo_aenderung,
-                'neuer_saldo': neuer_saldo
+                'neuer_saldo': neuer_saldo,
+                'datum': jetzt.strftime("%d.%m.%Y"),
+                'uhrzeit': jetzt.strftime("%H:%M")
             }
             _send_new_transaction_email(user_details_for_email, transaction_details_for_email)
         aktuellen_saldo_pruefen_und_benachrichtigen(benutzer_info['id'])
@@ -545,18 +560,21 @@ def person_transaktion_erstellen(api_user_id_auth: int, api_username_auth: str, 
         api_user_id_auth (int): Die ID des authentifizierten API-Benutzers.
         api_username_auth (str): Der Benutzername des authentifizierten API-Benutzers.
         code (str): Der 10-stellige Code der Person.
+
     Body (JSON): {"beschreibung": "text", "saldo_aenderung": number}
+
     Returns: flask.Response
     """
+
     app.logger.info("Manuelle Transaktion für Code %s von API-Benutzer: ID %s - %s.", code, api_user_id_auth, api_username_auth)
     daten = request.get_json()
-    if not daten or 'beschreibung' not in daten or 'saldo_aenderung' not in daten:
-        return jsonify({'error': 'Ungültige Anfrage. Beschreibung und Saldoänderung sind erforderlich.'}), 400
+    if not daten or 'beschreibung' not in daten:
+        return jsonify({'error': 'Ungültige Anfrage. Beschreibung ist erforderlich.'}), 400
 
-    try:
-        saldo_aenderung_val = float(daten['saldo_aenderung']) # Float für Konsistenz
-    except ValueError:
-        return jsonify({'error': 'Saldoänderung muss eine gültige Zahl sein.'}), 400
+    trans_saldo_aenderung_str = get_system_setting('TRANSACTION_SALDO_CHANGE')
+    if trans_saldo_aenderung_str is None:
+        app.logger.info("TRANSACTION_SALDO_CHANGE nicht konfiguriert, keine Saldo-Änderung für User %s.", user_id)
+        return
 
     user_info = get_user_details_for_notification_by_code(code)
     if not user_info:
@@ -566,21 +584,22 @@ def person_transaktion_erstellen(api_user_id_auth: int, api_username_auth: str, 
     if not cnx:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
 
-    neuer_saldo = 0.0 # Default Wert
+    neuer_saldo = 0 # Default Wert
     try:
         with cnx.cursor(dictionary=True) as cursor:
             cursor.execute("INSERT INTO transactions (user_id, beschreibung, saldo_aenderung) VALUES (%s, %s, %s)",
-                           (user_info['id'], daten['beschreibung'], saldo_aenderung_val))
+                           (user_info['id'], daten['beschreibung'], trans_saldo_aenderung))
             cnx.commit()
             app.logger.info("Manuelle Transaktion für %s (ID: %s, Code: %s), '%s', Saldo: %s erfolgreich erstellt.",
-                            user_info['vorname'], user_info['id'], code, daten['beschreibung'], saldo_aenderung_val)
+                            user_info['vorname'], user_info['id'], code, daten['beschreibung'], trans_saldo_aenderung)
 
             cursor.execute("SELECT SUM(saldo_aenderung) AS saldo FROM transactions WHERE user_id = %s", (user_info['id'],))
             saldo_row = cursor.fetchone()
-            neuer_saldo = saldo_row['saldo'] if saldo_row and saldo_row['saldo'] is not None else 0.0
+            neuer_saldo = saldo_row['saldo'] if saldo_row and saldo_row['saldo'] is not None else 0
 
         # Außerhalb des 'with cursor' Blocks
         if user_info.get('email') and get_user_notification_preference(user_info['id'], 'NEUE_TRANSAKTION'):
+            jetzt = datetime.datetime.now()
             user_details_for_email = {
                 'email': user_info['email'],
                 'vorname': user_info.get('vorname', ''),
@@ -588,8 +607,10 @@ def person_transaktion_erstellen(api_user_id_auth: int, api_username_auth: str, 
             }
             transaction_details_for_email = {
                 'beschreibung': daten['beschreibung'],
-                'saldo_aenderung': saldo_aenderung_val,
-                'neuer_saldo': neuer_saldo
+                'saldo_aenderung': trans_saldo_aenderung,
+                'neuer_saldo': neuer_saldo,
+                'datum': jetzt.strftime("%d.%m.%Y"),
+                'uhrzeit': jetzt.strftime("%H:%M")
             }
             _send_new_transaction_email(user_details_for_email, transaction_details_for_email)
         aktuellen_saldo_pruefen_und_benachrichtigen(user_info['id'])
@@ -995,3 +1016,13 @@ if __name__ == '__main__':
 
     app.logger.info("Feuerwehr-Versorgungs-Helfer API wird gestartet...")
     app.run(host=config.api_config['host'], port=config.api_config['port'], debug=config.api_config['debug_mode'])
+
+
+
+
+# TODO
+# nfc_transaction und person_transaktion_erstellen sollen die Einstellung für TRANSACTION_SALDO_CHANGE aus der DB lesen
+# und dann diesen Betrag vom Saldo abziehen.
+#
+# all_db_setting_keys = get_all_system_settings().keys()
+#system_settings_data = get_all_system_settings()

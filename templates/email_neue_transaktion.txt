@@ -3,7 +3,7 @@ Hallo {{ vorname }},
 wir hoffen, es geht dir gut!
 
 Kurze Info von uns:
-Über das Gerät {{ beschreibung_transaktion }} wurde am {{ datum }} eine Transaktion {{ saldo_aenderung }} € gebucht.
+Über das Gerät {{ beschreibung_transaktion }} wurde am {{ datum }} um {{ uhrzeit }} Uhr eine Transaktion {{ saldo_aenderung }} € gebucht.
 Dein Konto für Getränke und Essen ist aktuell bei {{ neuer_saldo }} €.
 
 Viele Grüße
