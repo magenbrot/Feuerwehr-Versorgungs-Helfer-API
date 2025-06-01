@@ -501,14 +501,14 @@ def nfc_transaction(api_user_id_auth: int, api_username_auth: str):
 
             trans_saldo_aenderung_str = get_system_setting('TRANSACTION_SALDO_CHANGE')
             if trans_saldo_aenderung_str is None:
-                app.logger.info("TRANSACTION_SALDO_CHANGE nicht konfiguriert, keine Saldo-Änderung für User %s.", user_id)
-                return
+                app.logger.info("TRANSACTION_SALDO_CHANGE nicht konfiguriert, keine Saldo-Änderung für User %s.", benutzer_info['id'])
+                return jsonify({'error': f"TRANSACTION_SALDO_CHANGE nicht konfiguriert, keine Saldo-Änderung für User {benutzer_info['id']} möglich."}), 400
 
             try:
                 trans_saldo_aenderung = int(trans_saldo_aenderung_str)
             except ValueError:
                 app.logger.error("Ungültiger Wert für TRANSACTION_SALDO_CHANGE ('%s') in system_einstellungen.", trans_saldo_aenderung_str)
-                return
+                return jsonify({'error': f"Ungültiger Wert für TRANSACTION_SALDO_CHANGE ('{trans_saldo_aenderung_str}') in system_einstellungen."}), 400
 
             cursor.execute("INSERT INTO transactions (user_id, beschreibung, saldo_aenderung) VALUES (%s, %s, %s)",
                            (benutzer_info['id'], daten['beschreibung'], trans_saldo_aenderung))
@@ -571,14 +571,20 @@ def person_transaktion_erstellen(api_user_id_auth: int, api_username_auth: str, 
     if not daten or 'beschreibung' not in daten:
         return jsonify({'error': 'Ungültige Anfrage. Beschreibung ist erforderlich.'}), 400
 
-    trans_saldo_aenderung_str = get_system_setting('TRANSACTION_SALDO_CHANGE')
-    if trans_saldo_aenderung_str is None:
-        app.logger.info("TRANSACTION_SALDO_CHANGE nicht konfiguriert, keine Saldo-Änderung für User %s.", user_id)
-        return
-
     user_info = get_user_details_for_notification_by_code(code)
     if not user_info:
         return jsonify({'error': f"Person mit Code {code} nicht gefunden."}), 404
+
+    trans_saldo_aenderung_str = get_system_setting('TRANSACTION_SALDO_CHANGE')
+    if trans_saldo_aenderung_str is None:
+        app.logger.info("TRANSACTION_SALDO_CHANGE nicht konfiguriert, keine Saldo-Änderung für User %s.", user_info['id'])
+        return jsonify({'error': f"TRANSACTION_SALDO_CHANGE nicht konfiguriert, keine Saldo-Änderung für User {user_info['id']} möglich."}), 400
+
+    try:
+        trans_saldo_aenderung = int(trans_saldo_aenderung_str)
+    except ValueError:
+        app.logger.error("Ungültiger Wert für TRANSACTION_SALDO_CHANGE ('%s') in system_einstellungen.", trans_saldo_aenderung_str)
+        return jsonify({'error': f"Ungültiger Wert für TRANSACTION_SALDO_CHANGE ('{trans_saldo_aenderung_str}') in system_einstellungen."}), 400
 
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if not cnx:
@@ -1016,13 +1022,3 @@ if __name__ == '__main__':
 
     app.logger.info("Feuerwehr-Versorgungs-Helfer API wird gestartet...")
     app.run(host=config.api_config['host'], port=config.api_config['port'], debug=config.api_config['debug_mode'])
-
-
-
-
-# TODO
-# nfc_transaction und person_transaktion_erstellen sollen die Einstellung für TRANSACTION_SALDO_CHANGE aus der DB lesen
-# und dann diesen Betrag vom Saldo abziehen.
-#
-# all_db_setting_keys = get_all_system_settings().keys()
-#system_settings_data = get_all_system_settings()
