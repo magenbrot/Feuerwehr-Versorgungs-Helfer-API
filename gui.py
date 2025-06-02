@@ -45,17 +45,19 @@ if "BASE_URL" in os.environ:
 else:
     BASE_URL=""
 
-if not all(key in config.db_config and config.db_config[key] is not None for key in ['host', 'port', 'user', 'password', 'database']):
-    logger.critical("Fehler: Nicht alle Datenbank-Konfigurationsvariablen (MYSQL_HOST, MYSQL_PORT, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DB) sind in der .env Datei oder Umgebung gesetzt.")
-    sys.exit()
+# Konfigurationsprüfungen
+required_db_keys = ['host', 'port', 'user', 'password', 'database']
+if not all(key in config.db_config and config.db_config[key] is not None for key in required_db_keys):
+    logger.critical("Fehler: Nicht alle Datenbank-Konfigurationsvariablen sind gesetzt. Benötigt: %s", ", ".join(required_db_keys))
+    sys.exit(1)
 
 try:
     config.db_config['port'] = int(config.db_config['port'])
 except ValueError:
-    logger.critical("Fehler: Datenbank-Port '%s' ist keine gültige Zahl.", config.db_config['port'])
-    sys.exit()
+    logger.critical("Fehler: Datenbank-Port '%s' ist keine gültige Zahl.", config.db_config.get('port'))
+    sys.exit(1)
 
-# Initialisiere den Pool einmal beim Start der Anwendung # pylint: disable=R0801
+# Initialisiere den Datenbank-Pool einmal beim Start der Anwendung # pylint: disable=R0801
 try:
     db_utils.DatabaseConnectionPool.initialize_pool(config.db_config)
 except Error:
