@@ -536,12 +536,12 @@ def nfc_transaction(api_user_id_auth: int, api_username_auth: str):
             cursor.execute("INSERT INTO transactions (user_id, beschreibung, saldo_aenderung) VALUES (%s, %s, %s)",
                            (benutzer_info['id'], daten['beschreibung'], trans_saldo_aenderung))
             cnx.commit()
-            logger.info("Transaktion für %s (ID: %s), '%s', Saldo: %s erfolgreich erstellt.",
-                            benutzer_info['vorname'], benutzer_info['id'], daten['beschreibung'], trans_saldo_aenderung)
-
             cursor.execute("SELECT SUM(saldo_aenderung) AS saldo FROM transactions WHERE user_id = %s", (benutzer_info['id'],))
+
             saldo_row = cursor.fetchone()
             neuer_saldo = saldo_row['saldo'] if saldo_row and saldo_row['saldo'] is not None else 0
+            logger.info("Transaktion für %s (ID: %s), '%s', Saldo: %s = %s erfolgreich erstellt.",
+                            benutzer_info['vorname'], benutzer_info['id'], daten['beschreibung'], trans_saldo_aenderung, neuer_saldo)
 
         # Außerhalb des 'with cursor' Blocks, da DB Operationen darin abgeschlossen sein sollten.
         if benutzer_info.get('email') and get_user_notification_preference(benutzer_info['id'], 'NEUE_TRANSAKTION'):
