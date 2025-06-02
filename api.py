@@ -31,17 +31,30 @@ app.json.mimetype = "application/json; charset=utf-8"
 
 logger.info("Feuerwehr-Versorgungs-Helfer API wurde gestartet")
 
-if not all(key in config.db_config and config.db_config[key] is not None for key in ['host', 'port', 'user', 'password', 'database']):
-    logger.critical("Fehler: Nicht alle Datenbank-Konfigurationsvariablen (MYSQL_HOST, MYSQL_PORT, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DB) sind in der .env Datei oder Umgebung gesetzt.")
-    sys.exit()
+# Konfigurationsprüfungen
+required_db_keys = ['host', 'port', 'user', 'password', 'database']
+if not all(key in config.db_config and config.db_config[key] is not None for key in required_db_keys):
+    logger.critical("Fehler: Nicht alle Datenbank-Konfigurationsvariablen sind gesetzt. Benötigt: %s", ", ".join(required_db_keys))
+    sys.exit(1)
 
 try:
     config.db_config['port'] = int(config.db_config['port'])
 except ValueError:
-    logger.critical("Fehler: Datenbank-Port '%s' ist keine gültige Zahl.", config.db_config['port'])
-    sys.exit()
+    logger.critical("Fehler: Datenbank-Port '%s' ist keine gültige Zahl.", config.db_config.get('port'))
+    sys.exit(1)
 
-# Initialisiere den Pool einmal beim Start der Anwendung # pylint: disable=R0801
+required_smtp_keys = ['host', 'port', 'user', 'password', 'sender']
+if not all(key in config.smtp_config and config.smtp_config[key] is not None for key in required_smtp_keys):
+    logger.critical("Fehler: Nicht alle SMTP-Konfigurationsvariablen sind gesetzt. Benötigt: %s", ", ".join(required_smtp_keys))
+    sys.exit(1)
+
+try:
+    config.smtp_config['port'] = int(config.smtp_config['port'])
+except ValueError:
+    logger.critical("Fehler: SMTP_PORT '%s' ist keine gültige Zahl.", config.smtp_config.get('port'))
+    sys.exit(1)
+
+# Initialisiere den Datenbank-Pool einmal beim Start der Anwendung # pylint: disable=R0801
 try:
     db_utils.DatabaseConnectionPool.initialize_pool(config.db_config)
 except Error as e:
@@ -993,28 +1006,4 @@ def person_transaktionen_loeschen(api_user_id: int, api_username: str, code: str
             db_utils.DatabaseConnectionPool.close_connection(cnx)
 
 if __name__ == '__main__':
-    # Konfigurationsprüfungen
-    required_db_keys = ['host', 'port', 'user', 'password', 'database']
-    if not all(key in config.db_config and config.db_config[key] is not None for key in required_db_keys):
-        logger.critical("Fehler: Nicht alle Datenbank-Konfigurationsvariablen sind gesetzt. Benötigt: %s", ", ".join(required_db_keys))
-        sys.exit(1)
-
-    try:
-        config.db_config['port'] = int(config.db_config['port'])
-    except ValueError:
-        logger.critical("Fehler: Datenbank-Port '%s' ist keine gültige Zahl.", config.db_config.get('port'))
-        sys.exit(1)
-
-    required_smtp_keys = ['host', 'port', 'user', 'password', 'sender']
-    if not all(key in config.smtp_config and config.smtp_config[key] is not None for key in required_smtp_keys):
-        logger.critical("Fehler: Nicht alle SMTP-Konfigurationsvariablen sind gesetzt. Benötigt: %s", ", ".join(required_smtp_keys))
-        sys.exit(1)
-
-    try:
-        config.smtp_config['port'] = int(config.smtp_config['port'])
-    except ValueError:
-        logger.critical("Fehler: SMTP_PORT '%s' ist keine gültige Zahl.", config.smtp_config.get('port'))
-        sys.exit(1)
-
-    logger.info("Feuerwehr-Versorgungs-Helfer API wird gestartet...")
     app.run(host=config.api_config['host'], port=config.api_config['port'], debug=config.api_config['debug_mode'])
