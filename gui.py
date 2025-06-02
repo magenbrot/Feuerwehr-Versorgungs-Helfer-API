@@ -1519,12 +1519,15 @@ def generate_qr():
 
     if text_to_add == "a":
         text_to_add = "Transaktion buchen"
+        img = erzeuge_qr_code(usercode_to_encode + "a", text_to_add)
     elif text_to_add == "k":
         text_to_add = "Kontostand"
+        img = erzeuge_qr_code(usercode_to_encode + "k", text_to_add)
     else:
-        text_to_add = "hier stimmt was nicht!"
-
-    img = erzeuge_qr_code(usercode_to_encode, text_to_add)
+        text_to_add = "Hier stimmt was nicht!"
+        img = None
+        flash("Ungültige Aktion für QR-Code.", "error")
+        return redirect(BASE_URL + url_for('user_info'))
 
     # Bild in einem In-Memory Bytes-Puffer speichern
     byte_io = io.BytesIO()
