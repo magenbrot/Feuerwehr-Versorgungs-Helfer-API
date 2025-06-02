@@ -3,15 +3,6 @@
 # Logging zuerst aktivieren
 import sys
 import logging
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stderr)
-    ]
-)
-logger = logging.getLogger(__name__)
-
 import binascii
 import os
 import io
@@ -25,6 +16,15 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from mysql.connector import Error, IntegrityError # IntegrityError für Unique-Constraint-Fehler hinzugefügt
 import config
 import db_utils
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stderr)
+    ]
+)
+logger = logging.getLogger(__name__)
 
 if config.gui_config['static_url_prefix']:
     app = Flask(__name__, static_url_path=config.gui_config['static_url_prefix'] + '/static')
@@ -41,7 +41,7 @@ logger.info("Feuerwehr-Versorgungs-Helfer GUI wurde gestartet")
 
 if "BASE_URL" in os.environ:
     BASE_URL = os.environ.get('BASE_URL', '/')
-    logger.info(f"BASE_URL: {BASE_URL}")
+    logger.info("BASE_URL: %s", BASE_URL)
 else:
     BASE_URL=""
 
@@ -52,7 +52,7 @@ if not all(key in config.db_config and config.db_config[key] is not None for key
 try:
     config.db_config['port'] = int(config.db_config['port'])
 except ValueError:
-    logger.critical(f"Fehler: Datenbank-Port '{config.db_config['port']}' ist keine gültige Zahl.")
+    logger.critical("Fehler: Datenbank-Port '%s' ist keine gültige Zahl.", config.db_config['port'])
     sys.exit()
 
 # Initialisiere den Pool einmal beim Start der Anwendung # pylint: disable=R0801
@@ -88,10 +88,10 @@ def hex_to_binary(hex_string):
     try:
         return binascii.unhexlify(hex_string)
     except binascii.Error:
-        logger.error(f"Fehler bei der Hexadezimal-Konvertierung: Ungültiger Hexadezimalstring '{hex_string}'")
+        logger.error("Fehler bei der Hexadezimal-Konvertierung: Ungültiger Hexadezimalstring '%s'", hex_string)
         return None
     except TypeError:
-        logger.error(f"Fehler bei der Hexadezimal-Konvertierung: Ungültiger Typ für Hexadezimalstring: {type(hex_string)}")
+        logger.error("Fehler bei der Hexadezimal-Konvertierung: Ungültiger Typ für Hexadezimalstring: %s", type(hex_string))
         return None
 
 def erzeuge_qr_code(daten, text):
@@ -121,10 +121,10 @@ def erzeuge_qr_code(daten, text):
     for font_name in font_names:
         try:
             schriftart = ImageFont.truetype(font_name, schriftgroesse)
-            logger.info(f"Schriftart '{font_name}' geladen.")
+            logger.info("Schriftart '%s' geladen.", font_name)
             break  # Erfolgreich geladen, Schleife verlassen
         except IOError:
-            logger.error(f"Schriftart '{font_name}' nicht gefunden.")
+            logger.error("Schriftart '%s' nicht gefunden.", font_name)
 
     if schriftart is None:
         logger.error("Keine der bevorzugten Schriftarten gefunden. Lade Standardschriftart.")
@@ -195,7 +195,7 @@ def get_all_notification_types():
             types = cursor.fetchall()
             return types
         except Error as err:
-            logger.error(f"Datenbankfehler beim Abrufen aller Benachrichtigungstypen: {err}")
+            logger.error("Datenbankfehler beim Abrufen aller Benachrichtigungstypen: %s", err)
             return []
         finally:
             if cursor:
@@ -229,7 +229,7 @@ def get_user_notification_settings(user_id):
                 settings[row['typ_id']] = bool(row['email_aktiviert'])
             return settings
         except Error as err:
-            logger.error(f"Datenbankfehler beim Abrufen der Benutzereinstellungen für Benachrichtigungen: {err}")
+            logger.error("Datenbankfehler beim Abrufen der Benutzereinstellungen für Benachrichtigungen: %s", err)
             return {}
         finally:
             if cursor:
@@ -278,7 +278,7 @@ def update_user_notification_settings(user_id, active_notification_type_ids_int)
         cnx.commit()
         return True
     except Error as err:
-        logger.error(f"Fehler beim Aktualisieren der Benutzereinstellungen für Benachrichtigungen: {err}")
+        logger.error("Fehler beim Aktualisieren der Benutzereinstellungen für Benachrichtigungen: %s", err)
         flash("Fehler beim Speichern der Benachrichtigungseinstellungen.", "error")
         cnx.rollback()
         return False
@@ -308,7 +308,7 @@ def get_all_system_settings():
                 settings[row['einstellung_schluessel']] = {'wert': row['einstellung_wert'], 'beschreibung': row['beschreibung']}
             return settings
         except Error as err:
-            logger.error(f"Datenbankfehler beim Abrufen der Systemeinstellungen: {err}")
+            logger.error("Datenbankfehler beim Abrufen der Systemeinstellungen: %s", err)
             return {}
         finally:
             if cursor:
@@ -338,7 +338,7 @@ def update_system_setting(einstellung_schluessel, einstellung_wert):
             cnx.commit()
             return cursor.rowcount > 0 # True wenn eine Zeile aktualisiert wurde
         except Error as err:
-            logger.error(f"Fehler beim Aktualisieren der Systemeinstellung '{einstellung_schluessel}': {err}")
+            logger.error("Fehler beim Aktualisieren der Systemeinstellung '%s': %s", einstellung_schluessel, err)
             flash(f"Datenbankfehler beim Speichern der Einstellung '{einstellung_schluessel}'.", "error")
             cnx.rollback()
             return False
@@ -373,7 +373,7 @@ def add_user_nfc_token(user_id, token_name, token_hex):
                 cnx.commit()
                 return True
             except Error as err:
-                logger.error(f"Fehler beim Hinzufügen des NFC-Tokens: {err}")
+                logger.error("Fehler beim Hinzufügen des NFC-Tokens: %s", err)
                 cnx.rollback()
                 return False
             finally:
@@ -401,13 +401,13 @@ def delete_user_nfc_token(user_id, token_id):
         cursor = cnx.cursor()
         if token_id:
             try:
-                logger.info(f"Lösche NFC-Tokens: {token_id} von Benutzer {user_id}")
+                logger.info("Lösche NFC-Tokens: %s von Benutzer %s", token_id, user_id)
                 query = "DELETE FROM nfc_token WHERE token_id = %s AND user_id = %s"
                 cursor.execute(query, (token_id, user_id))
                 cnx.commit()
                 return True
             except Error as err:
-                logger.error(f"Fehler beim Entfernen des NFC-Tokens: {err}")
+                logger.error("Fehler beim Entfernen des NFC-Tokens: %s", err)
                 cnx.rollback()
                 return False
             finally:
@@ -443,7 +443,7 @@ def get_user_nfc_tokens(user_id):
             nfc_tokens = cursor.fetchall()
             return nfc_tokens
         except Error as err:
-            logger.error(f"Datenbankfehler beim Abrufen der Benutzer NFC Tokens: {err}")
+            logger.error("Datenbankfehler beim Abrufen der Benutzer NFC Tokens: %s", err)
             return None
         finally:
             if cursor:
@@ -506,7 +506,7 @@ def delete_user(user_id):
             cnx.commit()
             return True
         except Error as err:
-            logger.error(f"Fehler beim Löschen des Benutzers: {err}")
+            logger.error("Fehler beim Löschen des Benutzers: %s", err)
             cnx.rollback()
             return False
         finally:
@@ -538,7 +538,7 @@ def toggle_user_admin(user_id, admin_state):
             cnx.commit()
             return True
         except Error as err:
-            logger.error(f"Fehler beim Ändern des Admin-Modes für den Benutzers: {err}")
+            logger.error("Fehler beim Ändern des Admin-Modes für den Benutzers: %s", err)
             cnx.rollback()
             return False
         finally:
@@ -570,7 +570,7 @@ def toggle_user_lock(user_id, lock_state):
             cnx.commit()
             return True
         except Error as err:
-            logger.error(f"Fehler beim Ändern des Locks für den Benutzers: {err}")
+            logger.error("Fehler beim Ändern des Locks für den Benutzers: %s", err)
             cnx.rollback()
             return False
         finally:
@@ -599,7 +599,7 @@ def update_user_comment(user_id, comment):
             cnx.commit()
             return True
         except Error as err:
-            logger.error(f"Fehler beim Ändern des Kommentars für den Benutzers: {err}")
+            logger.error("Fehler beim Ändern des Kommentars für den Benutzers: %s", err)
             cnx.rollback()
             return False
         finally:
@@ -628,7 +628,7 @@ def update_user_email(user_id, email):
             cnx.commit()
             return True
         except Error as err:
-            logger.error(f"Fehler beim Ändern der Emailadresse für den Benutzers: {err}")
+            logger.error("Fehler beim Ändern der Emailadresse für den Benutzers: %s", err)
             cnx.rollback()
             return False
         finally:
@@ -657,7 +657,7 @@ def fetch_user(code):
             user = cursor.fetchone()
             return user
         except Error as err:
-            logger.error(f"Datenbankfehler beim Abrufen des Benutzers: {err}")
+            logger.error("Datenbankfehler beim Abrufen des Benutzers: %s", err)
             return None
         finally:
             if cursor:
@@ -690,7 +690,7 @@ def get_user_by_id(user_id):
             user = cursor.fetchone()
             return user
         except Error as err:
-            logger.error(f"Datenbankfehler beim Abrufen des Benutzers: {err}")
+            logger.error("Datenbankfehler beim Abrufen des Benutzers: %s", err)
             return None
         finally:
             if cursor:
@@ -719,7 +719,7 @@ def get_saldo_for_user(user_id):
             saldo = result[0] if result and result[0] is not None else 0
             return saldo
         except Error as err:
-            logger.error(f"Datenbankfehler beim Abrufen des Saldos: {err}")
+            logger.error("Datenbankfehler beim Abrufen des Saldos: %s", err)
             return 0
         finally:
             if cursor:
@@ -750,7 +750,7 @@ def get_saldo_by_user():
             saldo_by_user = {row['id']: row['saldo'] or 0 for row in cursor.fetchall()}
             return saldo_by_user
         except Error as err:
-            logger.error(f"Datenbankfehler beim Abrufen des Saldos pro Benutzer: {err}")
+            logger.error("Datenbankfehler beim Abrufen des Saldos pro Benutzer: %s", err)
             return {}
         finally:
             if cursor:
@@ -781,7 +781,7 @@ def get_all_users():
             users = cursor.fetchall()
             return users
         except Error as err:
-            logger.error(f"Datenbankfehler beim Abrufen aller Benutzer: {err}")
+            logger.error("Datenbankfehler beim Abrufen aller Benutzer: %s", err)
             return []
         finally:
             if cursor:
@@ -807,7 +807,7 @@ def get_all_api_users():
             api_users = cursor.fetchall()
             return api_users
         except Error as err:
-            logger.error(f"Datenbankfehler beim Abrufen aller API-Benutzer: {err}")
+            logger.error("Datenbankfehler beim Abrufen aller API-Benutzer: %s", err)
             return []
         finally:
             if cursor:
@@ -836,7 +836,7 @@ def get_api_user_by_id(api_user_id):
             api_user = cursor.fetchone()
             return api_user
         except Error as err:
-            logger.error(f"Datenbankfehler beim Abrufen des API-Benutzers: {err}")
+            logger.error("Datenbankfehler beim Abrufen des API-Benutzers: %s", err)
             return None
         finally:
             if cursor:
@@ -865,7 +865,7 @@ def get_api_keys_for_api_user(api_user_id):
             keys = cursor.fetchall()
             return keys
         except Error as err:
-            logger.error(f"Datenbankfehler beim Abrufen der API-Keys für API-Benutzer {api_user_id}: {err}")
+            logger.error("Datenbankfehler beim Abrufen der API-Keys für API-Benutzer %s: %s", api_user_id, err)
             return []
         finally:
             if cursor:
@@ -894,7 +894,7 @@ def get_user_transactions(user_id):
             transactions = cursor.fetchall()
             return transactions
         except Error as err:
-            logger.error(f"Datenbankfehler beim Abrufen der Benutzertransaktionen: {err}")
+            logger.error("Datenbankfehler beim Abrufen der Benutzertransaktionen: %s", err)
             return None
         finally:
             if cursor:
@@ -924,7 +924,7 @@ def add_transaction(user_id, beschreibung, saldo_aenderung):
             cnx.commit()
             return True
         except Error as err:
-            logger.error(f"Fehler beim Hinzufügen der Transaktion: {err}")
+            logger.error("Fehler beim Hinzufügen der Transaktion: %s", err)
             flash(f"Datenbankfehler beim Hinzufügen der Transaktion: {err}", "error")
             cnx.rollback()
             return False
@@ -954,7 +954,7 @@ def delete_all_transactions(user_id):
             cnx.commit()
             return True
         except Error as err:
-            logger.error(f"Fehler beim Löschen der Transaktionen: {err}")
+            logger.error("Fehler beim Löschen der Transaktionen: %s", err)
             cnx.rollback()
             return False
         finally:
@@ -984,7 +984,7 @@ def update_password(user_id, new_password_hash):
             cnx.commit()
             return True
         except Error as err:
-            logger.error(f"Fehler beim Aktualisieren des Passworts: {err}")
+            logger.error("Fehler beim Aktualisieren des Passworts: %s", err)
             cnx.rollback()
             return False
         finally:
@@ -1036,7 +1036,7 @@ def add_regular_user_db(user_data):
             cnx.rollback()
             return False
         except Error as err:
-            logger.error(f"Fehler beim Hinzufügen des regulären Benutzers: {err}")
+            logger.error("Fehler beim Hinzufügen des regulären Benutzers: %s", err)
             flash("Datenbankfehler beim Hinzufügen des Benutzers.", 'error')
             cnx.rollback()
             return False
@@ -1069,7 +1069,7 @@ def add_api_user_db(username):
             cnx.rollback()
             return None
         except Error as err:
-            logger.error(f"Fehler beim Hinzufügen des API-Benutzers: {err}")
+            logger.error("Fehler beim Hinzufügen des API-Benutzers: %s", err)
             flash("Datenbankfehler beim Hinzufügen des API-Benutzers.", 'error')
             cnx.rollback()
             return None
@@ -1103,7 +1103,7 @@ def add_api_key_for_user_db(api_user_id, api_key_string):
             cnx.rollback()
             return False
         except Error as err:
-            logger.error(f"Fehler beim Hinzufügen des API-Keys für API-Benutzer {api_user_id}: {err}")
+            logger.error("Fehler beim Hinzufügen des API-Keys für API-Benutzer {api_user_id}: %s", err)
             flash("Datenbankfehler beim Hinzufügen des API-Keys.", 'error')
             cnx.rollback()
             return False
@@ -1133,7 +1133,7 @@ def delete_api_key_db(api_key_id):
             # Überprüfen, ob eine Zeile tatsächlich gelöscht wurde
             return cursor.rowcount > 0
         except Error as err:
-            logger.error(f"Fehler beim Löschen des API-Keys {api_key_id}: {err}")
+            logger.error("Fehler beim Löschen des API-Keys {api_key_id}: %s", err)
             flash("Datenbankfehler beim Löschen des API-Keys.", 'error')
             cnx.rollback()
             return False
@@ -1168,7 +1168,7 @@ def delete_api_user_and_keys_db(api_user_id):
             cnx.commit()
             return True
         except Error as err:
-            logger.error(f"Fehler beim Löschen des API-Benutzers {api_user_id} und seiner Keys: {err}")
+            logger.error("Fehler beim Löschen des API-Benutzers %s und seiner Keys: %s", api_user_id, err)
             flash("Datenbankfehler beim Löschen des API-Benutzers.", 'error')
             cnx.rollback()
             return False
