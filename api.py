@@ -2,15 +2,6 @@
 
 import sys
 import logging
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stderr)
-    ]
-)
-logger = logging.getLogger(__name__)
-
 import base64
 import datetime
 from functools import wraps
@@ -21,6 +12,15 @@ from mysql.connector import Error
 import config
 import db_utils
 import email_sender
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stderr)
+    ]
+)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
@@ -38,14 +38,14 @@ if not all(key in config.db_config and config.db_config[key] is not None for key
 try:
     config.db_config['port'] = int(config.db_config['port'])
 except ValueError:
-    logger.critical(f"Fehler: Datenbank-Port '{config.db_config['port']}' ist keine gültige Zahl.")
+    logger.critical("Fehler: Datenbank-Port '%s' ist keine gültige Zahl.", config.db_config['port'])
     sys.exit()
 
 # Initialisiere den Pool einmal beim Start der Anwendung # pylint: disable=R0801
 try:
     db_utils.DatabaseConnectionPool.initialize_pool(config.db_config)
 except Error as e:
-    app.logger.info(f"Kritischer Fehler beim Starten der Datenbankverbindung: {e}")
+    logger.info("Kritischer Fehler beim Starten der Datenbankverbindung: %s", e)
     sys.exit(1)
 
 def prepare_and_send_email(email_params: dict, smtp_cfg: dict) -> bool:
@@ -76,7 +76,7 @@ def prepare_and_send_email(email_params: dict, smtp_cfg: dict) -> bool:
     logo_dateipfad_str = email_params.get('logo_dateipfad')
 
     if not all([empfaenger_email, betreff, template_name_html, template_name_text]):
-        app.logger.error("Unvollständige E-Mail-Parameter. Benötigt: empfaenger_email, betreff, template_name_html, template_name_text.")
+        logger.error("Unvollständige E-Mail-Parameter. Benötigt: empfaenger_email, betreff, template_name_html, template_name_text.")
         return False
 
     logo_exists = False
@@ -85,7 +85,7 @@ def prepare_and_send_email(email_params: dict, smtp_cfg: dict) -> bool:
         if logo_path_obj.is_file():
             logo_exists = True
         else:
-            app.logger.warning("Logo-Datei nicht gefunden unter: %s", logo_dateipfad_str)
+            logger.warning("Logo-Datei nicht gefunden unter: %s", logo_dateipfad_str)
 
     try:
         template_context_final = template_context.copy()
@@ -96,7 +96,7 @@ def prepare_and_send_email(email_params: dict, smtp_cfg: dict) -> bool:
             final_text_body = render_template(template_name_text, **template_context_final)
 
     except Exception as e:  # pylint: disable=W0718
-        app.logger.error("Fehler beim Rendern der E-Mail-Templates für '%s': %s", template_name_html, e, exc_info=True)
+        logger.error("Fehler beim Rendern der E-Mail-Templates für '%s': %s", template_name_html, e, exc_info=True)
         return False
 
     email_content_dict = {
@@ -127,7 +127,7 @@ def get_user_notification_preference(user_id_int: int, event_schluessel: str) ->
     """
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if not cnx:
-        app.logger.error("DB-Verbindungsfehler in get_user_notification_preference für User %s", user_id_int)
+        logger.error("DB-Verbindungsfehler in get_user_notification_preference für User %s", user_id_int)
         return False
     # Verwendung eines try-finally Blocks, um sicherzustellen, dass die Verbindung geschlossen wird
     try:
@@ -142,7 +142,7 @@ def get_user_notification_preference(user_id_int: int, event_schluessel: str) ->
             result = cursor.fetchone()
             return bool(result['email_aktiviert']) if result and result['email_aktiviert'] is not None else False
     except Error as err:
-        app.logger.error("DB-Fehler in get_user_notification_preference für User %s, Event %s: %s", user_id_int, event_schluessel, err)
+        logger.error("DB-Fehler in get_user_notification_preference für User %s, Event %s: %s", user_id_int, event_schluessel, err)
         return False
     finally:
         if cnx:
@@ -160,7 +160,7 @@ def get_system_setting(einstellung_schluessel: str) -> Optional[str]:
     """
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if not cnx:
-        app.logger.error("DB-Verbindungsfehler in get_system_setting für Schlüssel %s", einstellung_schluessel)
+        logger.error("DB-Verbindungsfehler in get_system_setting für Schlüssel %s", einstellung_schluessel)
         return None
     try:
         with cnx.cursor(dictionary=True) as cursor:
@@ -169,7 +169,7 @@ def get_system_setting(einstellung_schluessel: str) -> Optional[str]:
             result = cursor.fetchone()
             return result['einstellung_wert'] if result else None
     except Error as err:
-        app.logger.error("DB-Fehler in get_system_setting für Schlüssel %s: %s", einstellung_schluessel, err)
+        logger.error("DB-Fehler in get_system_setting für Schlüssel %s: %s", einstellung_schluessel, err)
         return None
     finally:
         if cnx:
@@ -187,14 +187,14 @@ def get_user_details_for_notification(user_id_int: int) -> Optional[dict]:
     """
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if not cnx:
-        app.logger.error("DB-Verbindungsfehler in get_user_details_for_notification für User %s", user_id_int)
+        logger.error("DB-Verbindungsfehler in get_user_details_for_notification für User %s", user_id_int)
         return None
     try:
         with cnx.cursor(dictionary=True) as cursor:
             cursor.execute("SELECT id, vorname, email FROM users WHERE id = %s", (user_id_int,))
             return cursor.fetchone()
     except Error as err:
-        app.logger.error("DB-Fehler in get_user_details_for_notification für User %s: %s", user_id_int, err)
+        logger.error("DB-Fehler in get_user_details_for_notification für User %s: %s", user_id_int, err)
         return None
     finally:
         if cnx:
@@ -214,21 +214,21 @@ def _send_saldo_null_benachrichtigung(user_id: int, vorname: str, email: str, ak
         'logo_dateipfad': logo_pfad
     }
     if prepare_and_send_email(email_params, config.smtp_config):
-        app.logger.info("Saldo-Null Benachrichtigung an %s (ID: %s) gesendet.", email, user_id)
+        logger.info("Saldo-Null Benachrichtigung an %s (ID: %s) gesendet.", email, user_id)
     else:
-        app.logger.error("Fehler beim Senden der Saldo-Null Benachrichtigung an %s (ID: %s).", email, user_id)
+        logger.error("Fehler beim Senden der Saldo-Null Benachrichtigung an %s (ID: %s).", email, user_id)
 
 def _send_negativsaldo_benachrichtigung(user_id: int, vorname: str, email: str, aktueller_saldo: float, logo_pfad: str):
     """Hilfsfunktion zum Senden der "Negativsaldo" Benachrichtigung."""
     max_negativ_saldo_str = get_system_setting('MAX_NEGATIVSALDO')
     if max_negativ_saldo_str is None:
-        app.logger.info("MAX_NEGATIVSALDO nicht konfiguriert, keine Negativsaldo-Prüfung für User %s.", user_id)
+        logger.info("MAX_NEGATIVSALDO nicht konfiguriert, keine Negativsaldo-Prüfung für User %s.", user_id)
         return
 
     try:
         max_negativ_saldo = int(max_negativ_saldo_str)
     except ValueError:
-        app.logger.error("Ungültiger Wert für MAX_NEGATIVSALDO ('%s') in system_einstellungen.", max_negativ_saldo_str)
+        logger.error("Ungültiger Wert für MAX_NEGATIVSALDO ('%s') in system_einstellungen.", max_negativ_saldo_str)
         return
 
     if aktueller_saldo > max_negativ_saldo: # Guard clause: Wenn Saldo nicht niedrig genug ist, abbrechen
@@ -247,9 +247,9 @@ def _send_negativsaldo_benachrichtigung(user_id: int, vorname: str, email: str, 
         'logo_dateipfad': logo_pfad
     }
     if prepare_and_send_email(email_params, config.smtp_config):
-        app.logger.info("Negativsaldo-Warnung an %s (ID: %s) gesendet.", email, user_id)
+        logger.info("Negativsaldo-Warnung an %s (ID: %s) gesendet.", email, user_id)
     else:
-        app.logger.error("Fehler beim Senden der Negativsaldo-Warnung an %s (ID: %s).", email, user_id)
+        logger.error("Fehler beim Senden der Negativsaldo-Warnung an %s (ID: %s).", email, user_id)
 
 def aktuellen_saldo_pruefen_und_benachrichtigen(target_user_id: int):
     """
@@ -262,19 +262,19 @@ def aktuellen_saldo_pruefen_und_benachrichtigen(target_user_id: int):
     """
     user_details = get_user_details_for_notification(target_user_id)
     if not user_details:
-        app.logger.warning("Benutzerdetails für ID %s nicht gefunden in aktuellen_saldo_pruefen_und_benachrichtigen.", target_user_id)
+        logger.warning("Benutzerdetails für ID %s nicht gefunden in aktuellen_saldo_pruefen_und_benachrichtigen.", target_user_id)
         return
 
     user_vorname = user_details.get('vorname', '') # Default, falls 'vorname' fehlt
     user_email = user_details.get('email')
 
     if not user_email:
-        app.logger.info("Benutzer %s hat keine E-Mail-Adresse hinterlegt. Keine Saldo-Benachrichtigungen möglich.", target_user_id)
+        logger.info("Benutzer %s hat keine E-Mail-Adresse hinterlegt. Keine Saldo-Benachrichtigungen möglich.", target_user_id)
         return
 
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if not cnx:
-        app.logger.error("DB-Verbindungsfehler in aktuellen_saldo_pruefen_und_benachrichtigen für User %s", target_user_id)
+        logger.error("DB-Verbindungsfehler in aktuellen_saldo_pruefen_und_benachrichtigen für User %s", target_user_id)
         return
 
     try:
@@ -291,7 +291,7 @@ def aktuellen_saldo_pruefen_und_benachrichtigen(target_user_id: int):
         _send_negativsaldo_benachrichtigung(target_user_id, user_vorname, user_email, aktueller_saldo, logo_pfad_str)
 
     except Error as err:
-        app.logger.error("DB-Fehler in aktuellen_saldo_pruefen_und_benachrichtigen für User %s: %s", target_user_id, err)
+        logger.error("DB-Fehler in aktuellen_saldo_pruefen_und_benachrichtigen für User %s: %s", target_user_id, err)
     finally:
         if cnx:
             db_utils.DatabaseConnectionPool.close_connection(cnx)
@@ -318,7 +318,7 @@ def get_user_by_api_key(api_key_value: str) -> Optional[tuple[int, str]]: # api_
             user = cursor.fetchone()
             return (user[0], user[1]) if user else None
     except Error as err:
-        app.logger.error("Fehler beim Abrufen des Benutzers anhand des API-Schlüssels: %s.", err)
+        logger.error("Fehler beim Abrufen des Benutzers anhand des API-Schlüssels: %s.", err)
         return None
     finally:
         if cnx:
@@ -338,12 +338,12 @@ def api_key_required(f):
     def decorated(*args, **kwargs):
         api_key_header = request.headers.get('X-API-Key')
         if not api_key_header:
-            app.logger.warning("API-Zugriff ohne API-Schlüssel.")
+            logger.warning("API-Zugriff ohne API-Schlüssel.")
             return jsonify({'message': 'API-Schlüssel fehlt!'}), 401
 
         user_data = get_user_by_api_key(api_key_header) # user_id, username
         if not user_data:
-            app.logger.warning("API-Zugriff mit ungültigem API-Schlüssel: %s", api_key_header)
+            logger.warning("API-Zugriff mit ungültigem API-Schlüssel: %s", api_key_header)
             return jsonify({'message': 'Ungültiger API-Schlüssel!'}), 401
 
         # user_data[0] ist user_id, user_data[1] ist username
@@ -370,7 +370,7 @@ def finde_benutzer_zu_nfc_token(token_base64: str) -> Optional[dict]:
             try:
                 token_bytes = base64.b64decode(token_base64)
             except base64.binascii.Error:
-                app.logger.error("Ungültiger Base64-String in finde_benutzer_zu_nfc_token: %s", token_base64)
+                logger.error("Ungültiger Base64-String in finde_benutzer_zu_nfc_token: %s", token_base64)
                 return None
 
             query = """
@@ -382,11 +382,11 @@ def finde_benutzer_zu_nfc_token(token_base64: str) -> Optional[dict]:
             cursor.execute(query, (token_bytes,))
             user = cursor.fetchone()
             if user:
-                app.logger.info("Benutzer via NFC gefunden: ID %s - %s %s (TokenID: %s, Email: %s)",
+                logger.info("Benutzer via NFC gefunden: ID %s - %s %s (TokenID: %s, Email: %s)",
                                 user['id'], user['vorname'], user['nachname'], user['token_id'], user.get('email'))
             return user
     except Error as err:
-        app.logger.error("DB-Fehler in finde_benutzer_zu_nfc_token: %s", err)
+        logger.error("DB-Fehler in finde_benutzer_zu_nfc_token: %s", err)
         return None
     finally:
         if cnx:
@@ -418,9 +418,9 @@ def _send_new_transaction_email(user_details: Dict[str, Any], transaction_detail
         'logo_dateipfad': str(Path("static/logo/logo-80x109.png"))
     }
     if prepare_and_send_email(email_params, config.smtp_config):
-        app.logger.info("Neue Transaktion E-Mail an %s (ID: %s) gesendet.", user_details['email'], user_details['id'])
+        logger.info("Neue Transaktion E-Mail an %s (ID: %s) gesendet.", user_details['email'], user_details['id'])
     else:
-        app.logger.error("Fehler beim Senden der Neue Transaktion E-Mail an %s (ID: %s).", user_details['email'], user_details['id'])
+        logger.error("Fehler beim Senden der Neue Transaktion E-Mail an %s (ID: %s).", user_details['email'], user_details['id'])
 
 
 @app.route('/health-protected', methods=['GET'])
@@ -436,10 +436,10 @@ def health_protected_route(api_user_id: int, api_username: str): # Parameter umb
     Returns:
         flask.Response: Eine JSON-Antwort mit dem Healthcheck-Status und Benutzerinformationen.
     """
-    app.logger.debug("API-Benutzer authentifiziert: ID %s - %s", api_user_id, api_username)
+    logger.debug("API-Benutzer authentifiziert: ID %s - %s", api_user_id, api_username)
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if not cnx:
-        app.logger.error("Datenbankverbindung fehlgeschlagen im Healthcheck.")
+        logger.error("Datenbankverbindung fehlgeschlagen im Healthcheck.")
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
 
     # Einfache Operation, um die Verbindung zu testen, z.B. SELECT 1
@@ -447,10 +447,10 @@ def health_protected_route(api_user_id: int, api_username: str): # Parameter umb
         with cnx.cursor() as cursor:
             cursor.execute("SELECT 1")
             cursor.fetchone()
-        app.logger.debug("Datenbankverbindung erfolgreich für Healthcheck. Authentifizierter API-Benutzer: ID %s - %s", api_user_id, api_username)
+        logger.debug("Datenbankverbindung erfolgreich für Healthcheck. Authentifizierter API-Benutzer: ID %s - %s", api_user_id, api_username)
         return jsonify({'message': f"Healthcheck OK! Authentifizierter API-Benutzer ID {api_user_id} ({api_username})."})
     except Error as err:
-        app.logger.error("Datenbankfehler während Healthcheck: %s", err)
+        logger.error("Datenbankfehler während Healthcheck: %s", err)
         return jsonify({'error': 'Datenbankfehler während Healthcheck.'}), 500
     finally:
         if cnx:
@@ -472,7 +472,7 @@ def get_all_users(api_user_id: int, api_username: str):
                         (jeder Benutzer als Dictionary mit 'code', 'nachname', 'vorname')
                         oder einem Fehler.
     """
-    app.logger.info("API-Benutzer authentifiziert: ID %s - %s. Rufe alle Benutzer ab.", api_user_id, api_username)
+    logger.info("API-Benutzer authentifiziert: ID %s - %s. Rufe alle Benutzer ab.", api_user_id, api_username)
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if not cnx:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
@@ -482,10 +482,10 @@ def get_all_users(api_user_id: int, api_username: str):
             query = "SELECT code, nachname, vorname FROM users ORDER BY nachname, vorname;"
             cursor.execute(query)
             users_list = cursor.fetchall() # Umbenannt von users
-        app.logger.info("%s Benutzer erfolgreich aus der Datenbank abgerufen.", len(users_list))
+        logger.info("%s Benutzer erfolgreich aus der Datenbank abgerufen.", len(users_list))
         return jsonify(users_list), 200
     except Error as err:
-        app.logger.error("Fehler beim Abrufen aller Benutzer aus der Datenbank: %s", err)
+        logger.error("Fehler beim Abrufen aller Benutzer aus der Datenbank: %s", err)
         return jsonify({'error': f"Fehler beim Abrufen der Benutzerdaten: {err}"}), 500
     finally:
         if cnx:
@@ -504,7 +504,7 @@ def nfc_transaction(api_user_id_auth: int, api_username_auth: str):
     Body (JSON): {"token": "BASE64_TOKEN", "beschreibung": "text"}
     Returns: flask.Response
     """
-    app.logger.info("NFC-Transaktion Anfrage von API-Benutzer: ID %s - %s.", api_user_id_auth, api_username_auth)
+    logger.info("NFC-Transaktion Anfrage von API-Benutzer: ID %s - %s.", api_user_id_auth, api_username_auth)
     daten = request.get_json()
     if not daten or 'token' not in daten or 'beschreibung' not in daten:
         return jsonify({'error': 'Ungültige Anfrage. Token und Beschreibung sind erforderlich.'}), 400
@@ -524,19 +524,19 @@ def nfc_transaction(api_user_id_auth: int, api_username_auth: str):
 
             trans_saldo_aenderung_str = get_system_setting('TRANSACTION_SALDO_CHANGE')
             if trans_saldo_aenderung_str is None:
-                app.logger.info("TRANSACTION_SALDO_CHANGE nicht konfiguriert, keine Saldo-Änderung für User %s.", benutzer_info['id'])
+                logger.info("TRANSACTION_SALDO_CHANGE nicht konfiguriert, keine Saldo-Änderung für User %s.", benutzer_info['id'])
                 return jsonify({'error': f"TRANSACTION_SALDO_CHANGE nicht konfiguriert, keine Saldo-Änderung für User {benutzer_info['id']} möglich."}), 400
 
             try:
                 trans_saldo_aenderung = int(trans_saldo_aenderung_str)
             except ValueError:
-                app.logger.error("Ungültiger Wert für TRANSACTION_SALDO_CHANGE ('%s') in system_einstellungen.", trans_saldo_aenderung_str)
+                logger.error("Ungültiger Wert für TRANSACTION_SALDO_CHANGE ('%s') in system_einstellungen.", trans_saldo_aenderung_str)
                 return jsonify({'error': f"Ungültiger Wert für TRANSACTION_SALDO_CHANGE ('{trans_saldo_aenderung_str}') in system_einstellungen."}), 400
 
             cursor.execute("INSERT INTO transactions (user_id, beschreibung, saldo_aenderung) VALUES (%s, %s, %s)",
                            (benutzer_info['id'], daten['beschreibung'], trans_saldo_aenderung))
             cnx.commit()
-            app.logger.info("Transaktion für %s (ID: %s), '%s', Saldo: %s erfolgreich erstellt.",
+            logger.info("Transaktion für %s (ID: %s), '%s', Saldo: %s erfolgreich erstellt.",
                             benutzer_info['vorname'], benutzer_info['id'], daten['beschreibung'], trans_saldo_aenderung)
 
             cursor.execute("SELECT SUM(saldo_aenderung) AS saldo FROM transactions WHERE user_id = %s", (benutzer_info['id'],))
@@ -566,7 +566,7 @@ def nfc_transaction(api_user_id_auth: int, api_username_auth: str):
     except Error as err:
         if cnx.is_connected(): # Nur rollback wenn Verbindung noch besteht
             cnx.rollback()
-        app.logger.error("Fehler bei NFC-Transaktion für User %s: %s", benutzer_info.get('id', 'Unbekannt'), err)
+        logger.error("Fehler bei NFC-Transaktion für User %s: %s", benutzer_info.get('id', 'Unbekannt'), err)
         return jsonify({'error': 'Fehler bei der Transaktionsverarbeitung.'}), 500
     finally:
         if cnx:
@@ -589,7 +589,7 @@ def person_transaktion_erstellen(api_user_id_auth: int, api_username_auth: str, 
     Returns: flask.Response
     """
 
-    app.logger.info("Manuelle Transaktion für Code %s von API-Benutzer: ID %s - %s.", code, api_user_id_auth, api_username_auth)
+    logger.info("Manuelle Transaktion für Code %s von API-Benutzer: ID %s - %s.", code, api_user_id_auth, api_username_auth)
     daten = request.get_json()
     if not daten or 'beschreibung' not in daten:
         return jsonify({'error': 'Ungültige Anfrage. Beschreibung ist erforderlich.'}), 400
@@ -600,13 +600,13 @@ def person_transaktion_erstellen(api_user_id_auth: int, api_username_auth: str, 
 
     trans_saldo_aenderung_str = get_system_setting('TRANSACTION_SALDO_CHANGE')
     if trans_saldo_aenderung_str is None:
-        app.logger.info("TRANSACTION_SALDO_CHANGE nicht konfiguriert, keine Saldo-Änderung für User %s.", user_info['id'])
+        logger.info("TRANSACTION_SALDO_CHANGE nicht konfiguriert, keine Saldo-Änderung für User %s.", user_info['id'])
         return jsonify({'error': f"TRANSACTION_SALDO_CHANGE nicht konfiguriert, keine Saldo-Änderung für User {user_info['id']} möglich."}), 400
 
     try:
         trans_saldo_aenderung = int(trans_saldo_aenderung_str)
     except ValueError:
-        app.logger.error("Ungültiger Wert für TRANSACTION_SALDO_CHANGE ('%s') in system_einstellungen.", trans_saldo_aenderung_str)
+        logger.error("Ungültiger Wert für TRANSACTION_SALDO_CHANGE ('%s') in system_einstellungen.", trans_saldo_aenderung_str)
         return jsonify({'error': f"Ungültiger Wert für TRANSACTION_SALDO_CHANGE ('{trans_saldo_aenderung_str}') in system_einstellungen."}), 400
 
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
@@ -619,7 +619,7 @@ def person_transaktion_erstellen(api_user_id_auth: int, api_username_auth: str, 
             cursor.execute("INSERT INTO transactions (user_id, beschreibung, saldo_aenderung) VALUES (%s, %s, %s)",
                            (user_info['id'], daten['beschreibung'], trans_saldo_aenderung))
             cnx.commit()
-            app.logger.info("Manuelle Transaktion für %s (ID: %s, Code: %s), '%s', Saldo: %s erfolgreich erstellt.",
+            logger.info("Manuelle Transaktion für %s (ID: %s, Code: %s), '%s', Saldo: %s erfolgreich erstellt.",
                             user_info['vorname'], user_info['id'], code, daten['beschreibung'], trans_saldo_aenderung)
 
             cursor.execute("SELECT SUM(saldo_aenderung) AS saldo FROM transactions WHERE user_id = %s", (user_info['id'],))
@@ -649,7 +649,7 @@ def person_transaktion_erstellen(api_user_id_auth: int, api_username_auth: str, 
     except Error as err:
         if cnx.is_connected():
             cnx.rollback()
-        app.logger.error("Fehler bei manueller Transaktion für Code %s: %s", code, err)
+        logger.error("Fehler bei manueller Transaktion für Code %s: %s", code, err)
         return jsonify({'error': 'Fehler beim Erstellen der Transaktion.'}), 500
     finally:
         if cnx:
@@ -667,14 +667,14 @@ def get_user_details_for_notification_by_code(code_val: str) -> Optional[dict]: 
     """
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if not cnx:
-        app.logger.error("DB-Verbindungsfehler in get_user_details_for_notification_by_code für Code %s", code_val)
+        logger.error("DB-Verbindungsfehler in get_user_details_for_notification_by_code für Code %s", code_val)
         return None
     try:
         with cnx.cursor(dictionary=True) as cursor:
             cursor.execute("SELECT id, vorname, email FROM users WHERE code = %s", (code_val,))
             return cursor.fetchone()
     except Error as err:
-        app.logger.error("DB-Fehler in get_user_details_for_notification_by_code für Code %s: %s", code_val, err)
+        logger.error("DB-Fehler in get_user_details_for_notification_by_code für Code %s: %s", code_val, err)
         return None
     finally:
         if cnx:
@@ -693,7 +693,7 @@ def get_alle_summe(api_user_id: int, api_username: str):
     Returns:
         flask.Response: Eine JSON-Antwort mit einer Liste von Benutzern und ihrem Saldo.
     """
-    app.logger.info("API-Benutzer authentifiziert: ID %s - %s. Rufe Saldo aller Personen ab.", api_user_id, api_username)
+    logger.info("API-Benutzer authentifiziert: ID %s - %s. Rufe Saldo aller Personen ab.", api_user_id, api_username)
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if not cnx:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
@@ -703,10 +703,10 @@ def get_alle_summe(api_user_id: int, api_username: str):
                 "SELECT u.id, u.nachname AS nachname, u.vorname AS vorname, SUM(t.saldo_aenderung) AS saldo " \
                 "FROM users AS u LEFT JOIN transactions AS t ON u.id = t.user_id GROUP BY u.id, u.nachname, u.vorname ORDER BY saldo DESC, u.nachname, u.vorname;")
             personen_saldo = cursor.fetchall()
-        app.logger.info("Saldo aller Personen wurde ermittelt (%s Einträge).", len(personen_saldo))
+        logger.info("Saldo aller Personen wurde ermittelt (%s Einträge).", len(personen_saldo))
         return jsonify(personen_saldo)
     except Error as err:
-        app.logger.error("Fehler beim Lesen der Saldo-Daten: %s", err)
+        logger.error("Fehler beim Lesen der Saldo-Daten: %s", err)
         return jsonify({'error': 'Fehler beim Lesen der Daten.'}), 500
     finally:
         if cnx:
@@ -726,7 +726,7 @@ def get_alle_transaktionen(api_user_id: int, api_username: str): # Funktionsname
     Returns:
         flask.Response: Eine JSON-Antwort mit einer Liste aller Transaktionen mit Benutzerinformationen.
     """
-    app.logger.info("API-Benutzer authentifiziert: ID %s - %s. Rufe alle Transaktionen ab.", api_user_id, api_username)
+    logger.info("API-Benutzer authentifiziert: ID %s - %s. Rufe alle Transaktionen ab.", api_user_id, api_username)
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if not cnx:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
@@ -735,10 +735,10 @@ def get_alle_transaktionen(api_user_id: int, api_username: str): # Funktionsname
             cursor.execute(
                 "SELECT t.id, u.nachname AS nachname, u.vorname AS vorname, t.beschreibung, t.timestamp FROM transactions AS t INNER JOIN users AS u ON t.user_id = u.id ORDER BY t.timestamp DESC;")
             transaktionen_liste = cursor.fetchall() # Umbenannt
-        app.logger.info("Alle Transaktionen wurden ermittelt (%s Einträge).", len(transaktionen_liste))
+        logger.info("Alle Transaktionen wurden ermittelt (%s Einträge).", len(transaktionen_liste))
         return jsonify(transaktionen_liste)
     except Error as err:
-        app.logger.error("Fehler beim Lesen der Transaktionsdaten: %s", err)
+        logger.error("Fehler beim Lesen der Transaktionsdaten: %s", err)
         return jsonify({'error': 'Fehler beim Lesen der Daten.'}), 500
     finally:
         if cnx:
@@ -757,7 +757,7 @@ def reset_transaktionen(api_user_id: int, api_username: str): # Parameter umbena
     Returns:
         flask.Response: Eine JSON-Antwort mit einer Erfolgsmeldung oder einem Fehler.
     """
-    app.logger.info("API-Benutzer authentifiziert: ID %s - %s. Lösche alle Transaktionen.", api_user_id, api_username)
+    logger.info("API-Benutzer authentifiziert: ID %s - %s. Lösche alle Transaktionen.", api_user_id, api_username)
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if not cnx:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
@@ -766,12 +766,12 @@ def reset_transaktionen(api_user_id: int, api_username: str): # Parameter umbena
             sql = "TRUNCATE TABLE transactions;"
             cursor.execute(sql)
             cnx.commit()
-        app.logger.info("Alle Transaktionen wurden gelöscht.")
+        logger.info("Alle Transaktionen wurden gelöscht.")
         return jsonify({'message': 'Alle Transaktionen wurden gelöscht.'}), 200
     except Error as err:
         if cnx.is_connected():
             cnx.rollback()
-        app.logger.error("Fehler beim Leeren der Tabelle transactions: %s", err)
+        logger.error("Fehler beim Leeren der Tabelle transactions: %s", err)
         return jsonify({'error': 'Fehler beim Leeren der Tabelle transactions.'}), 500
     finally:
         if cnx:
@@ -789,7 +789,7 @@ def create_person(api_user_id: int, api_username: str): # Parameter umbenannt
     Body (JSON): {"code": "...", "nachname": "...", "vorname": "...", "password": "..."}
     Returns: flask.Response
     """
-    app.logger.info("API-Benutzer authentifiziert: ID %s - %s. Erstelle neue Person.", api_user_id, api_username)
+    logger.info("API-Benutzer authentifiziert: ID %s - %s. Erstelle neue Person.", api_user_id, api_username)
     daten = request.get_json()
     if not daten or 'code' not in daten or 'nachname' not in daten or 'vorname' not in daten:
         return jsonify({'error': 'Ungültige oder unvollständige Daten. Code, Nachname, Vorname sind erforderlich.'}), 400
@@ -816,12 +816,12 @@ def create_person(api_user_id: int, api_username: str): # Parameter umbenannt
             werte = (code_val, nachname_val, vorname_val, password_val)
             cursor.execute(sql, werte)
             cnx.commit()
-        app.logger.info("Person mit Code %s erfolgreich hinzugefügt.", code_val)
+        logger.info("Person mit Code %s erfolgreich hinzugefügt.", code_val)
         return jsonify({'message': f"Person mit Code {code_val} erfolgreich hinzugefügt."}), 201
     except Error as err:
         if cnx.is_connected():
             cnx.rollback()
-        app.logger.error("Fehler beim Hinzufügen der Person mit Code %s: %s", code_val, err)
+        logger.error("Fehler beim Hinzufügen der Person mit Code %s: %s", code_val, err)
         return jsonify({'error': 'Fehler beim Hinzufügen der Person.'}), 500
     finally:
         if cnx:
@@ -841,7 +841,7 @@ def delete_person(api_user_id: int, api_username: str, code: str): # Parameter u
     Returns:
         flask.Response: Eine JSON-Antwort mit einer Erfolgsmeldung oder einem Fehler.
     """
-    app.logger.info("API-Benutzer authentifiziert: ID %s - %s. Lösche Person mit Code %s.", api_user_id, api_username, code)
+    logger.info("API-Benutzer authentifiziert: ID %s - %s. Lösche Person mit Code %s.", api_user_id, api_username, code)
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if not cnx:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
@@ -851,14 +851,14 @@ def delete_person(api_user_id: int, api_username: str, code: str): # Parameter u
             cursor.execute(sql, (code,))
             cnx.commit()
             if cursor.rowcount > 0:
-                app.logger.info("Person mit Code %s erfolgreich gelöscht.", code)
+                logger.info("Person mit Code %s erfolgreich gelöscht.", code)
                 return jsonify({'message': f"Person mit Code {code} erfolgreich gelöscht."}), 200
-            app.logger.warning("Keine Person mit dem Code %s zum Löschen gefunden.", code)
+            logger.warning("Keine Person mit dem Code %s zum Löschen gefunden.", code)
             return jsonify({'error': f"Keine Person mit dem Code {code} gefunden."}), 404
     except Error as err:
         if cnx.is_connected():
             cnx.rollback()
-        app.logger.error("Fehler beim Löschen der Person mit Code %s: %s", code, err)
+        logger.error("Fehler beim Löschen der Person mit Code %s: %s", code, err)
         return jsonify({'error': 'Fehler beim Löschen der Person.'}), 500
     finally:
         if cnx:
@@ -878,7 +878,7 @@ def person_exists_by_code(api_user_id: int, api_username: str, code: str): # Par
     Returns:
         flask.Response: Eine JSON-Antwort mit dem Namen der Person oder einem Fehler.
     """
-    app.logger.info("API-Benutzer authentifiziert: ID %s - %s. Prüfe Existenz von Person mit Code %s.", api_user_id, api_username, code)
+    logger.info("API-Benutzer authentifiziert: ID %s - %s. Prüfe Existenz von Person mit Code %s.", api_user_id, api_username, code)
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if not cnx:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
@@ -887,12 +887,12 @@ def person_exists_by_code(api_user_id: int, api_username: str, code: str): # Par
             cursor.execute("SELECT nachname, vorname FROM users WHERE code = %s", (code,))
             person = cursor.fetchone()
         if person:
-            app.logger.info("Person mit Code %s gefunden: %s, %s", code, person['nachname'], person['vorname'])
+            logger.info("Person mit Code %s gefunden: %s, %s", code, person['nachname'], person['vorname'])
             return jsonify(person)
-        app.logger.info("Person mit Code %s nicht gefunden.", code)
+        logger.info("Person mit Code %s nicht gefunden.", code)
         return jsonify({'error': 'Person nicht gefunden.'}), 404
     except Error as err:
-        app.logger.error("Fehler beim Lesen der Daten für Code %s: %s", code, err)
+        logger.error("Fehler beim Lesen der Daten für Code %s: %s", code, err)
         return jsonify({'error': 'Fehler beim Lesen der Daten.'}), 500
     finally:
         if cnx:
@@ -913,7 +913,7 @@ def get_person_by_code(api_user_id: int, api_username: str, code: str): # Parame
     Returns:
         flask.Response: Eine JSON-Antwort mit den Personendaten (Name, Vorname, Saldo) oder einem Fehler.
     """
-    app.logger.info("Abfrage für Person mit Code %s von API-Benutzer: ID %s - %s.", code, api_user_id, api_username)
+    logger.info("Abfrage für Person mit Code %s von API-Benutzer: ID %s - %s.", code, api_user_id, api_username)
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if not cnx:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
@@ -924,7 +924,7 @@ def get_person_by_code(api_user_id: int, api_username: str, code: str): # Parame
             person_info = cursor.fetchone()
 
             if not person_info:
-                app.logger.info("Person mit Code %s nicht gefunden.", code)
+                logger.info("Person mit Code %s nicht gefunden.", code)
                 return jsonify({'error': 'Person nicht gefunden.'}), 404
 
             cursor.execute(
@@ -938,11 +938,11 @@ def get_person_by_code(api_user_id: int, api_username: str, code: str): # Parame
             "vorname": person_info['vorname'],
             "saldo": aktueller_saldo
         }
-        app.logger.info("Person mit Code %s gefunden: %s, %s - Saldo %s", code, response_data['nachname'], response_data['vorname'], response_data['saldo'])
+        logger.info("Person mit Code %s gefunden: %s, %s - Saldo %s", code, response_data['nachname'], response_data['vorname'], response_data['saldo'])
         return jsonify(response_data)
 
     except Error as err:
-        app.logger.error("DB-Fehler bei Abfrage von Person mit Code %s: %s", code, err)
+        logger.error("DB-Fehler bei Abfrage von Person mit Code %s: %s", code, err)
         return jsonify({'error': 'Fehler beim Lesen der Daten.'}), 500
     finally:
         if cnx:
@@ -962,7 +962,7 @@ def person_transaktionen_loeschen(api_user_id: int, api_username: str, code: str
     Returns:
         flask.Response: Eine JSON-Antwort mit einer Erfolgsmeldung oder einem Fehler.
     """
-    app.logger.info("API-Benutzer authentifiziert: ID %s - %s. Lösche Transaktionen für Code %s.", api_user_id, api_username, code)
+    logger.info("API-Benutzer authentifiziert: ID %s - %s. Lösche Transaktionen für Code %s.", api_user_id, api_username, code)
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if not cnx:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
@@ -973,20 +973,20 @@ def person_transaktionen_loeschen(api_user_id: int, api_username: str, code: str
             cursor.execute("SELECT id FROM users WHERE code = %s", (code,))
             user_data_row = cursor.fetchone()
             if not user_data_row:
-                app.logger.warning("Person mit Code %s nicht gefunden, keine Transaktionen zum Löschen.", code)
+                logger.warning("Person mit Code %s nicht gefunden, keine Transaktionen zum Löschen.", code)
                 return jsonify({'error': 'Person mit diesem Code nicht gefunden.'}), 404
 
             target_user_id_for_delete = user_data_row[0]
             cursor.execute("DELETE FROM transactions WHERE user_id = %s", (target_user_id_for_delete,))
             cnx.commit()
 
-        app.logger.info("Transaktionen für Benutzer mit Code %s (ID: %s) erfolgreich gelöscht.", code, target_user_id_for_delete)
+        logger.info("Transaktionen für Benutzer mit Code %s (ID: %s) erfolgreich gelöscht.", code, target_user_id_for_delete)
         return jsonify({'message': 'Transaktionen erfolgreich gelöscht.'}), 200
     except Error as err:
         if cnx.is_connected():
             cnx.rollback()
         user_id_log = target_user_id_for_delete if target_user_id_for_delete is not None else "Unbekannt (Benutzer nicht gefunden)"
-        app.logger.error("Fehler beim Löschen der Transaktionen für Code %s (User ID: %s): %s", code, user_id_log, err)
+        logger.error("Fehler beim Löschen der Transaktionen für Code %s (User ID: %s): %s", code, user_id_log, err)
         return jsonify({'error': 'Fehler beim Löschen der Transaktion.'}), 500
     finally:
         if cnx:
@@ -996,25 +996,25 @@ if __name__ == '__main__':
     # Konfigurationsprüfungen
     required_db_keys = ['host', 'port', 'user', 'password', 'database']
     if not all(key in config.db_config and config.db_config[key] is not None for key in required_db_keys):
-        app.logger.critical("Fehler: Nicht alle Datenbank-Konfigurationsvariablen sind gesetzt. Benötigt: %s", ", ".join(required_db_keys))
+        logger.critical("Fehler: Nicht alle Datenbank-Konfigurationsvariablen sind gesetzt. Benötigt: %s", ", ".join(required_db_keys))
         sys.exit(1)
 
     try:
         config.db_config['port'] = int(config.db_config['port'])
     except ValueError:
-        app.logger.critical("Fehler: Datenbank-Port '%s' ist keine gültige Zahl.", config.db_config.get('port'))
+        logger.critical("Fehler: Datenbank-Port '%s' ist keine gültige Zahl.", config.db_config.get('port'))
         sys.exit(1)
 
     required_smtp_keys = ['host', 'port', 'user', 'password', 'sender']
     if not all(key in config.smtp_config and config.smtp_config[key] is not None for key in required_smtp_keys):
-        app.logger.critical("Fehler: Nicht alle SMTP-Konfigurationsvariablen sind gesetzt. Benötigt: %s", ", ".join(required_smtp_keys))
+        logger.critical("Fehler: Nicht alle SMTP-Konfigurationsvariablen sind gesetzt. Benötigt: %s", ", ".join(required_smtp_keys))
         sys.exit(1)
 
     try:
         config.smtp_config['port'] = int(config.smtp_config['port'])
     except ValueError:
-        app.logger.critical("Fehler: SMTP_PORT '%s' ist keine gültige Zahl.", config.smtp_config.get('port'))
+        logger.critical("Fehler: SMTP_PORT '%s' ist keine gültige Zahl.", config.smtp_config.get('port'))
         sys.exit(1)
 
-    app.logger.info("Feuerwehr-Versorgungs-Helfer API wird gestartet...")
+    logger.info("Feuerwehr-Versorgungs-Helfer API wird gestartet...")
     app.run(host=config.api_config['host'], port=config.api_config['port'], debug=config.api_config['debug_mode'])

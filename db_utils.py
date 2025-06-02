@@ -43,10 +43,9 @@ class DatabaseConnectionPool:
                 logger.info("Datenbankverbindungspool erfolgreich initialisiert.")
             except mysql.connector.Error as e:
                 logger.error(
-                    f"Fehler beim Initialisieren des Datenbankverbindungspools: {e}"
+                    "Fehler beim Initialisieren des Datenbankverbindungspools: %s", e
                 )
                 raise  # Wirf den Fehler weiter, damit die Anwendung reagieren kann
-
 
     @classmethod
     def get_connection(cls, database_config=None):
@@ -88,9 +87,8 @@ class DatabaseConnectionPool:
             cnx = cls._connection_pool.get_connection()
             return cnx
         except mysql.connector.Error as e:
-            logger.error(f"Fehler beim Abrufen einer Verbindung aus dem Pool: {e}")
+            logger.error("Fehler beim Abrufen einer Verbindung aus dem Pool: %s", e)
             return None
-
 
     @classmethod
     def close_connection(cls, cnx):
