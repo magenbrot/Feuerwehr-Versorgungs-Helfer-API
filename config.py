@@ -32,5 +32,6 @@ api_config = {
 gui_config = {
     'host': os.getenv("GUI_HOST", "127.0.0.1"),
     'port': os.getenv("GUI_PORT", "5001"),
-    'debug_mode': os.getenv('GUI_DEBUG', 'False').lower() in ['true', '1', 'yes']
+    'debug_mode': os.getenv('GUI_DEBUG', 'False').lower() in ['true', '1', 'yes'],
+    'static_url_prefix': os.getenv("STATIC_URL_PREFIX"),
 }

@@ -1,8 +1,10 @@
 """Verwaltet den Datenbankverbindungspool für die Anwendung."""
+import logging
 import sys
 import mysql.connector
 from mysql.connector import pooling, Error  # Error hier importiert
 
+logger = logging.getLogger(__name__)
 
 class DatabaseConnectionPool:
     """
@@ -38,9 +40,9 @@ class DatabaseConnectionPool:
                 cls._connection_pool = pooling.MySQLConnectionPool(
                     pool_name="dbpool", pool_size=3, **database_config
                 )
-                print("Datenbankverbindungspool erfolgreich initialisiert.")
+                logger.info("Datenbankverbindungspool erfolgreich initialisiert.")
             except mysql.connector.Error as e:
-                print(
+                logger.error(
                     f"Fehler beim Initialisieren des Datenbankverbindungspools: {e}"
                 )
                 raise  # Wirf den Fehler weiter, damit die Anwendung reagieren kann
@@ -76,7 +78,7 @@ class DatabaseConnectionPool:
             try:
                 cls.initialize_pool(database_config)
             except Error:  # Hier Error verwenden
-                print("Fehler beim Initialisieren des Pools in get_connection")
+                logger.critical("Fehler beim Initialisieren des Pools in get_connection")
                 sys.exit(1)  # Kritischer Fehler: Anwendung beenden
         if cls._connection_pool is None:
             raise RuntimeError(
@@ -86,7 +88,7 @@ class DatabaseConnectionPool:
             cnx = cls._connection_pool.get_connection()
             return cnx
         except mysql.connector.Error as e:
-            print(f"Fehler beim Abrufen einer Verbindung aus dem Pool: {e}")
+            logger.error(f"Fehler beim Abrufen einer Verbindung aus dem Pool: {e}")
             return None
 
 

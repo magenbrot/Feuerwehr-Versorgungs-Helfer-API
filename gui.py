@@ -1,41 +1,65 @@
 """WebGUI für den Feuerwehr-Versorgungs-Helfer"""
 
+# Logging zuerst aktivieren
+import sys
+import logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stderr)
+    ]
+)
+logger = logging.getLogger(__name__)
+
 import binascii
 import os
 import io
 import random
 import secrets
 import string
-import sys
 import qrcode
 from PIL import Image, ImageDraw, ImageFont
-from dotenv import load_dotenv
 from flask import Flask, render_template, request, redirect, url_for, session, flash, send_file # pigar: required-packages=uWSGI
 from werkzeug.security import check_password_hash, generate_password_hash
 from mysql.connector import Error, IntegrityError # IntegrityError für Unique-Constraint-Fehler hinzugefügt
 import config
 import db_utils
 
-load_dotenv()
-
-if "STATIC_URL_PREFIX" in os.environ:
-    app = Flask(__name__, static_url_path=os.environ.get('STATIC_URL_PREFIX', '/static'))
+if config.gui_config['static_url_prefix']:
+    app = Flask(__name__, static_url_path=config.gui_config['static_url_prefix'] + '/static')
 else:
     app = Flask(__name__)
 
+app.debug = config.gui_config['debug_mode']
+
+app.config['SECRET_KEY'] = os.urandom(24)
+app.json.ensure_ascii = False
+app.json.mimetype = "application/json; charset=utf-8"
+
+logger.info("Feuerwehr-Versorgungs-Helfer GUI wurde gestartet")
+
 if "BASE_URL" in os.environ:
     BASE_URL = os.environ.get('BASE_URL', '/')
-    print(f"BASE_URL: {BASE_URL}")
+    logger.info(f"BASE_URL: {BASE_URL}")
 else:
     BASE_URL=""
 
-app.config['SECRET_KEY'] = os.urandom(24)
+if not all(key in config.db_config and config.db_config[key] is not None for key in ['host', 'port', 'user', 'password', 'database']):
+    logger.critical("Fehler: Nicht alle Datenbank-Konfigurationsvariablen (MYSQL_HOST, MYSQL_PORT, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DB) sind in der .env Datei oder Umgebung gesetzt.")
+    sys.exit()
+
+try:
+    config.db_config['port'] = int(config.db_config['port'])
+except ValueError:
+    logger.critical(f"Fehler: Datenbank-Port '{config.db_config['port']}' ist keine gültige Zahl.")
+    sys.exit()
 
 # Initialisiere den Pool einmal beim Start der Anwendung # pylint: disable=R0801
 try:
     db_utils.DatabaseConnectionPool.initialize_pool(config.db_config)
 except Error:
-    print("Fehler beim Starten der Datenbankverbindung.")
+    logger.critical("Fehler beim Starten der Datenbankverbindung.")
     sys.exit(1)
 
 def generate_api_key_string(length=32):
@@ -64,10 +88,10 @@ def hex_to_binary(hex_string):
     try:
         return binascii.unhexlify(hex_string)
     except binascii.Error:
-        print(f"Fehler bei der Hexadezimal-Konvertierung: Ungültiger Hexadezimalstring '{hex_string}'")
+        logger.error(f"Fehler bei der Hexadezimal-Konvertierung: Ungültiger Hexadezimalstring '{hex_string}'")
         return None
     except TypeError:
-        print(f"Fehler bei der Hexadezimal-Konvertierung: Ungültiger Typ für Hexadezimalstring: {type(hex_string)}")
+        logger.error(f"Fehler bei der Hexadezimal-Konvertierung: Ungültiger Typ für Hexadezimalstring: {type(hex_string)}")
         return None
 
 def erzeuge_qr_code(daten, text):
@@ -97,13 +121,13 @@ def erzeuge_qr_code(daten, text):
     for font_name in font_names:
         try:
             schriftart = ImageFont.truetype(font_name, schriftgroesse)
-            print(f"Schriftart '{font_name}' geladen.")
+            logger.info(f"Schriftart '{font_name}' geladen.")
             break  # Erfolgreich geladen, Schleife verlassen
         except IOError:
-            print(f"Schriftart '{font_name}' nicht gefunden.")
+            logger.error(f"Schriftart '{font_name}' nicht gefunden.")
 
     if schriftart is None:
-        print("Keine der bevorzugten Schriftarten gefunden. Lade Standardschriftart.")
+        logger.error("Keine der bevorzugten Schriftarten gefunden. Lade Standardschriftart.")
         try:
             schriftart = ImageFont.load_default(size=schriftgroesse)
         except AttributeError: # Fallback für ältere Pillow Versionen ohne size Parameter
@@ -124,7 +148,7 @@ def erzeuge_qr_code(daten, text):
     else: # Fallback
         text_breite_val = len(text) * (schriftgroesse // 2)
         text_hoehe_val = schriftgroesse
-        print("Konnte Textgröße nicht exakt bestimmen, verwende Schätzung.")
+        logger.error("Konnte Textgröße nicht exakt bestimmen, verwende Schätzung.")
 
     tatsaechliche_gesamthoehe_textbereich = max(text_abstand_unten, text_hoehe_val)
 
@@ -171,7 +195,7 @@ def get_all_notification_types():
             types = cursor.fetchall()
             return types
         except Error as err:
-            print(f"Datenbankfehler beim Abrufen aller Benachrichtigungstypen: {err}")
+            logger.error(f"Datenbankfehler beim Abrufen aller Benachrichtigungstypen: {err}")
             return []
         finally:
             if cursor:
@@ -205,7 +229,7 @@ def get_user_notification_settings(user_id):
                 settings[row['typ_id']] = bool(row['email_aktiviert'])
             return settings
         except Error as err:
-            print(f"Datenbankfehler beim Abrufen der Benutzereinstellungen für Benachrichtigungen: {err}")
+            logger.error(f"Datenbankfehler beim Abrufen der Benutzereinstellungen für Benachrichtigungen: {err}")
             return {}
         finally:
             if cursor:
@@ -254,7 +278,7 @@ def update_user_notification_settings(user_id, active_notification_type_ids_int)
         cnx.commit()
         return True
     except Error as err:
-        print(f"Fehler beim Aktualisieren der Benutzereinstellungen für Benachrichtigungen: {err}")
+        logger.error(f"Fehler beim Aktualisieren der Benutzereinstellungen für Benachrichtigungen: {err}")
         flash("Fehler beim Speichern der Benachrichtigungseinstellungen.", "error")
         cnx.rollback()
         return False
@@ -284,7 +308,7 @@ def get_all_system_settings():
                 settings[row['einstellung_schluessel']] = {'wert': row['einstellung_wert'], 'beschreibung': row['beschreibung']}
             return settings
         except Error as err:
-            print(f"Datenbankfehler beim Abrufen der Systemeinstellungen: {err}")
+            logger.error(f"Datenbankfehler beim Abrufen der Systemeinstellungen: {err}")
             return {}
         finally:
             if cursor:
@@ -314,7 +338,7 @@ def update_system_setting(einstellung_schluessel, einstellung_wert):
             cnx.commit()
             return cursor.rowcount > 0 # True wenn eine Zeile aktualisiert wurde
         except Error as err:
-            print(f"Fehler beim Aktualisieren der Systemeinstellung '{einstellung_schluessel}': {err}")
+            logger.error(f"Fehler beim Aktualisieren der Systemeinstellung '{einstellung_schluessel}': {err}")
             flash(f"Datenbankfehler beim Speichern der Einstellung '{einstellung_schluessel}'.", "error")
             cnx.rollback()
             return False
@@ -349,7 +373,7 @@ def add_user_nfc_token(user_id, token_name, token_hex):
                 cnx.commit()
                 return True
             except Error as err:
-                print(f"Fehler beim Hinzufügen des NFC-Tokens: {err}")
+                logger.error(f"Fehler beim Hinzufügen des NFC-Tokens: {err}")
                 cnx.rollback()
                 return False
             finally:
@@ -377,13 +401,13 @@ def delete_user_nfc_token(user_id, token_id):
         cursor = cnx.cursor()
         if token_id:
             try:
-                print(f"Lösche NFC-Tokens: {token_id} von Benutzer {user_id}")
+                logger.info(f"Lösche NFC-Tokens: {token_id} von Benutzer {user_id}")
                 query = "DELETE FROM nfc_token WHERE token_id = %s AND user_id = %s"
                 cursor.execute(query, (token_id, user_id))
                 cnx.commit()
                 return True
             except Error as err:
-                print(f"Fehler beim Entfernen des NFC-Tokens: {err}")
+                logger.error(f"Fehler beim Entfernen des NFC-Tokens: {err}")
                 cnx.rollback()
                 return False
             finally:
@@ -419,7 +443,7 @@ def get_user_nfc_tokens(user_id):
             nfc_tokens = cursor.fetchall()
             return nfc_tokens
         except Error as err:
-            print(f"Datenbankfehler beim Abrufen der Benutzer NFC Tokens: {err}")
+            logger.error(f"Datenbankfehler beim Abrufen der Benutzer NFC Tokens: {err}")
             return None
         finally:
             if cursor:
@@ -482,7 +506,7 @@ def delete_user(user_id):
             cnx.commit()
             return True
         except Error as err:
-            print(f"Fehler beim Löschen des Benutzers: {err}")
+            logger.error(f"Fehler beim Löschen des Benutzers: {err}")
             cnx.rollback()
             return False
         finally:
@@ -514,7 +538,7 @@ def toggle_user_admin(user_id, admin_state):
             cnx.commit()
             return True
         except Error as err:
-            print(f"Fehler beim Ändern des Admin-Modes für den Benutzers: {err}")
+            logger.error(f"Fehler beim Ändern des Admin-Modes für den Benutzers: {err}")
             cnx.rollback()
             return False
         finally:
@@ -546,7 +570,7 @@ def toggle_user_lock(user_id, lock_state):
             cnx.commit()
             return True
         except Error as err:
-            print(f"Fehler beim Ändern des Locks für den Benutzers: {err}")
+            logger.error(f"Fehler beim Ändern des Locks für den Benutzers: {err}")
             cnx.rollback()
             return False
         finally:
@@ -575,7 +599,7 @@ def update_user_comment(user_id, comment):
             cnx.commit()
             return True
         except Error as err:
-            print(f"Fehler beim Ändern des Kommentars für den Benutzers: {err}")
+            logger.error(f"Fehler beim Ändern des Kommentars für den Benutzers: {err}")
             cnx.rollback()
             return False
         finally:
@@ -604,7 +628,7 @@ def update_user_email(user_id, email):
             cnx.commit()
             return True
         except Error as err:
-            print(f"Fehler beim Ändern der Emailadresse für den Benutzers: {err}")
+            logger.error(f"Fehler beim Ändern der Emailadresse für den Benutzers: {err}")
             cnx.rollback()
             return False
         finally:
@@ -633,7 +657,7 @@ def fetch_user(code):
             user = cursor.fetchone()
             return user
         except Error as err:
-            print(f"Datenbankfehler beim Abrufen des Benutzers: {err}")
+            logger.error(f"Datenbankfehler beim Abrufen des Benutzers: {err}")
             return None
         finally:
             if cursor:
@@ -666,7 +690,7 @@ def get_user_by_id(user_id):
             user = cursor.fetchone()
             return user
         except Error as err:
-            print(f"Datenbankfehler beim Abrufen des Benutzers: {err}")
+            logger.error(f"Datenbankfehler beim Abrufen des Benutzers: {err}")
             return None
         finally:
             if cursor:
@@ -695,7 +719,7 @@ def get_saldo_for_user(user_id):
             saldo = result[0] if result and result[0] is not None else 0
             return saldo
         except Error as err:
-            print(f"Datenbankfehler beim Abrufen des Saldos: {err}")
+            logger.error(f"Datenbankfehler beim Abrufen des Saldos: {err}")
             return 0
         finally:
             if cursor:
@@ -726,7 +750,7 @@ def get_saldo_by_user():
             saldo_by_user = {row['id']: row['saldo'] or 0 for row in cursor.fetchall()}
             return saldo_by_user
         except Error as err:
-            print(f"Datenbankfehler beim Abrufen des Saldos pro Benutzer: {err}")
+            logger.error(f"Datenbankfehler beim Abrufen des Saldos pro Benutzer: {err}")
             return {}
         finally:
             if cursor:
@@ -757,7 +781,7 @@ def get_all_users():
             users = cursor.fetchall()
             return users
         except Error as err:
-            print(f"Datenbankfehler beim Abrufen aller Benutzer: {err}")
+            logger.error(f"Datenbankfehler beim Abrufen aller Benutzer: {err}")
             return []
         finally:
             if cursor:
@@ -783,7 +807,7 @@ def get_all_api_users():
             api_users = cursor.fetchall()
             return api_users
         except Error as err:
-            print(f"Datenbankfehler beim Abrufen aller API-Benutzer: {err}")
+            logger.error(f"Datenbankfehler beim Abrufen aller API-Benutzer: {err}")
             return []
         finally:
             if cursor:
@@ -812,7 +836,7 @@ def get_api_user_by_id(api_user_id):
             api_user = cursor.fetchone()
             return api_user
         except Error as err:
-            print(f"Datenbankfehler beim Abrufen des API-Benutzers: {err}")
+            logger.error(f"Datenbankfehler beim Abrufen des API-Benutzers: {err}")
             return None
         finally:
             if cursor:
@@ -841,7 +865,7 @@ def get_api_keys_for_api_user(api_user_id):
             keys = cursor.fetchall()
             return keys
         except Error as err:
-            print(f"Datenbankfehler beim Abrufen der API-Keys für API-Benutzer {api_user_id}: {err}")
+            logger.error(f"Datenbankfehler beim Abrufen der API-Keys für API-Benutzer {api_user_id}: {err}")
             return []
         finally:
             if cursor:
@@ -870,7 +894,7 @@ def get_user_transactions(user_id):
             transactions = cursor.fetchall()
             return transactions
         except Error as err:
-            print(f"Datenbankfehler beim Abrufen der Benutzertransaktionen: {err}")
+            logger.error(f"Datenbankfehler beim Abrufen der Benutzertransaktionen: {err}")
             return None
         finally:
             if cursor:
@@ -900,7 +924,7 @@ def add_transaction(user_id, beschreibung, saldo_aenderung):
             cnx.commit()
             return True
         except Error as err:
-            print(f"Fehler beim Hinzufügen der Transaktion: {err}")
+            logger.error(f"Fehler beim Hinzufügen der Transaktion: {err}")
             flash(f"Datenbankfehler beim Hinzufügen der Transaktion: {err}", "error")
             cnx.rollback()
             return False
@@ -930,7 +954,7 @@ def delete_all_transactions(user_id):
             cnx.commit()
             return True
         except Error as err:
-            print(f"Fehler beim Löschen der Transaktionen: {err}")
+            logger.error(f"Fehler beim Löschen der Transaktionen: {err}")
             cnx.rollback()
             return False
         finally:
@@ -960,7 +984,7 @@ def update_password(user_id, new_password_hash):
             cnx.commit()
             return True
         except Error as err:
-            print(f"Fehler beim Aktualisieren des Passworts: {err}")
+            logger.error(f"Fehler beim Aktualisieren des Passworts: {err}")
             cnx.rollback()
             return False
         finally:
@@ -1012,7 +1036,7 @@ def add_regular_user_db(user_data):
             cnx.rollback()
             return False
         except Error as err:
-            print(f"Fehler beim Hinzufügen des regulären Benutzers: {err}")
+            logger.error(f"Fehler beim Hinzufügen des regulären Benutzers: {err}")
             flash("Datenbankfehler beim Hinzufügen des Benutzers.", 'error')
             cnx.rollback()
             return False
@@ -1045,7 +1069,7 @@ def add_api_user_db(username):
             cnx.rollback()
             return None
         except Error as err:
-            print(f"Fehler beim Hinzufügen des API-Benutzers: {err}")
+            logger.error(f"Fehler beim Hinzufügen des API-Benutzers: {err}")
             flash("Datenbankfehler beim Hinzufügen des API-Benutzers.", 'error')
             cnx.rollback()
             return None
@@ -1079,7 +1103,7 @@ def add_api_key_for_user_db(api_user_id, api_key_string):
             cnx.rollback()
             return False
         except Error as err:
-            print(f"Fehler beim Hinzufügen des API-Keys für API-Benutzer {api_user_id}: {err}")
+            logger.error(f"Fehler beim Hinzufügen des API-Keys für API-Benutzer {api_user_id}: {err}")
             flash("Datenbankfehler beim Hinzufügen des API-Keys.", 'error')
             cnx.rollback()
             return False
@@ -1109,7 +1133,7 @@ def delete_api_key_db(api_key_id):
             # Überprüfen, ob eine Zeile tatsächlich gelöscht wurde
             return cursor.rowcount > 0
         except Error as err:
-            print(f"Fehler beim Löschen des API-Keys {api_key_id}: {err}")
+            logger.error(f"Fehler beim Löschen des API-Keys {api_key_id}: {err}")
             flash("Datenbankfehler beim Löschen des API-Keys.", 'error')
             cnx.rollback()
             return False
@@ -1144,7 +1168,7 @@ def delete_api_user_and_keys_db(api_user_id):
             cnx.commit()
             return True
         except Error as err:
-            print(f"Fehler beim Löschen des API-Benutzers {api_user_id} und seiner Keys: {err}")
+            logger.error(f"Fehler beim Löschen des API-Benutzers {api_user_id} und seiner Keys: {err}")
             flash("Datenbankfehler beim Löschen des API-Benutzers.", 'error')
             cnx.rollback()
             return False
@@ -2006,14 +2030,4 @@ def logout():
     return redirect(BASE_URL + url_for('login'))
 
 if __name__ == '__main__':
-    if not all(key in config.db_config and config.db_config[key] is not None for key in ['host', 'port', 'user', 'password', 'database']):
-        print("Fehler: Nicht alle Datenbank-Konfigurationsvariablen (MYSQL_HOST, MYSQL_PORT, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DB) sind in der .env Datei oder Umgebung gesetzt.")
-        sys.exit()
-
-    try:
-        config.db_config['port'] = int(config.db_config['port'])
-    except ValueError:
-        print(f"Fehler: Datenbank-Port '{config.db_config['port']}' ist keine gültige Zahl.")
-        sys.exit()
-
     app.run(host=config.gui_config['host'], port=config.gui_config['port'], debug=config.gui_config['debug_mode'])
