@@ -2,12 +2,15 @@
 
 import binascii
 import os
+import io
 import random
 import secrets
 import string
 import sys
+import qrcode
+from PIL import Image, ImageDraw, ImageFont
 from dotenv import load_dotenv
-from flask import Flask, render_template, request, redirect, url_for, session, flash # pigar: required-packages=uWSGI
+from flask import Flask, render_template, request, redirect, url_for, session, flash, send_file # pigar: required-packages=uWSGI
 from werkzeug.security import check_password_hash, generate_password_hash
 from mysql.connector import Error, IntegrityError # IntegrityError für Unique-Constraint-Fehler hinzugefügt
 import config
@@ -66,6 +69,87 @@ def hex_to_binary(hex_string):
     except TypeError:
         print(f"Fehler bei der Hexadezimal-Konvertierung: Ungültiger Typ für Hexadezimalstring: {type(hex_string)}")
         return None
+
+def erzeuge_qr_code(daten, text):
+    """
+    Erzeugt einen QR-Code mit zusätzlichem Infotext als PNG-Datei.
+    """
+
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_L,
+        box_size=10,
+        border=4,
+    )
+    qr.add_data(daten)
+    qr.make(fit=True)
+
+    img = qr.make_image(fill_color="black", back_color="white").convert("RGBA")
+
+    qr_breite, qr_hoehe = img.size
+    text_farbe = "black"
+    hintergrund_farbe = "white"
+    text_abstand_unten = 40
+    schriftgroesse = 20
+    font_names = ["Hack-Bold.ttf", "DejaVuSans-Bold.ttf", "NotoSans-Bold.ttf"]
+    schriftart = None
+
+    for font_name in font_names:
+        try:
+            schriftart = ImageFont.truetype(font_name, schriftgroesse)
+            print(f"Schriftart '{font_name}' geladen.")
+            break  # Erfolgreich geladen, Schleife verlassen
+        except IOError:
+            print(f"Schriftart '{font_name}' nicht gefunden.")
+
+    if schriftart is None:
+        print("Keine der bevorzugten Schriftarten gefunden. Lade Standardschriftart.")
+        try:
+            schriftart = ImageFont.load_default(size=schriftgroesse)
+        except AttributeError: # Fallback für ältere Pillow Versionen ohne size Parameter
+            schriftart = ImageFont.load_default()
+
+    zeichne_temp = ImageDraw.Draw(Image.new("RGB", (1,1)))
+
+    if hasattr(zeichne_temp, "textbbox"): # Pillow 10.0.0+
+        # textbbox((0,0)...) gibt (x1, y1, x2, y2) relativ zum Ankerpunkt (0,0)
+        # Standardanker für textbbox ist 'la' (left-ascent), d.h. (0,0) ist links auf der Grundlinie.
+        # text_box[1] ist der y-Wert des höchsten Pixels (negativ für Aufstrich).
+        # text_box[3] ist der y-Wert des tiefsten Pixels (positiv für Abstriche).
+        text_box = zeichne_temp.textbbox((0, 0), text, font=schriftart)
+        text_breite_val = text_box[2] - text_box[0]
+        text_hoehe_val = text_box[3] - text_box[1] # Gesamthöhe des Textes
+    elif hasattr(zeichne_temp, "textsize"): # Ältere Pillow Versionen
+        text_breite_val, text_hoehe_val = zeichne_temp.textsize(text, font=schriftart)
+    else: # Fallback
+        text_breite_val = len(text) * (schriftgroesse // 2)
+        text_hoehe_val = schriftgroesse
+        print("Konnte Textgröße nicht exakt bestimmen, verwende Schätzung.")
+
+    tatsaechliche_gesamthoehe_textbereich = max(text_abstand_unten, text_hoehe_val)
+
+    # Berechne den Abstand über dem Text, um ihn im tatsaechliche_gesamthoehe_textbereich zu zentrieren.
+    # Wenn tatsaechliche_gesamthoehe_textbereich == text_hoehe_val, ist dieser Abstand 0.
+    abstand_ueber_text = (tatsaechliche_gesamthoehe_textbereich - text_hoehe_val) // 15
+
+    # Neue Gesamthöhe des Bildes
+    neue_bild_hoehe = qr_hoehe + tatsaechliche_gesamthoehe_textbereich
+
+    # Neues Bild erstellen
+    neues_bild = Image.new("RGBA", (qr_breite, neue_bild_hoehe), hintergrund_farbe)
+    neues_bild.paste(img, (0, 0)) # QR-Code auf das neue Bild kopieren
+
+    # Text auf das neue Bild zeichnen
+    zeichne_neu = ImageDraw.Draw(neues_bild)
+
+    text_x = (qr_breite - text_breite_val) // 2
+    # text_y ist die y-Koordinate für die Oberkante des Textes.
+    # Die text() Funktion von Pillow (ohne expliziten Anker) erwartet die obere linke Ecke.
+    text_y = qr_hoehe + abstand_ueber_text
+
+    zeichne_neu.text((text_x, text_y), text, fill=text_farbe, font=schriftart)
+
+    return neues_bild
 
 # Benachrichtigungseinstellungen
 def get_all_notification_types():
@@ -1390,6 +1474,65 @@ def user_info():
                            saldo=saldo,
                            all_notification_types=all_notification_types_data, # Korrigierter Variablenname
                            user_notification_settings=user_notification_settings_data) # Korrigierter Variablenname
+
+@app.route('/qr_code')
+def generate_qr():
+    """
+    Generiert dynamisch einen QR-Code als PNG-Bild und sendet ihn an den Browser.
+
+    Diese Route erfordert, dass der Benutzer eingeloggt ist. Andernfalls wird er
+    zur Login-Seite weitergeleitet.
+    Der Inhalt des QR-Codes wird durch die URL-Parameter 'usercode' und 'aktion' bestimmt.
+    'aktion' wird intern auf einen beschreibenden Text abgebildet.
+
+        URL-Parameter (Query-Argumente):
+        usercode (str): Der Benutzercode, der im QR-Code kodiert werden soll.
+                        Dieser Parameter ist erforderlich.
+        aktion (str): Ein Kürzel für die Aktion, die mit dem QR-Code verbunden ist.
+                      Mögliche Werte:
+                        - 'a': Wird zu "Transaktion buchen".
+                        - 'k': Wird zu "Kontostand".
+                      Andere Werte führen zu einem Standardtext "hier stimmt was nicht!".
+                      Dieser Parameter ist erforderlich.
+
+    Returns:
+        flask.Response: Eine Flask-Antwort, die entweder das generierte QR-Code-Bild
+                        (mimetype 'image/png') enthält oder eine Weiterleitung
+                        (redirect) zur Login-Seite oder zur Benutzerinformationsseite,
+                        falls Parameter fehlen oder der Benutzer nicht eingeloggt ist.
+                        Im Falle eines ungültigen 'aktion'-Parameters wird eine
+                        Fehlermeldung geflasht.
+    """
+
+    user_id = session.get('user_id')
+    if not user_id:
+        flash("Bitte zuerst einloggen.", "info")
+        return redirect(BASE_URL + url_for('login'))
+
+    # Die Daten für den QR-Code werden als URL-Parameter erwartet (z.B. /qr_code?data=1234567890a)
+    usercode_to_encode = request.args.get('usercode')
+    text_to_add = request.args.get('aktion')
+
+    if not usercode_to_encode or not text_to_add:
+        flash("Ungültige Aktion für QR-Code.", "error")
+        return redirect(BASE_URL + url_for('user_info'))
+
+    if text_to_add == "a":
+        text_to_add = "Transaktion buchen"
+    elif text_to_add == "k":
+        text_to_add = "Kontostand"
+    else:
+        text_to_add = "hier stimmt was nicht!"
+
+    img = erzeuge_qr_code(usercode_to_encode, text_to_add)
+
+    # Bild in einem In-Memory Bytes-Puffer speichern
+    byte_io = io.BytesIO()
+    img.save(byte_io, 'PNG')
+    byte_io.seek(0) # Wichtig: Den Puffer an den Anfang zurücksetzen
+
+    # Bild als Datei-Antwort senden
+    return send_file(byte_io, mimetype='image/png')
 
 @app.route('/admin', methods=['GET', 'POST'])
 def admin_dashboard():

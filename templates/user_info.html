@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Benutzerinformationen</title>
-    <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo/favicon.png') }}">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo/logo-120x164-alpha.png') }}">
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
@@ -87,6 +87,13 @@
             {% else %}
             <p>Noch keine NFC-Token hinterlegt.</p>
             {% endif %}
+
+            <div class="qr-code-section">
+                <h3>Deine QR-Codes:</h3>
+                <img class="qr-code-image" src="{{ url_for('generate_qr', usercode=user.code, aktion="a") }}" alt="QR-Code Transaktion buchen">
+                <img class="qr-code-image" src="{{ url_for('generate_qr', usercode=user.code, aktion="k") }}" alt="QR-Code Kontostand abfragen">
+                <p>Speichern mit Rechtsklick -> Bild speichern unter</p>
+            </div>
         </div>
 
         <div class="column right-column">

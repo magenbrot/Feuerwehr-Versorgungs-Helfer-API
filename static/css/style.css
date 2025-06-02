@@ -19,7 +19,7 @@ body {
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     width: 300px;
     text-align: center;
-    margin-top: 50px;
+    margin-top: 10px;
 }
 
 h2 {
@@ -405,6 +405,10 @@ form.inline-form-transaction button[type="submit"]:hover {
     background-color: #0056b3;
 }
 
+.qr-code-image {
+    max-width: 25%;
+}
+
 /* --- NEUE STYLES FÜR DAS ZWEISPALTIGE LAYOUT --- */
 .container {
     display: flex;
@@ -455,7 +459,6 @@ form.inline-form-transaction button[type="submit"]:hover {
     /* Weitere spezifische Anpassungen hier, falls nötig */
 }
 
-
 .right-column .action-buttons form {
     margin-bottom: 10px; /* Space between action buttons */
     border: none; /* Entfernt den Standard-Formularrahmen für diese Button-Gruppen */
@@ -467,7 +470,6 @@ form.inline-form-transaction button[type="submit"]:hover {
 .right-column .action-buttons form button[type="submit"] {
     width: 100%; /* Buttons nehmen die volle Breite ihres Form-Containers ein */
 }
-
 
 /* Responsive adjustments - stack columns on smaller screens */
 @media (max-width: 768px) {
@@ -484,7 +486,6 @@ form.inline-form-transaction button[type="submit"]:hover {
     }
 }
 
-/* Korrektur für globales Form-Styling, damit es nicht die .action-buttons beeinflusst */
 form:not(.action-buttons form):not(.compact-delete-form) {
     margin-top: 20px;
     padding: 15px;
