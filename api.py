@@ -1,8 +1,18 @@
 """Dieses Modul ist eine API Middleware für den Feuerwehr-Versorgungs-Helfer"""
 
+import sys
+import logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stderr)
+    ]
+)
+logger = logging.getLogger(__name__)
+
 import base64
 import datetime
-import sys
 from functools import wraps
 from pathlib import Path
 from typing import Optional, Dict, Any
@@ -14,15 +24,28 @@ import email_sender
 
 app = Flask(__name__)
 
+app.debug = config.api_config['debug_mode']
+
 app.json.ensure_ascii = False
 app.json.mimetype = "application/json; charset=utf-8"
+
+logger.info("Feuerwehr-Versorgungs-Helfer API wurde gestartet")
+
+if not all(key in config.db_config and config.db_config[key] is not None for key in ['host', 'port', 'user', 'password', 'database']):
+    logger.critical("Fehler: Nicht alle Datenbank-Konfigurationsvariablen (MYSQL_HOST, MYSQL_PORT, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DB) sind in der .env Datei oder Umgebung gesetzt.")
+    sys.exit()
+
+try:
+    config.db_config['port'] = int(config.db_config['port'])
+except ValueError:
+    logger.critical(f"Fehler: Datenbank-Port '{config.db_config['port']}' ist keine gültige Zahl.")
+    sys.exit()
 
 # Initialisiere den Pool einmal beim Start der Anwendung # pylint: disable=R0801
 try:
     db_utils.DatabaseConnectionPool.initialize_pool(config.db_config)
 except Error as e:
-    # Direkter Print, da Logger ggf. noch nicht voll initialisiert ist oder Konfigurationsproblem.
-    print(f"Kritischer Fehler beim Starten der Datenbankverbindung: {e}")
+    app.logger.info(f"Kritischer Fehler beim Starten der Datenbankverbindung: {e}")
     sys.exit(1)
 
 def prepare_and_send_email(email_params: dict, smtp_cfg: dict) -> bool:
@@ -970,33 +993,6 @@ def person_transaktionen_loeschen(api_user_id: int, api_username: str, code: str
             db_utils.DatabaseConnectionPool.close_connection(cnx)
 
 if __name__ == '__main__':
-    # Logging-Konfiguration
-    if not app.debug:
-        import logging
-        from logging.handlers import RotatingFileHandler
-        try:
-            # Sicherstellen, dass der logs-Ordner existiert
-            log_dir = Path("logs")
-            log_dir.mkdir(exist_ok=True)
-            log_file_path = log_dir / 'api_activity.log'
-
-            file_handler = RotatingFileHandler(log_file_path, maxBytes=1024 * 1024 * 10, backupCount=5, encoding='utf-8')
-            #file_handler.setLevel(logging.INFO)
-            file_handler.setLevel(logging.DEBUG)
-            formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s [in %(pathname)s:%(lineno)d]')
-            file_handler.setFormatter(formatter)
-
-            # Standard-Handler entfernen, falls vorhanden, um doppeltes Logging zu vermeiden
-            if app.logger.hasHandlers():
-                app.logger.handlers.clear()
-
-            app.logger.addHandler(file_handler)
-            app.logger.setLevel(logging.INFO)
-            app.logger.info("API-Logging in Datei %s konfiguriert.", log_file_path)
-        except Exception as e: # pylint: disable=W0718
-            # Fallback auf print, wenn Logger-Konfiguration fehlschlägt
-            print(f"Kritischer Fehler bei der Konfiguration des File-Loggings: {e}")
-
     # Konfigurationsprüfungen
     required_db_keys = ['host', 'port', 'user', 'password', 'database']
     if not all(key in config.db_config and config.db_config[key] is not None for key in required_db_keys):
