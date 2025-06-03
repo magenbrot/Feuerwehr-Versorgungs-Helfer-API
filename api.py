@@ -574,7 +574,7 @@ def nfc_transaction(api_user_id_auth: int, api_username_auth: str):
             _send_new_transaction_email(user_details_for_email, transaction_details_for_email)
         aktuellen_saldo_pruefen_und_benachrichtigen(benutzer_info['id'])
 
-        return jsonify({'message': f"Danke {benutzer_info['vorname']}. Dein aktueller Saldo beträgt: {neuer_saldo}."}), 200
+        return jsonify({'message': f"Danke {benutzer_info['vorname']}. Dein aktueller Saldo beträgt: {neuer_saldo} €."}), 200
 
     except Error as err:
         if cnx.is_connected(): # Nur rollback wenn Verbindung noch besteht
@@ -626,7 +626,7 @@ def person_transaktion_erstellen(api_user_id_auth: int, api_username_auth: str, 
     if not cnx:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
 
-    neuer_saldo = 0 # Default Wert
+    neuer_saldo = 0
     try:
         with cnx.cursor(dictionary=True) as cursor:
             cursor.execute("INSERT INTO transactions (user_id, beschreibung, saldo_aenderung) VALUES (%s, %s, %s)",
@@ -657,7 +657,7 @@ def person_transaktion_erstellen(api_user_id_auth: int, api_username_auth: str, 
             _send_new_transaction_email(user_details_for_email, transaction_details_for_email)
         aktuellen_saldo_pruefen_und_benachrichtigen(user_info['id'])
 
-        return jsonify({'message': f"Transaktion für {user_info['vorname']} (Code {code}) erfolgreich erstellt. Neuer Saldo: {neuer_saldo}."}), 201
+        return jsonify({'message': f"Danke {user_info['vorname']}. Dein aktueller Saldo beträgt: {neuer_saldo} €."}), 200
 
     except Error as err:
         if cnx.is_connected():
@@ -830,7 +830,7 @@ def create_person(api_user_id: int, api_username: str): # Parameter umbenannt
             cursor.execute(sql, werte)
             cnx.commit()
         logger.info("Person mit Code %s erfolgreich hinzugefügt.", code_val)
-        return jsonify({'message': f"Person mit Code {code_val} erfolgreich hinzugefügt."}), 201
+        return jsonify({'message': f"Person mit Code {code_val} erfolgreich hinzugefügt."}), 200
     except Error as err:
         if cnx.is_connected():
             cnx.rollback()
