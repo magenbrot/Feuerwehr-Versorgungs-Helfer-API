@@ -38,7 +38,7 @@ class DatabaseConnectionPool:
         if cls._connection_pool is None:
             try:
                 cls._connection_pool = pooling.MySQLConnectionPool(
-                    pool_name="dbpool", pool_size=3, **database_config
+                    pool_name="dbpool", pool_size=20, **database_config
                 )
                 logger.info("Datenbankverbindungspool erfolgreich initialisiert.")
             except mysql.connector.Error as e:
