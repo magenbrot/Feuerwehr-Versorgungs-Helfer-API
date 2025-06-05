@@ -6,7 +6,7 @@ import base64
 import datetime
 from functools import wraps
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Union, Tuple, Literal, Dict, Optional, Any
 from flask import Flask, jsonify, request, render_template
 from mysql.connector import Error
 import config
@@ -224,7 +224,7 @@ def _send_saldo_null_benachrichtigung(user_id: int, vorname: str, email: str, ak
 
     email_params = {
         'empfaenger_email': email,
-        'betreff': "Ihr Saldo hat Null erreicht",
+        'betreff': "Dein Kontostand hat Null erreicht",
         'template_name_html': "email_saldo_null.html",
         'template_name_text': "email_saldo_null.txt",
         'template_context': {"vorname": vorname, "saldo": aktueller_saldo},
@@ -269,38 +269,55 @@ def _send_negativsaldo_benachrichtigung(user_id: int, vorname: str, email: str, 
     else:
         logger.error("Fehler beim Senden der Negativsaldo-Warnung an %s (ID: %s).", email, user_id)
 
-def _aktuellen_saldo_pruefen(target_user_id: int):
+def _aktuellen_saldo_pruefen(target_user_id: int) -> Union[Literal[True], Tuple[Literal[False], float, int], Literal[False]]:
     """
-    Prüft den aktuellen Saldo eines Benutzers vor einer Transaktion und lehnt eventuell
-    eine Transaktion ab basierend auf den Systemeinstellungen (MAX_NEGATIVSALDO).
+    Prüft den aktuellen Saldo eines Benutzers vor einer Transaktion.
 
     Args:
         target_user_id (int): Die ID des Benutzers, dessen Saldo geprüft werden soll.
 
     Returns:
-        bool: False, wenn der aktuelle Saldo geringer ist als das in der DB konfigurierte
-              Maximum, sonst True.
+        True: Wenn der Saldo ausreichend ist.
+        tuple[Literal[False], float, int]: Ein Tupel (False, aktueller_saldo, max_negativ_saldo_int),
+                                            wenn der Saldo das Limit unterschreitet.
+                                            aktueller_saldo ist der tatsächliche Saldo.
+                                            max_negativ_saldo_int ist das erlaubte negative Limit.
+        False: Im Falle eines Datenbank- oder Konfigurationsfehlers.
     """
 
-    max_negativ_saldo_int = int(get_system_setting('MAX_NEGATIVSALDO'))
+    try:
+        max_negativ_saldo_str = get_system_setting('MAX_NEGATIVSALDO')
+        if not max_negativ_saldo_str:
+            logger.error("Systemeinstellung MAX_NEGATIVSALDO nicht gefunden oder leer.")
+            return False
+        max_negativ_saldo_int = int(max_negativ_saldo_str)
+    except ValueError:
+        logger.error("Ungültiger Wert für MAX_NEGATIVSALDO: %s", max_negativ_saldo_str)
+        return False
 
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if not cnx:
-        logger.error("DB-Verbindungsfehler in aktuellen_saldo_pruefen_und_benachrichtigen für User %s", target_user_id)
-        return False
+        logger.error("DB-Verbindungsfehler in _aktuellen_saldo_pruefen für User %s", target_user_id)
+        return False # Rückgabe False bei Verbindungsfehler
 
     try:
         with cnx.cursor(dictionary=True) as cursor:
             cursor.execute("SELECT SUM(saldo_aenderung) AS saldo FROM transactions WHERE user_id = %s", (target_user_id,))
             saldo_data = cursor.fetchone()
-            aktueller_saldo = saldo_data['saldo'] if saldo_data and saldo_data['saldo'] is not None else 0 # Sicherstellen, dass es ein Float ist
+
+            aktueller_saldo = float(saldo_data['saldo']) if saldo_data and saldo_data['saldo'] is not None else 0
 
         if aktueller_saldo <= max_negativ_saldo_int:
-            return False
+            # Saldo ist zu niedrig
+            return (False, aktueller_saldo, max_negativ_saldo_int)
+        # Saldo ist ausreichend
         return True
 
     except Error as err:
         logger.error("DB-Fehler in _aktuellen_saldo_pruefen für User %s: %s", target_user_id, err)
+        return False
+    except Exception as e:  # pylint: disable=W0718
+        logger.error("Allgemeiner Fehler in _aktuellen_saldo_pruefen für User %s: %s", target_user_id, e)
         return False
     finally:
         if cnx:
@@ -579,14 +596,21 @@ def nfc_transaction(api_user_id_auth: int, api_username_auth: str):
     if not cnx:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
 
-    neuer_saldo = 0 # Default Wert
+    neuer_saldo = 0
     try:
         with cnx.cursor(dictionary=True) as cursor:
             cursor.execute("UPDATE nfc_token SET last_used = NOW() WHERE token_id = %s", (int(benutzer_info['token_id']),))
 
-            if _aktuellen_saldo_pruefen(benutzer_info['id']):
-                return jsonify({'message': f"Hey {benutzer_info['vorname']}, leider unterschreitet dein Guthaben das von uns "
-                                "festgelegte Limit. Bitte melde dich bei einem Verantwortlichen um dein Konto wieder aufzufüllen."}), 403
+            saldo_pruefung = _aktuellen_saldo_pruefen(benutzer_info['id'])
+            if isinstance(saldo_pruefung, tuple):
+                logger.warning("Transaktion für User %s blockiert, da das Guthaben von %s nicht ausreichend ist", benutzer_info['id'], saldo_pruefung[1])
+                return jsonify({'message': f"Hey {benutzer_info['vorname']}, leider unterschreitet dein Guthaben von {saldo_pruefung[2]} € das von uns "
+                                "festgelegte Limit. Bitte melde dich bei einem Verantwortlichen, um dein Konto wieder aufzufüllen.",
+                                'action': "block"}), 200
+            if saldo_pruefung is False:
+                logger.error("Fehler bei der Saldoprüfung für Benutzer %s. Aktion blockiert.", benutzer_info['id'])
+                return jsonify({'message': f"Hey {benutzer_info['vorname']}, es gab ein technisches Problem bei der Überprüfung deines Saldos. "
+                        "Bitte versuche es später erneut oder kontaktiere einen Verantwortlichen.", 'action': "error"}), 200
 
             trans_saldo_aenderung_str = get_system_setting('TRANSACTION_SALDO_CHANGE')
             if trans_saldo_aenderung_str is None:
@@ -679,9 +703,16 @@ def person_transaktion_erstellen(api_user_id_auth: int, api_username_auth: str, 
     if not cnx:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
 
-    if _aktuellen_saldo_pruefen(user_info['id']):
-        return jsonify({'message': f"Hey {user_info['vorname']}, leider unterschreitet dein Guthaben das von uns "
-                        "festgelegte Limit. Bitte melde dich bei einem Verantwortlichen um dein Konto wieder aufzufüllen."}), 403
+    saldo_pruefung = _aktuellen_saldo_pruefen(user_info['id'])
+    if isinstance(saldo_pruefung, tuple):
+        logger.warning("Transaktion für User %s blockiert, da das Guthaben von %s nicht ausreichend ist (Limit %s)", user_info['id'], saldo_pruefung[1], saldo_pruefung[2])
+        return jsonify({'message': f"Hey {user_info['vorname']}, leider unterschreitet dein Guthaben von {saldo_pruefung[2]} € das von uns "
+                        "festgelegte Limit. Bitte melde dich bei einem Verantwortlichen, um dein Konto wieder aufzufüllen.",
+                        'action': "block"}), 200
+    if saldo_pruefung is False:
+        logger.error("Fehler bei der Saldoprüfung für Benutzer %s. Aktion blockiert.", user_info['id'])
+        return jsonify({'message': f"Hey {user_info['vorname']}, es gab ein technisches Problem bei der Überprüfung deines Saldos. "
+                "Bitte versuche es später erneut oder kontaktiere einen Verantwortlichen.", 'action': "error"}), 200
 
     neuer_saldo = 0
     try:
