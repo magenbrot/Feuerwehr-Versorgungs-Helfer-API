@@ -4,7 +4,7 @@
 
 Dies ist das Backend für die digitale Strichlisten-Anwendung "Feuerwehr-Versorgungs-Helfer". Die Anwendung dient dazu, Guthaben von Benutzern zentral zu verwalten, die beispielsweise bei einem Verein oder einer Organisation eingezahlt wurden. Über eine separate Client-Anwendung können Benutzer dann digital "Striche machen", d.h. es wird ein vordefinierter Betrag (z.B. 1 Guthabenpunkt) von ihrem Konto abgebucht.
 
-Das Backend stellt eine Weboberfläche (GUI) für Administratoren und Benutzer sowie eine API für die Client-Anwendung bereit. Die Client-Anwendungen sind in diesem [Repository](https://github.com/magenbrot/Feuerwehr-Versorgungs-Helfer-API) zu finden.
+Das Backend stellt eine Weboberfläche (GUI) für Administratoren und Benutzer sowie eine API für die Client-Anwendung bereit. Die Client-Anwendungen sind in diesem [Repository](https://github.com/magenbrot/Feuerwehr-Versorgungs-Helfer) zu finden.
 
 ## Funktionen des Backends ⚙️
 
