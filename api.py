@@ -224,7 +224,7 @@ def _send_saldo_null_benachrichtigung(user_id: int, vorname: str, email: str, ak
 
     email_params = {
         'empfaenger_email': email,
-        'betreff': "Ihr Saldo hat Null erreicht",
+        'betreff': "Dein Kontostand hat Null erreicht",
         'template_name_html': "email_saldo_null.html",
         'template_name_text': "email_saldo_null.txt",
         'template_context': {"vorname": vorname, "saldo": aktueller_saldo},
@@ -285,7 +285,6 @@ def _aktuellen_saldo_pruefen(target_user_id: int) -> Union[Literal[True], Tuple[
         False: Im Falle eines Datenbank- oder Konfigurationsfehlers.
     """
 
-    #TODO Hier wird vielleicht irgendwo die DB-Verbindung nicht zurückgegeben!
     try:
         max_negativ_saldo_str = get_system_setting('MAX_NEGATIVSALDO')
         if not max_negativ_saldo_str:
@@ -311,16 +310,15 @@ def _aktuellen_saldo_pruefen(target_user_id: int) -> Union[Literal[True], Tuple[
         if aktueller_saldo <= max_negativ_saldo_int:
             # Saldo ist zu niedrig
             return (False, aktueller_saldo, max_negativ_saldo_int)
-
         # Saldo ist ausreichend
         return True
 
-    except Error as err: # Spezifischere Exception-Behandlung ist oft besser
+    except Error as err:
         logger.error("DB-Fehler in _aktuellen_saldo_pruefen für User %s: %s", target_user_id, err)
-        return False # Rückgabe False bei DB-Fehler
+        return False
     except Exception as e:  # pylint: disable=W0718
         logger.error("Allgemeiner Fehler in _aktuellen_saldo_pruefen für User %s: %s", target_user_id, e)
-        return False # Rückgabe False bei anderen Fehlern
+        return False
     finally:
         if cnx:
             db_utils.DatabaseConnectionPool.close_connection(cnx)
@@ -598,7 +596,7 @@ def nfc_transaction(api_user_id_auth: int, api_username_auth: str):
     if not cnx:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
 
-    neuer_saldo = 0 # Default Wert
+    neuer_saldo = 0
     try:
         with cnx.cursor(dictionary=True) as cursor:
             cursor.execute("UPDATE nfc_token SET last_used = NOW() WHERE token_id = %s", (int(benutzer_info['token_id']),))
