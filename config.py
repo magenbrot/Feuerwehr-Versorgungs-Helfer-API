@@ -11,6 +11,7 @@ db_config = {
     'user': os.getenv("MYSQL_USER"),
     'password': os.getenv("MYSQL_PASSWORD"),
     'database': os.getenv("MYSQL_DB"),
+    'pool_size': int(os.getenv("MYSQL_POOL_SIZE", "10")),
 }
 
 smtp_config = {
