@@ -71,6 +71,7 @@ button[type="submit"] {
     font-size: 1em;
     width: 100%;
     margin-top: 10px; /* Für Buttons in Formularen */
+    transition: background-color 0.2s ease-in-out;
 }
 
 button[type="submit"]:hover {
@@ -220,6 +221,7 @@ form button.red-button {
     font-size: 1em;
     width: 100%;
     box-sizing: border-box;
+    transition: background-color 0.2s ease-in-out;
 }
 
 form button.red-button:hover {
@@ -403,6 +405,20 @@ form.inline-form-transaction button[type="submit"] {
 /* Passen Sie den Hover-Stil an, falls eine spezifischere Regel benötigt wird */
 form.inline-form-transaction button[type="submit"]:hover {
     background-color: #0056b3;
+}
+
+a.styled-link {
+  background-color: #2db8ca;
+  padding: 8px 12px;
+  border-radius: 12px;
+  color: #000000;
+  text-decoration: none;
+  transition: background-color 0.2s ease-in-out;
+}
+
+a.styled-link:hover {
+  background-color: #228e9c;
+  color: #000000;
 }
 
 .qr-code-image {
