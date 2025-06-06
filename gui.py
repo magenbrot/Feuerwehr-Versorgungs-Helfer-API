@@ -4,6 +4,7 @@
 import sys
 import logging
 import binascii
+import json
 import os
 import io
 import random
@@ -63,6 +64,12 @@ try:
 except Error:
     logger.critical("Fehler beim Starten der Datenbankverbindung.")
     sys.exit(1)
+
+try:
+    with open('manifest.json', 'r', encoding='utf-8') as f:
+        app.config.update(json.load(f))
+except FileNotFoundError:
+    app.config.update(version="N/A", author="N/A")
 
 def generate_api_key_string(length=32):
     """
@@ -1379,7 +1386,7 @@ def login():
     Bei fehlgeschlagener Anmeldung wird eine Fehlermeldung angezeigt.
 
     Returns:
-        str oder werkzeug.wrappers.response.Response: Die gerenderte Login-Seite (login.html)
+        str oder werkzeug.wrappers.response.Response: Die gerenderte Login-Seite (web_login.html)
         mit optionaler Fehlermeldung oder eine Weiterleitung.
     """
 
@@ -1388,7 +1395,7 @@ def login():
         if user and user.get('is_locked'): # Prüfen ob User gesperrt ist
             session.pop('user_id', None)
             flash('Ihr Konto wurde gesperrt. Bitte kontaktieren Sie einen Administrator.', 'error')
-            return render_template('login.html')
+            return render_template('web_login.html', version=app.config.get('version', 'unbekannt'))
         return redirect(BASE_URL + url_for('user_info'))
 
     if request.method == 'POST':
@@ -1403,7 +1410,7 @@ def login():
             flash('Ihr Konto ist gesperrt. Bitte kontaktieren Sie einen Administrator.', 'error')
         else:
             flash('Ungültiger Benutzername oder Passwort', 'error')
-    return render_template('login.html')
+    return render_template('web_login.html', version=app.config.get('version', 'unbekannt'))
 
 @app.route('/user_info', methods=['GET', 'POST'])
 def user_info():
@@ -1417,7 +1424,7 @@ def user_info():
     Aktualisierung der Benachrichtigungseinstellungen verarbeitet.
 
     Returns:
-        str oder werkzeug.wrappers.response.Response: Die gerenderte Benutzerinformationsseite (`user_info.html`)
+        str oder werkzeug.wrappers.response.Response: Die gerenderte Benutzerinformationsseite (`web_user_info.html`)
         oder eine Weiterleitung zur Login-Seite bei Fehlern oder wenn nicht eingeloggt.
     """
 
@@ -1493,13 +1500,14 @@ def user_info():
     all_notification_types_data = get_all_notification_types()
     user_notification_settings_data = get_user_notification_settings(user_id)
 
-    return render_template('user_info.html',
+    return render_template('web_user_info.html',
                            user=user,
                            nfc_tokens=nfc_tokens,
                            transactions=transactions,
                            saldo=saldo,
-                           all_notification_types=all_notification_types_data, # Korrigierter Variablenname
-                           user_notification_settings=user_notification_settings_data) # Korrigierter Variablenname
+                           all_notification_types=all_notification_types_data,
+                           user_notification_settings=user_notification_settings_data,
+                           version=app.config.get('version', 'unbekannt'))
 
 @app.route('/qr_code')
 def generate_qr():
@@ -1535,7 +1543,7 @@ def generate_qr():
         flash("Bitte zuerst einloggen.", "info")
         return redirect(BASE_URL + url_for('login'))
 
-    # Die Daten für den QR-Code werden als URL-Parameter erwartet (z.B. /qr_code?data=1234567890a)
+    # Die Daten für den QR-Code werden als URL-Parameter erwartet (z.B. /qr_code?usercode=1234567890a&aktion=a)
     usercode_to_encode = request.args.get('usercode')
     text_to_add = request.args.get('aktion')
 
@@ -1574,7 +1582,7 @@ def admin_dashboard():
     Erfordert Admin-Rechte und eine aktive Benutzersitzung.
 
     Returns:
-        str oder werkzeug.wrappers.response.Response: Die gerenderte Admin-Dashboard-Seite (`admin_dashboard.html`)
+        str oder werkzeug.wrappers.response.Response: Die gerenderte Admin-Dashboard-Seite (`web_admin_dashboard.html`)
         oder eine Weiterleitung bei fehlenden Rechten, Fehlern oder wenn nicht eingeloggt.
     """
 
@@ -1595,10 +1603,9 @@ def admin_dashboard():
 
     if request.method == 'POST':
         if 'update_system_settings' in request.form:
-            settings_updated_successfully = True # Gesamterfolg aller Einstellungen
+            settings_updated_successfully = True
 
             # Hole alle Schlüssel aus der DB, um sicherzustellen, dass nur existierende verarbeitet werden
-            # und um die Reihenfolge der Verarbeitung ggf. zu steuern (obwohl hier nicht kritisch)
             all_db_setting_keys = get_all_system_settings().keys()
 
             for key in all_db_setting_keys:
@@ -1606,7 +1613,6 @@ def admin_dashboard():
                     new_value = request.form[key].strip()
                     if not _process_system_setting_update(key, new_value):
                         settings_updated_successfully = False
-                        # Optional: Hier `break` einfügen, wenn bei erstem Fehler abgebrochen werden soll
 
             if settings_updated_successfully:
                 flash("Systemeinstellungen erfolgreich aktualisiert.", "success")
@@ -1618,11 +1624,12 @@ def admin_dashboard():
     saldo_by_user_data = get_saldo_by_user()
     system_settings_data = get_all_system_settings()
 
-    return render_template('admin_dashboard.html',
+    return render_template('web_admin_dashboard.html',
                            user=admin_user,
                            users=users_data,
                            saldo_by_user=saldo_by_user_data,
-                           system_settings=system_settings_data)
+                           system_settings=system_settings_data,
+                           version=app.config.get('version', 'unbekannt'))
 
 @app.route('/admin/add_user', methods=['GET', 'POST'])
 def add_user():
@@ -1666,10 +1673,11 @@ def add_user():
                 return redirect(BASE_URL + url_for('admin_dashboard'))
         # Bei Validierungsfehler oder DB-Fehler (geflasht in add_regular_user_db oder _validate_add_user_form),
         # das Formular mit den eingegebenen Daten erneut anzeigen
-        return render_template('user_add.html',
+        return render_template('web_user_add.html',
                                user=admin_user,
-                               current_code=form_data.get('code'), # Den vom User eingegebenen Code wiederverwenden
-                               form_data=form_data
+                               current_code=form_data.get('code'),
+                               form_data=form_data,
+                               version=app.config.get('version', 'unbekannt')
                               )
 
     # GET Request
@@ -1683,7 +1691,7 @@ def add_user():
         flash("Konnte keinen eindeutigen Code generieren. Bitte versuchen Sie es manuell oder später erneut.", "warning")
         generated_code = "" # Fallback
 
-    return render_template('user_add.html', user=admin_user, current_code=generated_code, form_data=None)
+    return render_template('web_user_add.html', user=admin_user, current_code=generated_code, form_data=None, version=app.config.get('version', 'unbekannt'))
 
 @app.route('/admin/api_users', methods=['GET', 'POST'])
 def admin_api_user_manage():
@@ -1697,7 +1705,7 @@ def admin_api_user_manage():
 
     Returns:
         str oder werkzeug.wrappers.response.Response: Bei GET das gerenderte Template
-        `admin_api_user_manage.html`. Bei POST eine Weiterleitung zurück zur
+        `web_admin_api_user_manage.html`. Bei POST eine Weiterleitung zurück zur
         gleichen Seite (`admin_api_user_manage`) mit entsprechenden
         Erfolgs- oder Fehlermeldungen. Bei Authentifizierungs-/Autorisierungsfehlern
         erfolgt eine Weiterleitung zur Login- bzw. Benutzerinformationsseite.
@@ -1727,13 +1735,11 @@ def admin_api_user_manage():
             new_api_user_id = add_api_user_db(username)
             if new_api_user_id:
                 flash(f"API-Benutzer '{username}' erfolgreich hinzugefügt.", "success")
-                # Optional: Direkt zur Detailseite des neuen Users weiterleiten
-                # return redirect(BASE_URL + url_for('admin_api_user_detail', api_user_id=new_api_user_id))
             # Fehler (z.B. doppelter Name) wird in add_api_user_db geflasht
-        return redirect(BASE_URL + url_for('admin_api_user_manage')) # Nach POST zur gleichen Seite zurück
+        return redirect(BASE_URL + url_for('admin_api_user_manage'))
 
     api_users_list = get_all_api_users()
-    return render_template('admin_api_user_manage.html', user=admin_user, api_users=api_users_list)
+    return render_template('web_admin_api_user_manage.html', user=admin_user, api_users=api_users_list, version=app.config.get('version', 'unbekannt'))
 
 @app.route('/admin/api_user/<int:api_user_id_route>')
 def admin_api_user_detail(api_user_id_route):
@@ -1742,14 +1748,14 @@ def admin_api_user_detail(api_user_id_route):
 
     Diese Route prüft, ob der anfragende Benutzer ein eingeloggter, aktiver Administrator
     ist. Die Details des API-Benutzers und seiner zugehörigen API-Keys werden aus
-    der Datenbank geladen und im Template `admin_api_user_detail.html` dargestellt.
+    der Datenbank geladen und im Template `web_admin_api_user_detail.html` dargestellt.
 
     Args:
         api_user_id_route (int): Die ID des anzuzeigenden API-Benutzers aus der URL.
 
     Returns:
         str oder werkzeug.wrappers.response.Response: Das gerenderte Template
-        `admin_api_user_detail.html` mit den API-Benutzerdaten.
+        `web_admin_api_user_detail.html` mit den API-Benutzerdaten.
         Bei Authentifizierungs-/Autorisierungsfehlern oder wenn der API-Benutzer
         nicht gefunden wird, erfolgen entsprechende Weiterleitungen mit Flash-Nachrichten.
     """
@@ -1775,7 +1781,7 @@ def admin_api_user_detail(api_user_id_route):
         return redirect(BASE_URL + url_for('admin_api_user_manage'))
 
     api_keys_list = get_api_keys_for_api_user(api_user_id_route)
-    return render_template('admin_api_user_detail.html', user=admin_user, api_user=target_api_user, api_keys=api_keys_list)
+    return render_template('web_admin_api_user_detail.html', user=admin_user, api_user=target_api_user, api_keys=api_keys_list, version=app.config.get('version', 'unbekannt'))
 
 @app.route('/admin/api_user/<int:api_user_id_route>/generate_key', methods=['POST'])
 def admin_generate_api_key_for_user(api_user_id_route):
@@ -1884,7 +1890,7 @@ def admin_delete_api_key(api_key_id_route):
     # Fallback, falls die api_user_id nicht ermittelt werden konnte oder ungültig war
     return redirect(BASE_URL + url_for('admin_api_user_manage'))
 
-@app.route('/admin/api_user/<int:api_user_id_route>/delete', methods=['POST']) # Nur POST für Löschaktionen
+@app.route('/admin/api_user/<int:api_user_id_route>/delete', methods=['POST'])
 def admin_delete_api_user(api_user_id_route):
     """
     Löscht einen API-Benutzer und alle zugehörigen API-Keys.
@@ -1927,8 +1933,6 @@ def admin_delete_api_user(api_user_id_route):
     if delete_api_user_and_keys_db(api_user_id_route):
         flash(f"API-Benutzer '{api_user_to_delete['username']}' und zugehörige API-Keys wurden gelöscht.", "success")
     else:
-        # Genauere Fehlermeldung kommt von DB-Funktion und wird dort geflasht
-        # flash(f"Fehler beim Löschen des API-Benutzers '{api_user_to_delete['username']}'.", "error")
         pass
 
     return redirect(BASE_URL + url_for('admin_api_user_manage'))
@@ -1943,7 +1947,7 @@ def admin_user_modification(target_user_id):
 
     Returns:
         str oder werkzeug.wrappers.response.Response: Die gerenderte Seite mit den Benutzerdaten
-        (admin_user_modification.html) oder eine Weiterleitung.
+        (web_admin_user_modification.html) oder eine Weiterleitung.
     """
     logged_in_user_id = session.get('user_id')
     if not logged_in_user_id:
@@ -2011,12 +2015,13 @@ def admin_user_modification(target_user_id):
         flash("Zielbenutzer konnte nicht erneut geladen werden.", "error")
         return redirect(BASE_URL + url_for('admin_dashboard'))
 
-    return render_template('admin_user_modification.html',
+    return render_template('web_admin_user_modification.html',
                            user=refreshed_target_user,
                            nfc_tokens=nfc_tokens,
                            transactions=transactions,
                            saldo=saldo,
-                           admin_user=current_admin_user)
+                           admin_user=current_admin_user,
+                           version=app.config.get('version', 'unbekannt'))
 
 @app.route('/logout')
 def logout():
