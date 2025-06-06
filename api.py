@@ -651,7 +651,7 @@ def nfc_transaction(api_user_id_auth: int, api_username_auth: str):
             _send_new_transaction_email(user_details_for_email, transaction_details_for_email)
         aktuellen_saldo_pruefen_und_benachrichtigen(benutzer_info['id'])
 
-        return jsonify({'message': f"Danke {benutzer_info['vorname']}. Dein aktueller Kontostand beträgt: {neuer_saldo} €."}), 200
+        return jsonify({'message': f"Prost {benutzer_info['vorname']}! Dein aktueller Kontostand beträgt: {neuer_saldo} €."}), 200
 
     except Error as err:
         if cnx.is_connected(): # Nur rollback wenn Verbindung noch besteht
@@ -745,7 +745,7 @@ def person_transaktion_erstellen(api_user_id_auth: int, api_username_auth: str, 
             _send_new_transaction_email(user_details_for_email, transaction_details_for_email)
         aktuellen_saldo_pruefen_und_benachrichtigen(user_info['id'])
 
-        return jsonify({'message': f"Danke {user_info['vorname']}. Dein aktueller Kontostand beträgt: {neuer_saldo} €."}), 200
+        return jsonify({'message': f"Prost {user_info['vorname']}! Dein aktueller Kontostand beträgt: {neuer_saldo} €."}), 200
 
     except Error as err:
         if cnx.is_connected():
