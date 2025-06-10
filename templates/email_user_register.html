@@ -1,0 +1,12 @@
+<html><head><style>body {font-family: sans-serif;}</style></head>
+<body>
+    <h3>Hallo {{ vorname }},</h3>
+    <p>vielen Dank für deine Anmeldung!</p>
+    <p>Dein Login-Code lautet: {{ user_code }}</p>
+    <p>Viele Grüße<br>
+    Dein Team von der Abteilung Getränke</p>
+    {% if logo_exists_fuer_template %}
+    <p><img src="cid:logo" alt="Logo Feuerwehr-Versorgungs-Helfer"></p>
+    {% endif %}
+</body>
+</html>

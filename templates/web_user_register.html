@@ -9,7 +9,7 @@
 </head>
 <body>
     <img src="{{ url_for('static', filename='logo/logo-1024x1024-alpha.png') }}" alt="App Logo" style="max-width: 200px; height: auto; display: block; margin: 0 auto 10px;">
-    <div class="register-container">
+    <div class="login-container">
         <h2>Neuen Benutzer registrieren</h2>
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
@@ -43,7 +43,7 @@
             </div>
             <button type="submit">Registrieren</button>
         </form>
-        <div class="back-to-login">
+        <div class="link">
             <p><a href="{{ url_for('login') }}">Zurück zum Login</a></p>
         </div>
     </div>
