@@ -564,7 +564,7 @@ def get_all_users(api_user_id: int, api_username: str):
         return jsonify(users_list), 200
     except Error as err:
         logger.error("Fehler beim Abrufen aller Benutzer aus der Datenbank: %s", err)
-        return jsonify({'error': f"Fehler beim Abrufen der Benutzerdaten: {err}"}), 500
+        return jsonify({'error': "Ein interner Fehler ist aufgetreten."}), 500
     finally:
         if cnx:
             db_utils.DatabaseConnectionPool.close_connection(cnx)
