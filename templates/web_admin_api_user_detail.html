@@ -47,7 +47,7 @@
                             <td>{{ key.id }}</td>
                             <td>{{ key.api_key }}</td>
                             <td>
-                                <form method="POST" action="{{ url_for('admin_delete_api_key', api_key_id_route=key.id) }}" class="compact-delete-form" onsubmit="return confirm('Sind Sie sicher, dass Sie diesen API-Key unwiderruflich löschen möchten?');">
+                                <form method="POST" action="{{ url_for('admin_delete_api_key', api_key_id_route=key.id) }}" class="compact-delete-form" onsubmit="return confirm('Bist du sicher, dass du diesen API-Key unwiderruflich löschen möchtest?');">
                                     <input type="hidden" name="api_user_id_for_redirect" value="{{ api_user.id }}">
                                     <button type="submit" class="red-button">Löschen</button>
                                 </form>
