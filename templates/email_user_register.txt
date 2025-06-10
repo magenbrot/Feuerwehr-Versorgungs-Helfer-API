@@ -1,0 +1,8 @@
+Hallo {{ vorname }},
+
+vielen Dank für deine Anmeldung!
+
+Dein Login-Code lautet: {{ user_code }}
+
+Viele Grüße
+Dein Team von der Abteilung Getränke
