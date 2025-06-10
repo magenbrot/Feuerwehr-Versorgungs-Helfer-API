@@ -1209,7 +1209,7 @@ def send_user_register_email(user_vorname, user_email, user_code):
         )
         if not success:
             # Das Logging übernimmt bereits email_sender.py, hier ggf. nur eine Info
-            logger.info("Versuch, eine E-Mail via email_sender.py an %s zu senden, wurde mit Fehlern beendet.", user_email)
+            logger.info("Versuch, eine E-Mail via email_sender.py zu senden, wurde mit Fehlern beendet.")
 
     except Exception as e:  # pylint: disable=W0718
         logger.critical("Ein unerwarteter Fehler ist beim Vorbereiten der E-Mail aufgetreten: %s", e)
