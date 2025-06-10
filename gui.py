@@ -10,12 +10,14 @@ import io
 import random
 import secrets
 import string
+from datetime import datetime, timedelta, timezone
 import qrcode
 from PIL import Image, ImageDraw, ImageFont
 from flask import Flask, render_template, request, redirect, url_for, session, flash, send_file # pigar: required-packages=uWSGI
 from werkzeug.security import check_password_hash, generate_password_hash
 from mysql.connector import Error, IntegrityError # IntegrityError für Unique-Constraint-Fehler hinzugefügt
 import config
+import email_sender
 import db_utils
 
 logging.basicConfig(
@@ -106,6 +108,13 @@ def hex_to_binary(hex_string):
 def erzeuge_qr_code(daten, text):
     """
     Erzeugt einen QR-Code mit zusätzlichem Infotext als PNG-Datei.
+
+    Args:
+        daten (str): Die zu codierenden Daten, hier unser User-Code.
+        text (str): Wird als zusätzlicher Text unterhalb des QR-Codes hinzugefügt.
+
+    Returns:
+        ImageDraw: Bilddaten
     """
 
     qr = qrcode.QRCode(
@@ -1054,6 +1063,197 @@ def add_regular_user_db(user_data):
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return False
 
+def get_user_by_email(email):
+    """
+    Ruft einen Benutzer anhand seiner E-Mail-Adresse ab.
+
+    Args:
+        email (str): Die E-Mail-Adresse des Benutzers.
+
+    Returns:
+        dict: Ein Dictionary mit Benutzerdaten oder None.
+    """
+
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
+    if cnx:
+        cursor = cnx.cursor(dictionary=True)
+        try:
+            query = "SELECT id, code, nachname, vorname, email, is_locked FROM users WHERE email = %s"
+            cursor.execute(query, (email,))
+            return cursor.fetchone()
+        except Error as err:
+            logger.error("Datenbankfehler bei der Suche nach E-Mail: %s", err)
+            return None
+        finally:
+            if cursor:
+                cursor.close()
+            db_utils.DatabaseConnectionPool.close_connection(cnx)
+    return None
+
+def store_reset_token(user_id, token):
+    """
+    Speichert einen Passwort-Reset-Token in der Datenbank.
+
+    Args:
+        user_id (int): Die ID des Benutzers.
+        token (str): Der sichere Token.
+
+    Returns:
+        bool: True bei Erfolg, False bei Fehler.
+    """
+
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
+    if not cnx:
+        return False
+    cursor = cnx.cursor()
+    try:
+        # Alte Tokens für diesen Benutzer löschen, um Missbrauch zu vermeiden
+        cursor.execute("DELETE FROM password_reset_tokens WHERE user_id = %s", (user_id,))
+        # Neuen Token mit 1 Stunde Gültigkeit einfügen
+        expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
+        query = "INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES (%s, %s, %s)"
+        cursor.execute(query, (user_id, token, expires_at))
+        cnx.commit()
+        return True
+    except Error as err:
+        logger.error("Fehler beim Speichern des Reset-Tokens: %s", err)
+        cnx.rollback()
+        return False
+    finally:
+        cursor.close()
+        db_utils.DatabaseConnectionPool.close_connection(cnx)
+
+def get_user_by_reset_token(token):
+    """
+    Validiert einen Reset-Token und gibt den zugehörigen Benutzer zurück.
+
+    Args:
+        token (str): Der zu validierende Token.
+
+    Returns:
+        dict: Benutzerdaten, wenn der Token gültig und nicht abgelaufen ist, sonst None.
+    """
+
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
+    if not cnx:
+        return None
+    cursor = cnx.cursor(dictionary=True)
+    try:
+        query = """
+            SELECT u.* FROM users u
+            JOIN password_reset_tokens prt ON u.id = prt.user_id
+            WHERE prt.token = %s AND prt.expires_at > %s
+        """
+        cursor.execute(query, (token, datetime.now(timezone.utc)))
+        return cursor.fetchone()
+    except Error as err:
+        logger.error("Fehler beim Validieren des Reset-Tokens: %s", err)
+        return None
+    finally:
+        cursor.close()
+        db_utils.DatabaseConnectionPool.close_connection(cnx)
+
+def delete_reset_token(token):
+    """
+    Löscht einen verwendeten Reset-Token.
+
+    Args:
+        token (str): Der zu löschende Token.
+    """
+
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
+    if not cnx:
+        return
+    cursor = cnx.cursor()
+    try:
+        cursor.execute("DELETE FROM password_reset_tokens WHERE token = %s", (token,))
+        cnx.commit()
+    except Error as err:
+        logger.error("Fehler beim Löschen des Reset-Tokens: %s", err)
+        cnx.rollback()
+    finally:
+        cursor.close()
+        db_utils.DatabaseConnectionPool.close_connection(cnx)
+
+def send_user_register_email(user_vorname, user_email, user_code):
+    """
+    Informiert den Benutzer per Email, dass ein Konto angelegt wurde (sofern eine Emailadresse hinterlegt wurde).
+    """
+
+    try:
+        betreff = "Neuer Account auf Feuerwehr-Versorgungs-Helfer"
+
+        # HTML- und Text-Version der E-Mail aus Templates rendern
+        html_body = render_template('email_user_register.html', user_vorname=user_vorname, user_code=user_code)
+        text_body = render_template('email_user_register.txt', user_vorname=user_vorname, user_code=user_code)
+
+        # Pfad zum Logo definieren
+        logo_path = os.path.join(app.static_folder, 'logo', 'logo-120x164-alpha.png')
+        if not os.path.exists(logo_path):
+            logger.warning("Logo-Datei für E-Mail nicht gefunden unter: %s", logo_path)
+            logo_path = None
+
+        # Inhalts-Dictionary für den E-Mail-Sender vorbereiten
+        content = {
+            'html': html_body,
+            'text': text_body,
+            'logo_pfad': logo_path
+        }
+
+        # Die SMTP-Konfiguration wird direkt aus dem config-Modul übergeben
+        success = email_sender.sende_formatierte_email(
+            empfaenger_email=user_email,
+            betreff=betreff,
+            content=content,
+            smtp_cfg=config.smtp_config
+        )
+        if not success:
+            # Das Logging übernimmt bereits email_sender.py, hier ggf. nur eine Info
+            logger.info("Versuch, eine E-Mail via email_sender.py zu senden, wurde mit Fehlern beendet.")
+
+    except Exception as e:  # pylint: disable=W0718
+        logger.critical("Ein unerwarteter Fehler ist beim Vorbereiten der E-Mail aufgetreten: %s", e)
+
+def send_password_reset_email(user_email, token):
+    """
+    Erstellt und sendet die Passwort-Reset-E-Mail mit email_sender.py.
+    """
+
+    try:
+        betreff = "Passwort zurücksetzen für Feuerwehr-Versorgungs-Helfer"
+        reset_url = url_for('reset_with_token', token=token, _external=True)
+
+        # HTML- und Text-Version der E-Mail aus Templates rendern
+        html_body = render_template('email_reset_password.html', reset_url=reset_url)
+        text_body = render_template('email_reset_password.txt', reset_url=reset_url)
+
+        # Pfad zum Logo definieren
+        logo_path = os.path.join(app.static_folder, 'logo', 'logo-120x164-alpha.png')
+        if not os.path.exists(logo_path):
+            logger.warning("Logo-Datei für E-Mail nicht gefunden unter: %s", logo_path)
+            logo_path = None
+
+        # Inhalts-Dictionary für den E-Mail-Sender vorbereiten
+        content = {
+            'html': html_body,
+            'text': text_body,
+            'logo_pfad': logo_path
+        }
+
+        # Die SMTP-Konfiguration wird direkt aus dem config-Modul übergeben
+        success = email_sender.sende_formatierte_email(
+            empfaenger_email=user_email,
+            betreff=betreff,
+            content=content,
+            smtp_cfg=config.smtp_config
+        )
+        if not success:
+            # Das Logging übernimmt bereits email_sender.py, hier ggf. nur eine Info
+            logger.info("Versuch, eine E-Mail via email_sender.py an %s zu senden, wurde mit Fehlern beendet.", user_email)
+
+    except Exception as e:  # pylint: disable=W0718
+        logger.critical("Ein unerwarteter Fehler ist beim Vorbereiten der E-Mail aufgetreten: %s", e)
+
 def add_api_user_db(username):
     """
     Fügt einen neuen API-Benutzer der Datenbank hinzu.
@@ -1430,7 +1630,7 @@ def login():
         user = get_user_by_id(session['user_id'])
         if user and user.get('is_locked'): # Prüfen ob User gesperrt ist
             session.pop('user_id', None)
-            flash('Ihr Konto wurde gesperrt. Bitte kontaktiere einen Administrator.', 'error')
+            flash('Dein Konto wurde gesperrt. Bitte kontaktiere einen Administrator.', 'error')
             return render_template('web_login.html', version=app.config.get('version', 'unbekannt'))
         return redirect(BASE_URL + url_for('user_info'))
 
@@ -1443,7 +1643,7 @@ def login():
             session.permanent = True
             return redirect(BASE_URL + url_for('user_info'))
         if user and user['is_locked']:
-            flash('Ihr Konto ist gesperrt. Bitte kontaktiere einen Administrator.', 'error')
+            flash('Dein Konto ist gesperrt. Bitte kontaktiere einen Administrator.', 'error')
         else:
             flash('Ungültiger Benutzername oder Passwort', 'error')
     return render_template('web_login.html', version=app.config.get('version', 'unbekannt'))
@@ -1462,6 +1662,7 @@ def register():
         str oder werkzeug.wrappers.response.Response: Die gerenderte Registrierungsseite
         oder eine Weiterleitung zur Login-Seite.
     """
+
     if 'user_id' in session:
         return redirect(BASE_URL + url_for('user_info'))
 
@@ -1488,6 +1689,8 @@ def register():
                 'is_admin': False  # Neue Benutzer sind niemals Admins
             }
             if add_regular_user_db(user_details):
+                if user_details['email']:
+                    send_user_register_email(user_details['vorname'], user_details['email'], generated_code)
                 flash(f"Registrierung erfolgreich! Du kannst dich nun anmelden mit dem Code '{generated_code}'. Bitte notiere dir "
                        "diesen Code für künftige Logins!", "success")
                 return redirect(BASE_URL + url_for('login'))
@@ -1501,6 +1704,62 @@ def register():
     return render_template('web_user_register.html',
                            form_data=None,
                            version=app.config.get('version', 'unbekannt'))
+
+@app.route('/request-password-reset', methods=['GET', 'POST'])
+def request_password_reset():
+    """
+    Verarbeitet die Anforderung eines Passwort-Reset-Links.
+    """
+
+    if 'user_id' in session:
+        return redirect(url_for('user_info'))
+    if request.method == 'POST':
+        email = request.form.get('email')
+        user = get_user_by_email(email)
+
+        # Aus Sicherheitsgründen wird immer dieselbe Meldung angezeigt,
+        # um nicht preiszugeben, ob eine E-Mail existiert.
+        if user and not user['is_locked']:
+            token = secrets.token_urlsafe(32)
+            if store_reset_token(user['id'], token):
+                send_password_reset_email(user['email'], token)
+
+        flash('Wenn ein Konto mit dieser E-Mail-Adresse existiert und nicht gesperrt ist, wurde ein Link zum Zurücksetzen des Passworts gesendet.', 'info')
+        return redirect(url_for('login'))
+
+    return render_template('web_request_reset.html', version=app.config.get('version', 'unbekannt'))
+
+@app.route('/reset-password/<token>', methods=['GET', 'POST'])
+def reset_with_token(token):
+    """
+    Verarbeitet das tatsächliche Zurücksetzen des Passworts mit einem Token.
+    """
+
+    if 'user_id' in session:
+        return redirect(url_for('user_info'))
+
+    user = get_user_by_reset_token(token)
+    if not user:
+        flash('Der Link zum Zurücksetzen des Passworts ist ungültig oder abgelaufen.', 'error')
+        return redirect(url_for('login'))
+
+    if request.method == 'POST':
+        password = request.form.get('password')
+        confirm_password = request.form.get('confirm_password')
+
+        if not password or len(password) < 8:
+            flash('Das Passwort muss mindestens 8 Zeichen lang sein.', 'error')
+        elif password != confirm_password:
+            flash('Die Passwörter stimmen nicht überein.', 'error')
+        else:
+            new_password_hash = generate_password_hash(password)
+            if update_password(user['id'], new_password_hash):
+                delete_reset_token(token) # Wichtig: Token nach Nutzung entwerten
+                flash('Dein Passwort wurde erfolgreich zurückgesetzt. Du kannst dich nun anmelden.', 'success')
+                return redirect(url_for('login'))
+            flash('Beim Aktualisieren des Passworts ist ein Fehler aufgetreten.', 'error')
+
+    return render_template('web_reset_password.html', token=token, version=app.config.get('version', 'unbekannt'))
 
 @app.route('/user_info', methods=['GET', 'POST'])
 def user_info():
@@ -1530,7 +1789,7 @@ def user_info():
 
     if user.get('is_locked'): #
         session.pop('user_id', None) #
-        flash('Ihr Konto wurde gesperrt. Bitte kontaktiere einen Administrator.', 'error') #
+        flash('Dein Konto wurde gesperrt. Bitte kontaktiere einen Administrator.', 'error') #
         return redirect(BASE_URL + url_for('login')) #
 
     if request.method == 'POST':
@@ -1688,7 +1947,7 @@ def admin_dashboard():
 
     if admin_user.get('is_locked'):
         session.pop('user_id', None)
-        flash('Ihr Administratorkonto wurde gesperrt.', 'error')
+        flash('Dein Administratorkonto wurde gesperrt.', 'error')
         return redirect(BASE_URL + url_for('login'))
 
     if request.method == 'POST':
@@ -1743,7 +2002,7 @@ def add_user():
 
     if admin_user.get('is_locked'):
         session.pop('user_id', None)
-        flash('Ihr Administratorkonto wurde gesperrt.', 'error')
+        flash('Dein Administratorkonto wurde gesperrt.', 'error')
         return redirect(BASE_URL + url_for('login'))
 
     if request.method == 'POST':
@@ -1759,6 +2018,8 @@ def add_user():
                 'is_admin': 'is_admin' in form_data
             }
             if add_regular_user_db(user_details):
+                if user_details['email']:
+                    send_user_register_email(user_details['vorname'], user_details['email'], user_details['code'])
                 flash(f"Benutzer '{user_details['vorname']} {user_details['nachname']}' erfolgreich hinzugefügt.", "success")
                 return redirect(BASE_URL + url_for('admin_dashboard'))
         # Bei Validierungsfehler oder DB-Fehler (geflasht in add_regular_user_db oder _validate_add_user_form),
@@ -1813,7 +2074,7 @@ def admin_api_user_manage():
 
     if admin_user.get('is_locked'):
         session.pop('user_id', None)
-        flash('Ihr Administratorkonto wurde gesperrt.', 'error')
+        flash('Dein Administratorkonto wurde gesperrt.', 'error')
         return redirect(BASE_URL + url_for('login'))
 
     if request.method == 'POST':
@@ -1862,7 +2123,7 @@ def admin_api_user_detail(api_user_id_route):
 
     if admin_user.get('is_locked'):
         session.pop('user_id', None)
-        flash('Ihr Administratorkonto wurde gesperrt.', 'error')
+        flash('Dein Administratorkonto wurde gesperrt.', 'error')
         return redirect(BASE_URL + url_for('login'))
 
     target_api_user = get_api_user_by_id(api_user_id_route)
@@ -1907,7 +2168,7 @@ def admin_generate_api_key_for_user(api_user_id_route):
 
     if admin_user.get('is_locked'):
         session.pop('user_id', None)
-        flash('Ihr Administratorkonto wurde gesperrt.', 'error')
+        flash('Dein Administratorkonto wurde gesperrt.', 'error')
         return redirect(BASE_URL + url_for('login'))
 
     target_api_user = get_api_user_by_id(api_user_id_route)
@@ -1959,7 +2220,7 @@ def admin_delete_api_key(api_key_id_route):
 
     if admin_user.get('is_locked'):
         session.pop('user_id', None)
-        flash('Ihr Administratorkonto wurde gesperrt.', 'error')
+        flash('Dein Administratorkonto wurde gesperrt.', 'error')
         return redirect(BASE_URL + url_for('login'))
 
     api_user_id_for_redirect = request.form.get('api_user_id_for_redirect')
@@ -2012,7 +2273,7 @@ def admin_delete_api_user(api_user_id_route):
 
     if admin_user.get('is_locked'):
         session.pop('user_id', None)
-        flash('Ihr Administratorkonto wurde gesperrt.', 'error')
+        flash('Dein Administratorkonto wurde gesperrt.', 'error')
         return redirect(BASE_URL + url_for('login'))
 
     api_user_to_delete = get_api_user_by_id(api_user_id_route)
@@ -2051,7 +2312,7 @@ def admin_user_modification(target_user_id):
 
     if current_admin_user.get('is_locked'):
         session.pop('user_id', None)
-        flash('Ihr Administratorkonto wurde gesperrt.', 'error')
+        flash('Dein Administratorkonto wurde gesperrt.', 'error')
         return redirect(BASE_URL + url_for('login'))
 
     target_user = get_user_by_id(target_user_id)
