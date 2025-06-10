@@ -1270,7 +1270,7 @@ def _handle_delete_target_user(target_user_id, target_user, logged_in_user_id):
     """
 
     if target_user_id == logged_in_user_id:
-        flash("Sie können sich nicht selbst löschen.", "warning")
+        flash("Du kannst dich nicht selbst löschen.", "warning")
         return False # Keine Weiterleitung zum Dashboard
 
     if delete_user(target_user_id): # delete_user löscht auch Transaktionen durch DB CASCADE
@@ -1343,9 +1343,45 @@ def _validate_add_user_form(form_data):
         errors = True
     # fetch_user benötigt code, der oben schon als Pflichtfeld geprüft wurde
     if form_data.get('code') and fetch_user(form_data.get('code')):
-        flash(f"Der Code '{form_data.get('code')}' wird bereits verwendet. Bitte wählen Sie einen anderen.", "error")
+        flash(f"Der Code '{form_data.get('code')}' wird bereits verwendet. Bitte wähle einen anderen.", "error")
         errors = True
     return not errors
+
+def _validate_register_form(form_data):
+    """
+    Validiert die Formulardaten für die Registrierung eines neuen Benutzers.
+
+    Args:
+        form_data (werkzeug.datastructures.ImmutableMultiDict): Die Formulardaten.
+
+    Returns:
+        bool: True, wenn die Daten gültig sind, sonst False. Fehlermeldungen werden geflasht.
+    """
+
+    errors = False
+    required_fields = ['nachname', 'vorname', 'password', 'confirm_password']
+    for field in required_fields:
+        if not form_data.get(field):
+            flash(f"Bitte fülle das Pflichtfeld '{field}' aus.", "error")
+            errors = True
+
+    if errors:
+        return False # Frühzeitiger Ausstieg
+
+    if form_data.get('password') != form_data.get('confirm_password'):
+        flash("Die Passwörter stimmen nicht überein.", "error")
+        errors = True
+
+    if form_data.get('password') and len(form_data.get('password')) < 8:
+        flash('Das Passwort muss mindestens 8 Zeichen lang sein.', 'error')
+        errors = True
+
+    if fetch_user(form_data.get('code')):
+        flash(f"Der Benutzercode '{form_data.get('code')}' ist bereits vergeben.", "error")
+        errors = True
+
+    return not errors
+
 
 def _process_system_setting_update(key, new_value_str):
     """
@@ -1394,7 +1430,7 @@ def login():
         user = get_user_by_id(session['user_id'])
         if user and user.get('is_locked'): # Prüfen ob User gesperrt ist
             session.pop('user_id', None)
-            flash('Ihr Konto wurde gesperrt. Bitte kontaktieren Sie einen Administrator.', 'error')
+            flash('Ihr Konto wurde gesperrt. Bitte kontaktiere einen Administrator.', 'error')
             return render_template('web_login.html', version=app.config.get('version', 'unbekannt'))
         return redirect(BASE_URL + url_for('user_info'))
 
@@ -1407,10 +1443,64 @@ def login():
             session.permanent = True
             return redirect(BASE_URL + url_for('user_info'))
         if user and user['is_locked']:
-            flash('Ihr Konto ist gesperrt. Bitte kontaktieren Sie einen Administrator.', 'error')
+            flash('Ihr Konto ist gesperrt. Bitte kontaktiere einen Administrator.', 'error')
         else:
             flash('Ungültiger Benutzername oder Passwort', 'error')
     return render_template('web_login.html', version=app.config.get('version', 'unbekannt'))
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    """
+    Verarbeitet die Registrierung eines neuen Benutzers.
+
+    Bei GET wird das Registrierungsformular angezeigt.
+    Bei POST werden die Formulardaten validiert. Bei Erfolg wird ein neuer Benutzer
+    in der Datenbank angelegt und der Benutzer zur Login-Seite weitergeleitet.
+    Bei Fehlern wird das Formular mit entsprechenden Meldungen erneut angezeigt.
+
+    Returns:
+        str oder werkzeug.wrappers.response.Response: Die gerenderte Registrierungsseite
+        oder eine Weiterleitung zur Login-Seite.
+    """
+    if 'user_id' in session:
+        return redirect(BASE_URL + url_for('user_info'))
+
+    if request.method == 'POST':
+        form_data = request.form
+        if _validate_register_form(form_data):
+            # GET Request
+            generated_code = None
+            for _ in range(100): # Max 100 attempts
+                potential_code = ''.join(random.choices(string.digits, k=10))
+                if not fetch_user(potential_code):
+                    generated_code = potential_code
+                    break
+            if not generated_code:
+                flash("Ich konnte keinen eindeutigen Code generieren. Bitte versuche es später erneut.", "warning")
+                generated_code = "" # Fallback
+            user_details = {
+                'code': generated_code,
+                'nachname': form_data.get('nachname'),
+                'vorname': form_data.get('vorname'),
+                'password': form_data.get('password'),
+                'email': form_data.get('email', ''), # Optional
+                'kommentar': form_data.get('kommentar', ''), # Optional
+                'is_admin': False  # Neue Benutzer sind niemals Admins
+            }
+            if add_regular_user_db(user_details):
+                flash(f"Registrierung erfolgreich! Du kannst dich nun anmelden mit dem Code '{generated_code}'. Bitte notiere dir "
+                       "diesen Code für künftige Logins!", "success")
+                return redirect(BASE_URL + url_for('login'))
+        # Bei Validierungsfehler oder DB-Fehler, das Formular erneut mit den
+        # eingegebenen Daten anzeigen.
+        return render_template('web_user_register.html',
+                               form_data=form_data,
+                               version=app.config.get('version', 'unbekannt'))
+
+    # GET Request
+    return render_template('web_user_register.html',
+                           form_data=None,
+                           version=app.config.get('version', 'unbekannt'))
 
 @app.route('/user_info', methods=['GET', 'POST'])
 def user_info():
@@ -1440,7 +1530,7 @@ def user_info():
 
     if user.get('is_locked'): #
         session.pop('user_id', None) #
-        flash('Ihr Konto wurde gesperrt. Bitte kontaktieren Sie einen Administrator.', 'error') #
+        flash('Ihr Konto wurde gesperrt. Bitte kontaktiere einen Administrator.', 'error') #
         return redirect(BASE_URL + url_for('login')) #
 
     if request.method == 'POST':
@@ -1688,7 +1778,7 @@ def add_user():
             generated_code = potential_code
             break
     if not generated_code:
-        flash("Konnte keinen eindeutigen Code generieren. Bitte versuchen Sie es manuell oder später erneut.", "warning")
+        flash("Konnte keinen eindeutigen Code generieren. Bitte versuche es später erneut.", "warning")
         generated_code = "" # Fallback
 
     return render_template('web_user_add.html', user=admin_user, current_code=generated_code, form_data=None, version=app.config.get('version', 'unbekannt'))

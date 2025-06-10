@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registrierung</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo/logo-120x164-alpha.png') }}">
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <img src="{{ url_for('static', filename='logo/logo-1024x1024-alpha.png') }}" alt="App Logo" style="max-width: 200px; height: auto; display: block; margin: 0 auto 10px;">
+    <div class="register-container">
+        <h2>Neuen Benutzer registrieren</h2>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <ul class="flashes">
+                {% for category, message in messages %}
+                    <li class="{{ category }}">{{ message }}</li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+        {% endwith %}
+        <form method="POST">
+            <div>
+                <label for="vorname">Vorname *</label>
+                <input type="text" id="vorname" name="vorname" value="{{ form_data.vorname if form_data else '' }}" required>
+            </div>
+            <div>
+                <label for="nachname">Nachname *</label>
+                <input type="text" id="nachname" name="nachname" value="{{ form_data.nachname if form_data else '' }}" required>
+            </div>
+            <div>
+                <label for="password">Passwort (min. 8 Zeichen) *</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+            <div>
+                <label for="confirm_password">Passwort bestätigen *</label>
+                <input type="password" id="confirm_password" name="confirm_password" required>
+            </div>
+             <div>
+                <label for="email">E-Mail (optional)</label>
+                <input type="email" id="email" name="email" value="{{ form_data.email if form_data else '' }}">
+            </div>
+            <button type="submit">Registrieren</button>
+        </form>
+        <div class="back-to-login">
+            <p><a href="{{ url_for('login') }}">Zurück zum Login</a></p>
+        </div>
+    </div>
+    <div>
+        <a href="https://github.com/magenbrot/Feuerwehr-Versorgungs-Helfer" title="Quellcode ansehen" target="_blank" class="styled-link">Version {{ version }} (github.com)</a>
+        <a href="https://github.com/sponsors/magenbrot" title="Sponsoring Link" target="_blank" class="styled-link">Unterstütze die Entwicklung</a>
+    </div>
+</body>
+</html>
