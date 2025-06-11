@@ -390,8 +390,18 @@ def add_user_nfc_token(user_id, token_name, token_hex):
                 cursor.execute(query, (user_id, token_name, token_binary))
                 cnx.commit()
                 return True
+            except IntegrityError as err:
+                if err.errno == 1062:
+                    logger.warning("Versuch, einen doppelten NFC-Token hinzuzufügen: %s", token_hex)
+                    flash('Dieser NFC-Token ist bereits vorhanden und kann nicht erneut hinzugefügt werden.', 'error')
+                else:
+                    logger.error("Datenbank-Integritätsfehler beim Hinzufügen des NFC-Tokens: %s", err)
+                    flash(f"Ein Datenbank-Integritätsfehler ist aufgetreten: {err}", "error")
+                cnx.rollback()
+                return False
             except Error as err:
                 logger.error("Fehler beim Hinzufügen des NFC-Tokens: %s", err)
+                flash("Ein unerwarteter Datenbankfehler ist aufgetreten.", "error")
                 cnx.rollback()
                 return False
             finally:
