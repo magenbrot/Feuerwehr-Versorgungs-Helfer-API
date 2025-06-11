@@ -4,6 +4,7 @@ import sys
 import logging
 import base64
 import datetime
+import json
 from functools import wraps
 from pathlib import Path
 from typing import Union, Tuple, Literal, Dict, Optional, Any
@@ -28,8 +29,6 @@ app.debug = config.api_config['debug_mode']
 
 app.json.ensure_ascii = False
 app.json.mimetype = "application/json; charset=utf-8"
-
-logger.info("Feuerwehr-Versorgungs-Helfer API wurde gestartet")
 
 # Konfigurationsprüfungen
 required_db_keys = ['host', 'port', 'user', 'password', 'database']
@@ -60,6 +59,14 @@ try:
 except Error as e:
     logger.info("Kritischer Fehler beim Starten der Datenbankverbindung: %s", e)
     sys.exit(1)
+
+try:
+    with open('manifest.json', 'r', encoding='utf-8') as manifest:
+        app.config.update(json.load(manifest))
+except FileNotFoundError:
+    app.config.update(version="N/A", author="N/A")
+
+logger.info("Feuerwehr-Versorgungs-Helfer API (Version %s) wurde gestartet", app.config.get('version'))
 
 def prepare_and_send_email(email_params: dict, smtp_cfg: dict) -> bool:
     """
