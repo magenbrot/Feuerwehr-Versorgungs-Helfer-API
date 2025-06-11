@@ -40,8 +40,6 @@ app.config['SECRET_KEY'] = os.urandom(24)
 app.json.ensure_ascii = False
 app.json.mimetype = "application/json; charset=utf-8"
 
-logger.info("Feuerwehr-Versorgungs-Helfer GUI wurde gestartet")
-
 if "BASE_URL" in os.environ:
     BASE_URL = os.environ.get('BASE_URL', '/')
     logger.info("BASE_URL: %s", BASE_URL)
@@ -68,10 +66,12 @@ except Error:
     sys.exit(1)
 
 try:
-    with open('manifest.json', 'r', encoding='utf-8') as f:
-        app.config.update(json.load(f))
+    with open('manifest.json', 'r', encoding='utf-8') as manifest:
+        app.config.update(json.load(manifest))
 except FileNotFoundError:
     app.config.update(version="N/A", author="N/A")
+
+logger.info("Feuerwehr-Versorgungs-Helfer GUI (Version %s) wurde gestartet", app.config.get('version'))
 
 def generate_api_key_string(length=32):
     """
