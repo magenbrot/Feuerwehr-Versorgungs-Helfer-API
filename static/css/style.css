@@ -34,6 +34,28 @@ body {
     margin-bottom: 0;
 }
 
+.register-container {
+    background-color: #fff;
+    padding: 30px;
+    padding-top: 5px;
+    padding-bottom: 0px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    width: 400px;
+    text-align: center;
+    margin-top: 10px;
+}
+
+.register-container .link {
+    margin-top: 15px;
+    font-size: 0.9em;
+    text-align: center;
+}
+
+.register-container .link p {
+    margin-bottom: 0;
+}
+
 h2 {
     color: #333;
     margin-bottom: 20px;

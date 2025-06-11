@@ -1033,6 +1033,9 @@ def add_regular_user_db(user_data):
             'password' (str): Passwort des Benutzers (Klartext, wird hier gehasht).
             'email' (str, optional): E-Mail-Adresse des Benutzers.
             'kommentar' (str, optional): Kommentar zum Benutzer.
+            'acc_duties' (bool): Buchungs- und Mitwirkungspflicht akzeptiert.
+            'acc_privacy_policy' (bool): Datenschutzerklärung wurde akzeptiert.
+            'is_locked (bool): Benutzer ist gesperrt
             'is_admin' (bool): Gibt an, ob der Benutzer Admin-Rechte hat.
 
     Returns:
@@ -1045,8 +1048,8 @@ def add_regular_user_db(user_data):
         hashed_password = generate_password_hash(user_data['password'])
         try:
             query = """
-                INSERT INTO users (code, nachname, vorname, password, email, kommentar, is_admin, is_locked)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, 0)
+                INSERT INTO users (code, nachname, vorname, password, email, kommentar, acc_duties, acc_privacy_policy, is_locked, is_admin)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
             cursor.execute(query, (
                 user_data['code'],
@@ -1055,6 +1058,9 @@ def add_regular_user_db(user_data):
                 hashed_password,
                 user_data.get('email'),
                 user_data.get('kommentar'),
+                1 if user_data.get('acc_duties') else 0,
+                1 if user_data.get('acc_privacy_policy') else 0,
+                1 if user_data.get('is_locked') else 0,
                 1 if user_data.get('is_admin') else 0
             ))
             cnx.commit()
@@ -1696,6 +1702,9 @@ def register():
                 'password': form_data.get('password'),
                 'email': form_data.get('email', ''), # Optional
                 'kommentar': form_data.get('kommentar', ''), # Optional
+                'acc_duties': form_data.get('pflichten'),
+                'acc_privacy_policy': form_data.get('datenschutz'),
+                'is_locked': False,
                 'is_admin': False  # Neue Benutzer sind niemals Admins
             }
             if add_regular_user_db(user_details):
