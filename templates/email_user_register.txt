@@ -2,7 +2,10 @@ Hallo {{ vorname }},
 
 vielen Dank für deine Anmeldung!
 
-Dein Login-Code lautet: {{ user_code }}
+Dein Login-Code lautet: {{ code }}
 
 Viele Grüße
 Dein Team von der Abteilung Getränke
+
+PS: Wusstest du, dass du uns auch eine Einzugsermächtigung erteilen kannst?
+    So können wir das Guthaben auch einfach und bequem von deinem Konto abbuchen!
