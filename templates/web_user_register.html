@@ -9,7 +9,7 @@
 </head>
 <body>
     <img src="{{ url_for('static', filename='logo/logo-1024x1024-alpha.png') }}" alt="App Logo" style="max-width: 200px; height: auto; display: block; margin: 0 auto 10px;">
-    <div class="login-container">
+    <div class="register-container">
         <h2>Neuen Benutzer registrieren</h2>
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
@@ -38,8 +38,16 @@
                 <input type="password" id="confirm_password" name="confirm_password" required>
             </div>
              <div>
-                <label for="email">E-Mail (optional)</label>
+                <label for="email">E-Mail (optional, für Benachrichtigungen)</label>
                 <input type="email" id="email" name="email" value="{{ form_data.email if form_data else '' }}">
+            </div>
+            <div>
+                <label for="pflichten">Buchungs und Mitwirkungspflicht *</label>
+                <input type="checkbox" id="pflichten" name="pflichten" required>Ich verpflichte mich, alle von mir konsumierten Speisen und Getränke eigenständig und korrekt über das System zu buchen (z. B. durch Scannen des QR-Codes oder Nutzung des NFC-Schlüssels)
+            </div>
+            <div>
+                <label for="datenschutz">Datenschutz *</label>
+                <input type="checkbox" id="datenschutz" name="datenschutz" required>Ich habe die <a href="https://feuerwehr-werdau.de/datenschutzerklaerung-chris/" title="Datenschutzerklärung lesen" target="_blank">Datenschutzerklärung</a> gelesen und bin einverstanden.
             </div>
             <button type="submit">Registrieren</button>
         </form>

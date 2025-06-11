@@ -144,11 +144,11 @@ python3 gui.py
 
 ### GUI im Browser öffnen
 
-Bei lokalem Debugging ist die GUI unter [http://127.0.0.1:5000/](http://127.0.0.1:5000/) erreichbar. Die Listen-IP und der Port können in der .env Datei konfiguriert werden.
+Bei lokalem Debugging ist die GUI unter [http://127.0.0.1:5000/](http://127.0.0.1:5000/) erreichbar. Die Listen-IP und der Port können in der .env Datei konfiguriert werden. Für den Produktivbetrieb sollte die Applikation über uWSGI gestartet und hinter einen Webserver wie nginx gelegt werden.
 
-Für den ersten Login ist der Benutzer "9999999999" mit dem Passwort "pahvikoo9ieje.th9jee" angelegt. Bitte dann einen eigenen Benutzer anlegen und den Default-User löschen.
+Für den ersten Login ist der Benutzer "9876543210" mit dem Passwort "changeme" angelegt. Bitte nach dem Login gleich einen eigenen Benutzer registrieren oder anlegen und den Default-User löschen.
 
-### Installation API+GUI als nginx UWSGI Dienst mittels systemd
+### Installation API+GUI als nginx uWSGI Dienst mittels systemd
 
 1. Die Applikationen sollten bereits lauffähig sein (also ein Python3 venv existieren und die benötigten Module installiert sein).
 2. Die Dateien aus installation/systemd nach /etc/systemd/system/ kopieren und anpassen.
@@ -158,8 +158,8 @@ Für den ersten Login ist der Benutzer "9999999999" mit dem Passwort "pahvikoo9i
    * ```journalctl -u fvh-api.service```
    * ```journalctl -u fvh-gui.service```
 
-### Update
+### Aktuelle Version installieren
 
 Ich lasse den Code durch eine deploy-Action mit einem Github-Runner auf dem Server aktualisieren. Die Action startet, sobald es Änderungen am main-Branch gibt. Der Runner pullt dann den neuen Code, installiert ggf. neu benötigte Module und startet dann die systemd-Services neu.
 
-Ohne den Runner lässt sich das natürlich auch einfach manuell erledigen.
+Ohne den Runner lässt sich das natürlich auch einfach manuell erledigen (git pull + Restart der Services).
