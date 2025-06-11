@@ -376,7 +376,6 @@ def aktuellen_saldo_pruefen_und_benachrichtigen(target_user_id: int):
         if cnx:
             db_utils.DatabaseConnectionPool.close_connection(cnx)
 
-
 def get_user_by_api_key(api_key_value: str) -> Optional[tuple[int, str]]: # api_key umbenannt
     """
     Ruft den Benutzer anhand des API-Schlüssels aus der Datenbank ab.
@@ -505,10 +504,24 @@ def _send_new_transaction_email(user_details: Dict[str, Any], transaction_detail
     else:
         logger.error("Fehler beim Senden der Neue Transaktion E-Mail an %s (ID: %s).", user_details['email'], user_details['id'])
 
+# ------------* FLASK ROUTEN *------------
+
+@app.route('/version', methods=['GET'])
+@api_key_required
+def get_version_route(api_user_id: int, api_username: str):
+    """
+    Gibt die aktuelle Version der Anwendung zurück (nur für authentifizierte Benutzer).
+
+    Returns:
+        flask.Response: Eine JSON-Antwort mit der aktuellen Version.
+    """
+
+    logger.debug("API-Benutzer authentifiziert: ID %s - %s", api_user_id, api_username)
+    return jsonify({'version': app.config.get('version')})
 
 @app.route('/health-protected', methods=['GET'])
 @api_key_required
-def health_protected_route(api_user_id: int, api_username: str): # Parameter umbenannt für Konsistenz
+def health_protected_route(api_user_id: int, api_username: str):
     """
     Healthcheck gegen die Datenbank (nur für authentifizierte Benutzer).
 
@@ -526,7 +539,6 @@ def health_protected_route(api_user_id: int, api_username: str): # Parameter umb
         logger.error("Datenbankverbindung fehlgeschlagen im Healthcheck.")
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
 
-    # Einfache Operation, um die Verbindung zu testen, z.B. SELECT 1
     try:
         with cnx.cursor() as cursor:
             cursor.execute("SELECT 1")

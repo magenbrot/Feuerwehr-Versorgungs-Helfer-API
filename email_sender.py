@@ -104,7 +104,6 @@ def _send_email_via_smtp(msg: MIMEMultipart, smtp_cfg: Dict[str, Any], empfaenge
         logger.error("Ein unerwarteter Fehler ist beim E-Mail-Versand aufgetreten: %s", e, exc_info=True)
     return False
 
-
 def sende_formatierte_email(empfaenger_email: str, betreff: str, content: Dict[str, Any], smtp_cfg: Dict[str, Any]) -> bool:
     """
     Versendet eine formatierte HTML-E-Mail mit optionalem Logo und Text-Fallback.

@@ -10,6 +10,7 @@ import io
 import random
 import secrets
 import string
+from pathlib import Path
 from datetime import datetime, timedelta, timezone
 import qrcode
 from PIL import Image, ImageDraw, ImageFont
@@ -1191,84 +1192,102 @@ def delete_reset_token(token):
         cursor.close()
         db_utils.DatabaseConnectionPool.close_connection(cnx)
 
-def send_user_register_email(user_vorname, user_email, user_code):
+def prepare_and_send_email(email_params: dict, smtp_cfg: dict) -> bool:
     """
-    Informiert den Benutzer per Email, dass ein Konto angelegt wurde (sofern eine Emailadresse hinterlegt wurde).
+    Bereitet eine E-Mail mit Flasks render_template vor und versendet sie.
+    Die Argumente für die E-Mail-Details sind in einem Dictionary zusammengefasst.
+
+    Args:
+        email_params: Ein Dictionary mit den Details für die E-Mail.
+            Erwartete Schlüssel:
+                'empfaenger_email' (str): E-Mail-Adresse des Empfängers.
+                'betreff' (str): Betreff der E-Mail.
+                'template_name_html' (str): Dateiname des HTML-Templates (im Flask templates Ordner).
+                'template_name_text' (str): Dateiname des Text-Templates (im Flask templates Ordner).
+                'template_context' (dict): Dictionary mit Daten für die Templates.
+                'logo_dateipfad' (str, optional): Pfad zur Logo-Datei.
+        smtp_cfg: SMTP-Konfigurationsdictionary.
+
+    Returns:
+        bool: True bei Erfolg, sonst False.
     """
+
+    empfaenger_email = email_params.get('empfaenger_email')
+    betreff = email_params.get('betreff')
+    template_name_html = email_params.get('template_name_html')
+    template_name_text = email_params.get('template_name_text')
+    template_context = email_params.get('template_context', {})
+    logo_dateipfad_str = email_params.get('logo_dateipfad')
+
+    if not all([empfaenger_email, betreff, template_name_html, template_name_text]):
+        logger.error("Unvollständige E-Mail-Parameter. Benötigt: empfaenger_email, betreff, template_name_html, template_name_text.")
+        return False
+
+    logo_exists = False
+    if logo_dateipfad_str:
+        logo_path_obj = Path(logo_dateipfad_str)
+        if logo_path_obj.is_file():
+            logo_exists = True
+        else:
+            logger.warning("Logo-Datei nicht gefunden unter: %s", logo_dateipfad_str)
 
     try:
-        betreff = "Neuer Account auf Feuerwehr-Versorgungs-Helfer"
+        template_context_final = template_context.copy()
+        template_context_final['logo_exists_fuer_template'] = logo_exists
 
-        # HTML- und Text-Version der E-Mail aus Templates rendern
-        html_body = render_template('email_user_register.html', user_vorname=user_vorname, user_code=user_code)
-        text_body = render_template('email_user_register.txt', user_vorname=user_vorname, user_code=user_code)
-
-        # Pfad zum Logo definieren
-        logo_path = os.path.join(app.static_folder, 'logo', 'logo-120x164-alpha.png')
-        if not os.path.exists(logo_path):
-            logger.warning("Logo-Datei für E-Mail nicht gefunden unter: %s", logo_path)
-            logo_path = None
-
-        # Inhalts-Dictionary für den E-Mail-Sender vorbereiten
-        content = {
-            'html': html_body,
-            'text': text_body,
-            'logo_pfad': logo_path
-        }
-
-        # Die SMTP-Konfiguration wird direkt aus dem config-Modul übergeben
-        success = email_sender.sende_formatierte_email(
-            empfaenger_email=user_email,
-            betreff=betreff,
-            content=content,
-            smtp_cfg=config.smtp_config
-        )
-        if not success:
-            # Das Logging übernimmt bereits email_sender.py, hier ggf. nur eine Info
-            logger.info("Versuch, eine E-Mail via email_sender.py zu senden, wurde mit Fehlern beendet.")
+        with app.app_context():
+            final_html_body = render_template(template_name_html, **template_context_final)
+            final_text_body = render_template(template_name_text, **template_context_final)
 
     except Exception as e:  # pylint: disable=W0718
-        logger.critical("Ein unerwarteter Fehler ist beim Vorbereiten der E-Mail aufgetreten: %s", e)
+        logger.error("Fehler beim Rendern der E-Mail-Templates für '%s': %s", template_name_html, e, exc_info=True)
+        return False
 
-def send_password_reset_email(user_email, token):
-    """
-    Erstellt und sendet die Passwort-Reset-E-Mail mit email_sender.py.
-    """
+    email_content_dict = {
+        'html': final_html_body,
+        'text': final_text_body,
+        'logo_pfad': logo_dateipfad_str if logo_exists else None
+    }
 
-    try:
-        betreff = "Passwort zurücksetzen für Feuerwehr-Versorgungs-Helfer"
-        reset_url = url_for('reset_with_token', token=token, _external=True)
+    return email_sender.sende_formatierte_email(
+        empfaenger_email=empfaenger_email,
+        betreff=betreff,
+        content=email_content_dict,
+        smtp_cfg=smtp_cfg
+    )
 
-        # HTML- und Text-Version der E-Mail aus Templates rendern
-        html_body = render_template('email_reset_password.html', reset_url=reset_url)
-        text_body = render_template('email_reset_password.txt', reset_url=reset_url)
+def _send_user_register_email(vorname: str, email: str, code: int, logo_pfad: str):
+    """Hilfsfunktion zum Senden der "Neuer Benutzer" Benachrichtigung."""
 
-        # Pfad zum Logo definieren
-        logo_path = os.path.join(app.static_folder, 'logo', 'logo-120x164-alpha.png')
-        if not os.path.exists(logo_path):
-            logger.warning("Logo-Datei für E-Mail nicht gefunden unter: %s", logo_path)
-            logo_path = None
+    email_params = {
+        'empfaenger_email': email,
+        'betreff': "Dein neuer Account auf Feuerwehr-Versorgungs-Helfer",
+        'template_name_html': "email_user_register.html",
+        'template_name_text': "email_user_register.txt",
+        'template_context': {"vorname": vorname, "code": code},
+        'logo_dateipfad': logo_pfad
+    }
+    if prepare_and_send_email(email_params, config.smtp_config):
+        logger.info("Neuer Benutzer Benachrichtigung an %s gesendet.", email)
+    else:
+        logger.error("Fehler beim Senden der Neuer Benutzer Benachrichtigung an %s.", email)
 
-        # Inhalts-Dictionary für den E-Mail-Sender vorbereiten
-        content = {
-            'html': html_body,
-            'text': text_body,
-            'logo_pfad': logo_path
-        }
+def _send_password_reset_email(email: str, token: str, logo_pfad: str):
+    """Hilfsfunktion zum Senden der "Passwort zurücksetzen" Benachrichtigung."""
 
-        # Die SMTP-Konfiguration wird direkt aus dem config-Modul übergeben
-        success = email_sender.sende_formatierte_email(
-            empfaenger_email=user_email,
-            betreff=betreff,
-            content=content,
-            smtp_cfg=config.smtp_config
-        )
-        if not success:
-            # Das Logging übernimmt bereits email_sender.py, hier ggf. nur eine Info
-            logger.info("Versuch, eine E-Mail via email_sender.py an %s zu senden, wurde mit Fehlern beendet.", user_email)
-
-    except Exception as e:  # pylint: disable=W0718
-        logger.critical("Ein unerwarteter Fehler ist beim Vorbereiten der E-Mail aufgetreten: %s", e)
+    reset_url = url_for('reset_with_token', token=token, _external=True)
+    email_params = {
+        'empfaenger_email': email,
+        'betreff': "Passwort zurücksetzen für Feuerwehr-Versorgungs-Helfer",
+        'template_name_html': "email_reset_password.html",
+        'template_name_text': "email_reset_password.txt",
+        'template_context': {"reset_url": reset_url},
+        'logo_dateipfad': logo_pfad
+    }
+    if prepare_and_send_email(email_params, config.smtp_config):
+        logger.info("Passwort Reset Benachrichtigung an %s gesendet.", email)
+    else:
+        logger.error("Fehler beim Senden der Passwort Reset Benachrichtigung an %s.", email)
 
 def add_api_user_db(username):
     """
@@ -1709,7 +1728,9 @@ def register():
             }
             if add_regular_user_db(user_details):
                 if user_details['email']:
-                    send_user_register_email(user_details['vorname'], user_details['email'], generated_code)
+                    logo_pfad_str = str(Path("static/logo/logo-80x109.png"))
+                    _send_user_register_email(user_details['vorname'], user_details['email'], generated_code, logo_pfad_str)
+
                 flash(f"Registrierung erfolgreich! Du kannst dich nun anmelden mit dem Code '{generated_code}'. Bitte notiere dir "
                        "diesen Code für künftige Logins!", "success")
                 return redirect(BASE_URL + url_for('login'))
@@ -1741,9 +1762,10 @@ def request_password_reset():
         if user and not user['is_locked']:
             token = secrets.token_urlsafe(32)
             if store_reset_token(user['id'], token):
-                send_password_reset_email(user['email'], token)
+                logo_pfad_str = str(Path("static/logo/logo-80x109.png"))
+                _send_password_reset_email(user['email'], token, logo_pfad_str)
 
-        flash('Wenn ein Konto mit dieser E-Mail-Adresse existiert und nicht gesperrt ist, wurde ein Link zum Zurücksetzen des Passworts gesendet.', 'info')
+        flash('Wenn ein Konto mit dieser E-Mail-Adresse existiert und nicht gesperrt ist, wurde ein Link zum Zurücksetzen des Passworts gesendet.', 'success')
         return redirect(url_for('login'))
 
     return render_template('web_request_reset.html', version=app.config.get('version', 'unbekannt'))
@@ -1908,7 +1930,7 @@ def generate_qr():
 
     user_id = session.get('user_id')
     if not user_id:
-        flash("Bitte zuerst einloggen.", "info")
+        flash("Bitte zuerst einloggen.", "success")
         return redirect(BASE_URL + url_for('login'))
 
     # Die Daten für den QR-Code werden als URL-Parameter erwartet (z.B. /qr_code?usercode=1234567890a&aktion=a)
@@ -1956,7 +1978,7 @@ def admin_dashboard():
 
     user_id = session.get('user_id')
     if not user_id:
-        flash("Bitte zuerst einloggen.", "info")
+        flash("Bitte zuerst einloggen.", "success")
         return redirect(BASE_URL + url_for('login'))
 
     admin_user = get_user_by_id(user_id)
@@ -2011,7 +2033,7 @@ def add_user():
 
     user_id = session.get('user_id')
     if not user_id:
-        flash("Bitte zuerst einloggen.", "info")
+        flash("Bitte zuerst einloggen.", "success")
         return redirect(BASE_URL + url_for('login'))
 
     admin_user = get_user_by_id(user_id)
@@ -2038,7 +2060,9 @@ def add_user():
             }
             if add_regular_user_db(user_details):
                 if user_details['email']:
-                    send_user_register_email(user_details['vorname'], user_details['email'], user_details['code'])
+                    logo_pfad_str = str(Path("static/logo/logo-80x109.png"))
+                    _send_user_register_email(user_details['vorname'], user_details['email'], user_details['code'], logo_pfad_str)
+
                 flash(f"Benutzer '{user_details['vorname']} {user_details['nachname']}' erfolgreich hinzugefügt.", "success")
                 return redirect(BASE_URL + url_for('admin_dashboard'))
         # Bei Validierungsfehler oder DB-Fehler (geflasht in add_regular_user_db oder _validate_add_user_form),
@@ -2083,7 +2107,7 @@ def admin_api_user_manage():
 
     user_id = session.get('user_id')
     if not user_id:
-        flash("Bitte zuerst einloggen.", "info")
+        flash("Bitte zuerst einloggen.", "success")
         return redirect(BASE_URL + url_for('login'))
 
     admin_user = get_user_by_id(user_id)
@@ -2132,7 +2156,7 @@ def admin_api_user_detail(api_user_id_route):
 
     user_id = session.get('user_id')
     if not user_id:
-        flash("Bitte zuerst einloggen.", "info")
+        flash("Bitte zuerst einloggen.", "success")
         return redirect(BASE_URL + url_for('login'))
 
     admin_user = get_user_by_id(user_id)
@@ -2177,7 +2201,7 @@ def admin_generate_api_key_for_user(api_user_id_route):
 
     user_id = session.get('user_id')
     if not user_id:
-        flash("Bitte zuerst einloggen.", "info")
+        flash("Bitte zuerst einloggen.", "success")
         return redirect(BASE_URL + url_for('login'))
 
     admin_user = get_user_by_id(user_id)
@@ -2229,7 +2253,7 @@ def admin_delete_api_key(api_key_id_route):
 
     user_id = session.get('user_id')
     if not user_id:
-        flash("Bitte zuerst einloggen.", "info")
+        flash("Bitte zuerst einloggen.", "success")
         return redirect(BASE_URL + url_for('login'))
 
     admin_user = get_user_by_id(user_id)
@@ -2282,7 +2306,7 @@ def admin_delete_api_user(api_user_id_route):
 
     user_id = session.get('user_id')
     if not user_id:
-        flash("Bitte zuerst einloggen.", "info")
+        flash("Bitte zuerst einloggen.", "success")
         return redirect(BASE_URL + url_for('login'))
 
     admin_user = get_user_by_id(user_id)
@@ -2321,7 +2345,7 @@ def admin_user_modification(target_user_id):
     """
     logged_in_user_id = session.get('user_id')
     if not logged_in_user_id:
-        flash("Bitte zuerst einloggen.", "info")
+        flash("Bitte zuerst einloggen.", "success")
         return redirect(BASE_URL + url_for('login'))
 
     current_admin_user = get_user_by_id(logged_in_user_id)
@@ -2403,7 +2427,7 @@ def logout():
     """
 
     session.pop('user_id', None)
-    flash("Erfolgreich abgemeldet.", "info")
+    flash("Erfolgreich abgemeldet.", "success")
     return redirect(BASE_URL + url_for('login'))
 
 if __name__ == '__main__':
