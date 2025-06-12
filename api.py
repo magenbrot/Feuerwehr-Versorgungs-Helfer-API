@@ -440,7 +440,7 @@ def finde_benutzer_zu_nfc_token(token_base64: str) -> Optional[dict]:
         token_base64 (str): Die Base64-kodierte NFC-Daten des Tokens.
 
     Returns:
-        Optional[dict]: Ein Dictionary mit den Benutzerdaten (id, nachname, vorname, email, token_id)
+        Optional[dict]: Ein Dictionary mit den Benutzerdaten (id, nachname, vorname, email, is_locked, token_id)
                         oder None, falls kein Benutzer gefunden wird.
     """
 
@@ -456,7 +456,7 @@ def finde_benutzer_zu_nfc_token(token_base64: str) -> Optional[dict]:
                 return None
 
             query = """
-                SELECT u.id AS id, u.nachname AS nachname, u.vorname AS vorname, u.email AS email, t.token_id as token_id
+                SELECT u.id AS id, u.nachname AS nachname, u.vorname AS vorname, u.email AS email, u.is_locked AS is_locked, t.token_id as token_id
                 FROM nfc_token AS t
                 INNER JOIN users AS u ON t.user_id = u.id
                 WHERE t.token_daten = %s
@@ -611,6 +611,9 @@ def nfc_transaction(api_user_id_auth: int, api_username_auth: str):
     if not benutzer_info:
         return jsonify({'error': f"Kein Benutzer mit dem Token {daten['token']} gefunden."}), 404
 
+    if benutzer_info.get('is_locked') == 1:
+        return jsonify({'error': f"Hallo {benutzer_info['vorname']}, leider ist dein Benutzer gesperrt. Bitte wende dich an einen Verantwortlichen!"}), 403
+
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if not cnx:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
@@ -703,9 +706,13 @@ def person_transaktion_erstellen(api_user_id_auth: int, api_username_auth: str, 
     if not daten or 'beschreibung' not in daten:
         return jsonify({'error': 'Ungültige Anfrage. Beschreibung ist erforderlich.'}), 400
 
-    user_info = get_user_details_for_notification_by_code(code)
+    user_info = get_user_details_by_code(code)
     if not user_info:
         return jsonify({'error': f"Person mit Code {code} nicht gefunden."}), 404
+    elif user_info.get('is_locked') == 1:
+        return jsonify({'message': f"Hallo {user_info['vorname']}, leider ist dein Benutzer gesperrt. "
+                        "Bitte melde dich bei einem Verantwortlichen.",
+                        'action': "locked"}), 200
 
     trans_saldo_aenderung_str = get_system_setting('TRANSACTION_SALDO_CHANGE')
     if trans_saldo_aenderung_str is None:
@@ -775,27 +782,27 @@ def person_transaktion_erstellen(api_user_id_auth: int, api_username_auth: str, 
         if cnx:
             db_utils.DatabaseConnectionPool.close_connection(cnx)
 
-def get_user_details_for_notification_by_code(code_val: str) -> Optional[dict]: # code umbenannt
+def get_user_details_by_code(code_val: str) -> Optional[dict]: # code umbenannt
     """
-    Ruft ID, Vorname und E-Mail eines Benutzers anhand seines Codes ab.
+    Ruft ID, Vorname, E-Mail und Accountstatus (gesperrt/nicht gesperrt) eines Benutzers anhand seines Codes ab.
 
     Args:
         code_val (str): Der Benutzercode.
 
     Returns:
-        Optional[dict]: Ein Dictionary mit {'id': int, 'vorname': str, 'email': str} oder None.
+        Optional[dict]: Ein Dictionary mit {'id': int, 'vorname': str, 'email': str, 'is_locked': int} oder None.
     """
 
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if not cnx:
-        logger.error("DB-Verbindungsfehler in get_user_details_for_notification_by_code für Code %s", code_val)
+        logger.error("DB-Verbindungsfehler in get_user_details_by_code für Code %s", code_val)
         return None
     try:
         with cnx.cursor(dictionary=True) as cursor:
-            cursor.execute("SELECT id, vorname, email FROM users WHERE code = %s", (code_val,))
+            cursor.execute("SELECT id, vorname, email, is_locked FROM users WHERE code = %s", (code_val,))
             return cursor.fetchone()
     except Error as err:
-        logger.error("DB-Fehler in get_user_details_for_notification_by_code für Code %s: %s", code_val, err)
+        logger.error("DB-Fehler in get_user_details_by_code für Code %s: %s", code_val, err)
         return None
     finally:
         if cnx:
