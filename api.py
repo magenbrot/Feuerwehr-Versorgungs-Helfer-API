@@ -709,7 +709,7 @@ def person_transaktion_erstellen(api_user_id_auth: int, api_username_auth: str, 
     user_info = get_user_details_by_code(code)
     if not user_info:
         return jsonify({'error': f"Person mit Code {code} nicht gefunden."}), 404
-    elif user_info.get('is_locked') == 1:
+    if user_info.get('is_locked') == 1:
         return jsonify({'message': f"Hallo {user_info['vorname']}, leider ist dein Benutzer gesperrt. "
                         "Bitte melde dich bei einem Verantwortlichen.",
                         'action': "locked"}), 200
