@@ -10,7 +10,9 @@
 <body>
     <img src="{{ url_for('static', filename='logo/logo-1024x1024-alpha.png') }}" alt="App Logo" style="max-width: 200px; height: auto; display: block; margin: 0 auto 10px;">
     <div class="register-container">
+        <h2>{{ app_name }}</h2>
         <h2>Neuen Benutzer registrieren</h2>
+
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 <ul class="flashes">
@@ -20,6 +22,7 @@
                 </ul>
             {% endif %}
         {% endwith %}
+
         <form method="POST">
             <div>
                 <label for="vorname">Vorname *</label>
