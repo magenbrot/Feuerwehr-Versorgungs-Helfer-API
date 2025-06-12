@@ -10,7 +10,8 @@
 <body>
     <img src="{{ url_for('static', filename='logo/logo-1024x1024-alpha.png') }}" alt="App Logo" style="max-width: 200px; height: auto; display: block; margin: 0 auto 10px;">
     <div class="login-container">
-        <h2>Login</h2>
+        <h2>{{ app_name }} Login</h2>
+
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 <ul class="flashes">
@@ -20,6 +21,7 @@
                 </ul>
             {% endif %}
         {% endwith %}
+
         <form method="POST">
             <div>
                 <label for="code">Benutzername (Code):</label>
@@ -38,7 +40,7 @@
     </div>
     <div>
         <a href="https://github.com/magenbrot/Feuerwehr-Versorgungs-Helfer" title="Quellcode ansehen" target="_blank" class="styled-link">Version {{ version }} (github.com)</a>
-        <a href="https://github.com/sponsors/magenbrot" title=""Sponsoring Link" target="_blank" class="styled-link">Unterstütze die Entwicklung</a>
+        <a href="https://github.com/sponsors/magenbrot" title="Sponsoring Link" target="_blank" class="styled-link">Unterstütze die Entwicklung</a>
     </div>
 </body>
 </html>

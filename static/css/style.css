@@ -546,3 +546,9 @@ form:not(.action-buttons form):not(.compact-delete-form) {
     /* max-width: 400px; ist okay für Standardformulare, aber .inline-form-transaction und .form-section haben eigene max-widths */
     box-sizing: border-box;
 }
+
+.svg-icon {
+    width: 28px;
+    height: 28px;
+    fill: #2db8ca; /* 'fill' ändert die Farbe von SVGs */
+}
