@@ -1647,6 +1647,20 @@ def _process_system_setting_update(key, new_value_str):
 
 # --- Flask Routen ---
 
+@app.context_processor
+def inject_global_vars():
+    """
+    Stellt globale Variablen für alle Templates zur Verfügung.
+
+    Diese Funktion wird von Flask vor dem Rendern jedes Templates
+    aufgerufen und fügt das zurückgegebene Dictionary dem
+    Template-Kontext hinzu.
+
+    Returns:
+        dict: Ein Dictionary mit globalen Variablen.
+    """
+    return  {'app_name': config.app_name, 'version': app.config.get('version', 'unbekannt')}
+
 @app.route('/', methods=['GET', 'POST'])
 def login():
     """
@@ -1666,7 +1680,7 @@ def login():
         if user and user.get('is_locked'): # Prüfen ob User gesperrt ist
             session.pop('user_id', None)
             flash('Dein Konto wurde gesperrt. Bitte kontaktiere einen Administrator.', 'error')
-            return render_template('web_login.html', version=app.config.get('version', 'unbekannt'))
+            return render_template('web_login.html')
         return redirect(BASE_URL + url_for('user_info'))
 
     if request.method == 'POST':
@@ -1681,7 +1695,7 @@ def login():
             flash('Dein Konto ist gesperrt. Bitte kontaktiere einen Administrator.', 'error')
         else:
             flash('Ungültiger Benutzername oder Passwort', 'error')
-    return render_template('web_login.html', version=app.config.get('version', 'unbekannt'))
+    return render_template('web_login.html')
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -1768,7 +1782,7 @@ def request_password_reset():
         flash('Wenn ein Konto mit dieser E-Mail-Adresse existiert und nicht gesperrt ist, wurde ein Link zum Zurücksetzen des Passworts gesendet.', 'success')
         return redirect(url_for('login'))
 
-    return render_template('web_request_reset.html', version=app.config.get('version', 'unbekannt'))
+    return render_template('web_request_reset.html')
 
 @app.route('/reset-password/<token>', methods=['GET', 'POST'])
 def reset_with_token(token):
@@ -1800,7 +1814,7 @@ def reset_with_token(token):
                 return redirect(url_for('login'))
             flash('Beim Aktualisieren des Passworts ist ein Fehler aufgetreten.', 'error')
 
-    return render_template('web_reset_password.html', token=token, version=app.config.get('version', 'unbekannt'))
+    return render_template('web_reset_password.html', token=token)
 
 @app.route('/user_info', methods=['GET', 'POST'])
 def user_info():
@@ -2085,7 +2099,7 @@ def add_user():
         flash("Konnte keinen eindeutigen Code generieren. Bitte versuche es später erneut.", "warning")
         generated_code = "" # Fallback
 
-    return render_template('web_user_add.html', user=admin_user, current_code=generated_code, form_data=None, version=app.config.get('version', 'unbekannt'))
+    return render_template('web_user_add.html', user=admin_user, current_code=generated_code, form_data=None)
 
 @app.route('/admin/api_users', methods=['GET', 'POST'])
 def admin_api_user_manage():
@@ -2133,7 +2147,7 @@ def admin_api_user_manage():
         return redirect(BASE_URL + url_for('admin_api_user_manage'))
 
     api_users_list = get_all_api_users()
-    return render_template('web_admin_api_user_manage.html', user=admin_user, api_users=api_users_list, version=app.config.get('version', 'unbekannt'))
+    return render_template('web_admin_api_user_manage.html', user=admin_user, api_users=api_users_list)
 
 @app.route('/admin/api_user/<int:api_user_id_route>')
 def admin_api_user_detail(api_user_id_route):
@@ -2175,7 +2189,7 @@ def admin_api_user_detail(api_user_id_route):
         return redirect(BASE_URL + url_for('admin_api_user_manage'))
 
     api_keys_list = get_api_keys_for_api_user(api_user_id_route)
-    return render_template('web_admin_api_user_detail.html', user=admin_user, api_user=target_api_user, api_keys=api_keys_list, version=app.config.get('version', 'unbekannt'))
+    return render_template('web_admin_api_user_detail.html', user=admin_user, api_user=target_api_user, api_keys=api_keys_list)
 
 @app.route('/admin/api_user/<int:api_user_id_route>/generate_key', methods=['POST'])
 def admin_generate_api_key_for_user(api_user_id_route):

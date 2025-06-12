@@ -36,3 +36,5 @@ gui_config = {
     'debug_mode': os.getenv('GUI_DEBUG', 'False').lower() in ['true', '1', 'yes'],
     'static_url_prefix': os.getenv("STATIC_URL_PREFIX"),
 }
+
+app_name = os.getenv("APP_NAME")
