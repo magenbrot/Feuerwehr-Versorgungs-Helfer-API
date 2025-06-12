@@ -95,7 +95,6 @@
             <p>Noch keine NFC-Token hinterlegt.</p>
             {% endif %}
         </div>
-
         <div class="column right-column">
             <div class="form-section">
                 <h3>Neue Transaktion hinzufügen:</h3>
@@ -109,7 +108,6 @@
                     <button type="submit" name="add_transaction">Hinzufügen</button>
                 </form>
             </div>
-
             <div class="form-section">
                 <h3>neuen NFC-Token hinzufügen:</h3>
                 <form method="POST" class="inline-form-transaction">
@@ -120,7 +118,6 @@
                     <button type="submit" name="add_user_nfc_token">Hinzufügen</button>
                 </form>
             </div>
-
             <div class="form-section">
                 <h3>Kommentar aktualisieren:</h3>
                 <form method="POST" class="inline-form-transaction"> <label for="kommentar">Kommentar:</label>
@@ -128,7 +125,6 @@
                     <button type="submit" name="update_user_comment">Speichern</button>
                 </form>
             </div>
-
             <div class="form-section">
                 <h3>Emailadresse aktualisierenn:</h3>
                 <form method="POST" class="inline-form-transaction"> <label for="email">Emailadresse:</label>
@@ -136,7 +132,6 @@
                     <button type="submit" name="update_user_email">Speichern</button>
                 </form>
             </div>
-
             <div class="form-section action-buttons">
                 <h3>Benutzeraktionen:</h3>
                 {% if user.is_locked %}
@@ -175,9 +170,6 @@
             </div>
         </div>
     </div>
-
-    <hr>
-
     <div class="admin-link">
         <a href="{{ url_for('user_info') }}">Zur eigenen Benutzeransicht</a> |
         <a href="{{ url_for('logout') }}">Abmelden</a>
@@ -186,6 +178,5 @@
         <a href="https://github.com/magenbrot/Feuerwehr-Versorgungs-Helfer" title="Quellcode ansehen" target="_blank" class="styled-link">{{ app_name }} Version {{ version }} (github.com)</a>
         <a href="https://github.com/sponsors/magenbrot" title="Sponsoring Link" target="_blank" class="styled-link">Unterstütze die Entwicklung</a>
     </div>
-
 </body>
 </html>

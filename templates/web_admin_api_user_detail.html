@@ -30,7 +30,6 @@
             <h2>Benutzerinformationen</h2>
             <p><strong>ID:</strong> {{ api_user.id }}</p>
             <p><strong>Username:</strong> {{ api_user.username }}</p>
-
             <h2>Zugehörige API-Keys</h2>
             {% if api_keys %}
                 <table class="zebra-table">
@@ -60,7 +59,6 @@
                 <p>Für diesen API-Benutzer wurden keine API-Keys gefunden.</p>
             {% endif %}
         </div>
-
         <div class="column right-column">
             <div class="form-section">
                 <h3>Neuen API-Key für {{ api_user.username }} generieren</h3>
@@ -75,9 +73,6 @@
             </div>
         </div>
     </div>
-
-    <hr>
-
     <div class="admin-link">
         <a href="{{ url_for('user_info') }}">Zur eigenen Benutzeransicht</a> |
         <a href="{{ url_for('logout') }}">Abmelden</a>
@@ -86,6 +81,5 @@
         <a href="https://github.com/magenbrot/Feuerwehr-Versorgungs-Helfer" title="Quellcode ansehen" target="_blank" class="styled-link">{{ app_name }} Version {{ version }} (github.com)</a>
         <a href="https://github.com/sponsors/magenbrot" title="Sponsoring Link" target="_blank" class="styled-link">Unterstütze die Entwicklung</a>
     </div>
-
 </body>
 </html>
