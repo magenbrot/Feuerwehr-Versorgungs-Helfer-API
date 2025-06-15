@@ -1659,7 +1659,7 @@ def inject_global_vars():
     Returns:
         dict: Ein Dictionary mit globalen Variablen.
     """
-    return  {'app_name': config.app_name, 'version': app.config.get('version', 'unbekannt')}
+    return  {'app_name': config.app_name, 'app_slogan': config.app_slogan, 'version': app.config.get('version', 'unbekannt')}
 
 @app.route('/', methods=['GET', 'POST'])
 def login():

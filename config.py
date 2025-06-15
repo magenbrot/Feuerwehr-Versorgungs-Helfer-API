@@ -38,3 +38,4 @@ gui_config = {
 }
 
 app_name = os.getenv("APP_NAME")
+app_slogan = os.getenv("APP_SLOGAN")
