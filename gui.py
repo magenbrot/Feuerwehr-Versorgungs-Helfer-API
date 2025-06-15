@@ -16,7 +16,7 @@ import qrcode
 from PIL import Image, ImageDraw, ImageFont
 from flask import Flask, render_template, request, redirect, url_for, session, flash, send_file # pigar: required-packages=uWSGI
 from werkzeug.security import check_password_hash, generate_password_hash
-from mysql.connector import Error, IntegrityError # IntegrityError für Unique-Constraint-Fehler hinzugefügt
+from mysql.connector import Error, IntegrityError
 import config
 import email_sender
 import db_utils
@@ -141,16 +141,13 @@ def erzeuge_qr_code(daten, text):
         try:
             schriftart = ImageFont.truetype(font_name, schriftgroesse)
             logger.info("Schriftart '%s' geladen.", font_name)
-            break  # Erfolgreich geladen, Schleife verlassen
+            break
         except IOError:
             logger.error("Schriftart '%s' nicht gefunden.", font_name)
 
     if schriftart is None:
         logger.error("Keine der bevorzugten Schriftarten gefunden. Lade Standardschriftart.")
-        try:
-            schriftart = ImageFont.load_default(size=schriftgroesse)
-        except AttributeError: # Fallback für ältere Pillow Versionen ohne size Parameter
-            schriftart = ImageFont.load_default()
+        schriftart = ImageFont.load_default(size=schriftgroesse)
 
     zeichne_temp = ImageDraw.Draw(Image.new("RGB", (1,1)))
 
@@ -355,7 +352,7 @@ def update_system_setting(einstellung_schluessel, einstellung_wert):
             query = "UPDATE system_einstellungen SET einstellung_wert = %s WHERE einstellung_schluessel = %s"
             cursor.execute(query, (einstellung_wert, einstellung_schluessel))
             cnx.commit()
-            return cursor.rowcount > 0 # True wenn eine Zeile aktualisiert wurde
+            return cursor.rowcount > 0
         except Error as err:
             logger.error("Fehler beim Aktualisieren der Systemeinstellung '%s': %s", einstellung_schluessel, err)
             flash(f"Datenbankfehler beim Speichern der Einstellung '{einstellung_schluessel}'.", "error")
@@ -1401,11 +1398,6 @@ def delete_api_user_and_keys_db(api_user_id):
     if cnx:
         cursor = cnx.cursor()
         try:
-            # Zuerst alle zugehörigen API-Keys löschen
-            query_delete_keys = "DELETE FROM api_keys WHERE user_id = %s"
-            cursor.execute(query_delete_keys, (api_user_id,))
-
-            # Dann den API-Benutzer löschen
             query_delete_user = "DELETE FROM api_users WHERE id = %s"
             cursor.execute(query_delete_user, (api_user_id,))
 
@@ -1508,7 +1500,7 @@ def _handle_delete_target_user(target_user_id, target_user, logged_in_user_id):
         flash("Du kannst dich nicht selbst löschen.", "warning")
         return False # Keine Weiterleitung zum Dashboard
 
-    if delete_user(target_user_id): # delete_user löscht auch Transaktionen durch DB CASCADE
+    if delete_user(target_user_id):
         flash(f'Benutzer "{target_user.get("nachname", "")}, {target_user.get("vorname", "")}" (ID {target_user_id}) wurde gelöscht.', 'success')
         return True # Weiterleitung zum Dashboard
     flash('Fehler beim Löschen des Benutzers.', 'error')
@@ -1524,8 +1516,6 @@ def _handle_update_user_comment_admin(form_data, target_user_id):
     """
 
     comment = form_data.get('kommentar')
-    # Leerer Kommentar ist erlaubt, um ihn zu löschen. Validierung hier ggf. anpassen.
-    # Die DB-Funktion sollte leere Strings handhaben können (z.B. als NULL speichern oder leer).
     if update_user_comment(target_user_id, comment if comment is not None else ""):
         flash('Kommentar erfolgreich aktualisiert.', 'success')
     else:
@@ -1677,7 +1667,7 @@ def login():
 
     if 'user_id' in session:
         user = get_user_by_id(session['user_id'])
-        if user and user.get('is_locked'): # Prüfen ob User gesperrt ist
+        if user and user.get('is_locked'):
             session.pop('user_id', None)
             flash('Dein Konto wurde gesperrt. Bitte kontaktiere einen Administrator.', 'error')
             return render_template('web_login.html')
@@ -1687,7 +1677,7 @@ def login():
         code = request.form['code']
         password = request.form['password']
         user = fetch_user(code)
-        if user and not user['is_locked'] and check_password_hash(user['password'], password): # Prüfen ob User gesperrt ist
+        if user and not user['is_locked'] and check_password_hash(user['password'], password):
             session['user_id'] = user['id']
             session.permanent = True
             return redirect(BASE_URL + url_for('user_info'))
@@ -2235,7 +2225,8 @@ def admin_generate_api_key_for_user(api_user_id_route):
 
     new_key_string = generate_api_key_string()
     if add_api_key_for_user_db(api_user_id_route, new_key_string):
-        # WICHTIG: Den Key nur dieses eine Mal anzeigen!
+        # WICHTIG: Den Key nur dieses eine Mal anzeigen!  -- https://github.com/magenbrot/Feuerwehr-Versorgungs-Helfer-API/issues/50
+        # flash(f"Neuer API-Key für '{target_api_user['username']}' generiert: {new_key_string}. Bitte sofort sicher kopieren!", "success")
         flash(f"Neuer API-Key für '{target_api_user['username']}' generiert: {new_key_string}. Bitte sofort sicher kopieren!", "success")
     else:
         # Fehler wurde bereits in add_api_key_for_user_db geflasht
