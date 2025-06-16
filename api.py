@@ -294,7 +294,7 @@ def _send_responsible_benachrichtigung(user_id: int, vorname: str, nachname: str
     # Alle Prüfungen bestanden, E-Mail senden
     email_params = {
         'empfaenger_email': config.api_config['responsible_email'],
-        'betreff': "Ein Benutzer hat das Saldo-Info-Limit erreicht",
+        'betreff': f"{vorname} {nachname} hat das Saldo-Info-Limit erreicht",
         'template_name_html': "email_notify_responsible_on_saldo_reached.html",
         'template_name_text': "email_notify_responsible_on_saldo_reached.txt",
         'template_context': {"vorname": vorname, "nachname": nachname, "notify_limit": notify_responsible_on_saldo_limit, 'app_name': config.app_name},
