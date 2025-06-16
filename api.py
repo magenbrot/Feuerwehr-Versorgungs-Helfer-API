@@ -24,9 +24,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-
 app.debug = config.api_config['debug_mode']
-
 app.json.ensure_ascii = False
 app.json.mimetype = "application/json; charset=utf-8"
 
