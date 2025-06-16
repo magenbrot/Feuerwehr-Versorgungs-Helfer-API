@@ -297,7 +297,7 @@ def _send_responsible_benachrichtigung(user_id: int, vorname: str, nachname: str
         'betreff': "Ein Benutzer hat das Saldo-Info-Limit erreicht",
         'template_name_html': "email_notify_responsible_on_saldo_reached.html",
         'template_name_text': "email_notify_responsible_on_saldo_reached.txt",
-        'template_context': {"vorname": vorname, "nachname": nachname, "notify_limit": notify_responsible_on_saldo_limit, 'app_name': config.api_config['app_name']},
+        'template_context': {"vorname": vorname, "nachname": nachname, "notify_limit": notify_responsible_on_saldo_limit, 'app_name': config.app_name},
         'logo_dateipfad': logo_pfad
     }
     if prepare_and_send_email(email_params, config.smtp_config):
