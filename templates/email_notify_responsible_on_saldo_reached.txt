@@ -1,8 +1,8 @@
 Hallo Person mit Verantwortung,
 
-wir hoffen, es geht dir gut!
+ich hoffe, es geht dir gut!
 
-Kurze Info von uns: {{ vorname }} {{ nachname }} hat eben das Benachrichtigungslimit von {{ notify_limit }} für sein Saldo erreicht.
+Kurze Info von mir: {{ vorname }} {{ nachname }} hat eben das Benachrichtigungslimit von {{ notify_limit }} für sein Saldo erreicht.
 
 Bitte erinnere ihn bei Gelegenheit daran sein Guthaben wieder aufzufüllen.
 
