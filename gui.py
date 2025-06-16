@@ -1236,7 +1236,7 @@ def prepare_and_send_email(email_params: dict, smtp_cfg: dict) -> bool:
             final_html_body = render_template(template_name_html, **template_context_final)
             final_text_body = render_template(template_name_text, **template_context_final)
 
-    except Exception as e:  # pylint: disable=W0718
+    except Exception as e: # pylint: disable=W0718
         logger.error("Fehler beim Rendern der E-Mail-Templates für '%s': %s", template_name_html, e, exc_info=True)
         return False
 
@@ -1728,7 +1728,7 @@ def register():
                 'acc_duties': form_data.get('pflichten'),
                 'acc_privacy_policy': form_data.get('datenschutz'),
                 'is_locked': False,
-                'is_admin': False  # Neue Benutzer sind niemals Admins
+                'is_admin': False # Neue Benutzer sind niemals Admins
             }
             if add_regular_user_db(user_details):
                 if user_details['email']:
@@ -2003,7 +2003,7 @@ def admin_dashboard():
             all_db_setting_keys = get_all_system_settings().keys()
 
             for key in all_db_setting_keys:
-                if key in request.form: # Nur verarbeiten, wenn das Feld im Formular gesendet wurde
+                if key in request.form:
                     new_value = request.form[key].strip()
                     if not _process_system_setting_update(key, new_value):
                         settings_updated_successfully = False
@@ -2225,7 +2225,8 @@ def admin_generate_api_key_for_user(api_user_id_route):
 
     new_key_string = generate_api_key_string()
     if add_api_key_for_user_db(api_user_id_route, new_key_string):
-        # WICHTIG: Den Key nur dieses eine Mal anzeigen!  -- https://github.com/magenbrot/Feuerwehr-Versorgungs-Helfer-API/issues/50
+        # WICHTIG: Den Key nur dieses eine Mal anzeigen!  -- Feature: keys einen Namen geben und den Key selbst dann verstecken
+        # https://github.com/magenbrot/Feuerwehr-Versorgungs-Helfer-API/issues/50
         # flash(f"Neuer API-Key für '{target_api_user['username']}' generiert: {new_key_string}. Bitte sofort sicher kopieren!", "success")
         flash(f"Neuer API-Key für '{target_api_user['username']}' generiert: {new_key_string}. Bitte sofort sicher kopieren!", "success")
     else:

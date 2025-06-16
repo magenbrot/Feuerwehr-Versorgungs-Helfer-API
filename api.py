@@ -115,7 +115,7 @@ def prepare_and_send_email(email_params: dict, smtp_cfg: dict) -> bool:
             final_html_body = render_template(template_name_html, **template_context_final)
             final_text_body = render_template(template_name_text, **template_context_final)
 
-    except Exception as e:  # pylint: disable=W0718
+    except Exception as e: # pylint: disable=W0718
         logger.error("Fehler beim Rendern der E-Mail-Templates für '%s': %s", template_name_html, e, exc_info=True)
         return False
 
@@ -323,7 +323,7 @@ def _aktuellen_saldo_pruefen(target_user_id: int) -> Union[Literal[True], Tuple[
     except Error as err:
         logger.error("DB-Fehler in _aktuellen_saldo_pruefen für User %s: %s", target_user_id, err)
         return False
-    except Exception as e:  # pylint: disable=W0718
+    except Exception as e: # pylint: disable=W0718
         logger.error("Allgemeiner Fehler in _aktuellen_saldo_pruefen für User %s: %s", target_user_id, e)
         return False
     finally:
@@ -942,8 +942,6 @@ def create_person(api_user_id: int, api_username: str): # Parameter umbenannt
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
     try:
         with cnx.cursor() as cursor:
-            # Annahme: `password` in `users` Tabelle kann auch leer sein oder hat einen Default-Wert.
-            # Wenn Passwort-Hashing in der GUI geschieht, hier Klartext oder Hash speichern.
             sql = "INSERT IGNORE INTO users (code, nachname, vorname, password) VALUES (%s, %s, %s, %s)"
             werte = (code_val, nachname_val, vorname_val, password_val)
             cursor.execute(sql, werte)

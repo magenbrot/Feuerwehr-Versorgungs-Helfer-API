@@ -68,7 +68,7 @@ def _create_mime_message(empfaenger_email: str, betreff: str, content: Dict[str,
                 msg.attach(img)
             except FileNotFoundError:
                 logger.warning("Logo-Datei nicht gefunden unter %s (trotz vorheriger Prüfung).", logo_pfad_content)
-            except Exception as e:  # pylint: disable=W0718
+            except Exception as e: # pylint: disable=W0718
                 logger.error("Fehler beim Einbetten des Logos '%s': %s.", logo_pfad_content, e, exc_info=True)
         else:
             pass
@@ -82,7 +82,7 @@ def _send_email_via_smtp(msg: MIMEMultipart, smtp_cfg: Dict[str, Any], empfaenge
             server.starttls()
             server.login(smtp_cfg['user'], smtp_cfg['password'])
             server.sendmail(smtp_cfg['sender'], empfaenger_email, msg.as_string())
-        #logger.info("E-Mail erfolgreich an %s gesendet!", empfaenger_email)
+        # logger.info("E-Mail erfolgreich an %s gesendet!", empfaenger_email)
         return True
     except smtplib.SMTPAuthenticationError:
         logger.error("SMTP Authentifizierungsfehler für Benutzer %s. Überprüfe Anmeldedaten.", smtp_cfg.get('user'))
@@ -100,7 +100,7 @@ def _send_email_via_smtp(msg: MIMEMultipart, smtp_cfg: Dict[str, Any], empfaenge
         logger.error("Der Server hat die Nachrichtendaten nicht akzeptiert: %s - %s", e.smtp_code, e.smtp_error)
     except ConnectionRefusedError:
         logger.error("Verbindung zu %s:%s wurde abgelehnt. Läuft der Server und ist der Port korrekt?", smtp_cfg.get('host'), smtp_cfg.get('port'))
-    except Exception as e:  # pylint: disable=W0718
+    except Exception as e: # pylint: disable=W0718
         logger.error("Ein unerwarteter Fehler ist beim E-Mail-Versand aufgetreten: %s", e, exc_info=True)
     return False
 
