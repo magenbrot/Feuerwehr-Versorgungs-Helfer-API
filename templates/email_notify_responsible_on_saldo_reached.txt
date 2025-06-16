@@ -1,0 +1,10 @@
+Hallo Person mit Verantwortung,
+
+ich hoffe, es geht dir gut!
+
+Kurze Info von mir: {{ vorname }} {{ nachname }} hat eben das Benachrichtigungslimit von {{ notify_limit }} € (oder weniger) für sein Saldo erreicht.
+
+Bitte erinnere ihn bei Gelegenheit daran sein Guthaben wieder aufzufüllen.
+
+Danke dir und viele Grüße
+Dein {{ app_name }}
