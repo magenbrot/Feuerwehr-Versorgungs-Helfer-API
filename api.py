@@ -24,9 +24,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-
 app.debug = config.api_config['debug_mode']
-
 app.json.ensure_ascii = False
 app.json.mimetype = "application/json; charset=utf-8"
 
@@ -214,7 +212,7 @@ def get_user_details_for_notification(user_id_int: int) -> Optional[dict]:
         return None
     try:
         with cnx.cursor(dictionary=True) as cursor:
-            cursor.execute("SELECT id, vorname, email FROM users WHERE id = %s", (user_id_int,))
+            cursor.execute("SELECT id, vorname, nachname, email FROM users WHERE id = %s", (user_id_int,))
             return cursor.fetchone()
     except Error as err:
         logger.error("DB-Fehler in get_user_details_for_notification für User %s: %s", user_id_int, err)
@@ -242,7 +240,7 @@ def _send_saldo_null_benachrichtigung(user_id: int, vorname: str, email: str, ak
     else:
         logger.error("Fehler beim Senden der Saldo-Null Benachrichtigung an %s (ID: %s).", email, user_id)
 
-def _send_negativsaldo_benachrichtigung(user_id: int, vorname: str, email: str, aktueller_saldo: float, logo_pfad: str):
+def _send_negativsaldo_benachrichtigung(user_id: int, vorname: str, email: str, aktueller_saldo: int, logo_pfad: str):
     """Hilfsfunktion zum Senden der "Negativsaldo" Benachrichtigung."""
 
     max_negativ_saldo_str = get_system_setting('MAX_NEGATIVSALDO')
@@ -275,6 +273,38 @@ def _send_negativsaldo_benachrichtigung(user_id: int, vorname: str, email: str, 
         logger.info("Negativsaldo-Warnung an %s (ID: %s) gesendet.", email, user_id)
     else:
         logger.error("Fehler beim Senden der Negativsaldo-Warnung an %s (ID: %s).", email, user_id)
+
+def _send_responsible_benachrichtigung(user_id: int, vorname: str, nachname: str, aktueller_saldo: int, logo_pfad: str):
+    """Hilfsfunktion zur Information der Verantwortlichen wenn ein Benutzer das Limit unterschreitet."""
+
+    notify_responsible_on_saldo_limit_str = get_system_setting('NOTIFY_RESPONSIBLE_ON_SALDO_REACHED')
+    if notify_responsible_on_saldo_limit_str is None:
+        logger.info("NOTIFY_RESPONSIBLE_ON_SALDO_REACHED nicht konfiguriert, keine Prüfung für User %s.", user_id)
+        return
+
+    try:
+        notify_responsible_on_saldo_limit = int(notify_responsible_on_saldo_limit_str)
+    except ValueError:
+        logger.error("Ungültiger Wert für NOTIFY_RESPONSIBLE_ON_SALDO_REACHED ('%s') in system_einstellungen.", notify_responsible_on_saldo_limit_str)
+        return
+
+    # Breche ab, wenn der aktuelle Saldo gleich dem gesetzten Limit ist und gleichzeitig größer als das Limit -5
+    if not (notify_responsible_on_saldo_limit - 5) < aktueller_saldo <= notify_responsible_on_saldo_limit:
+        return
+
+    # Alle Prüfungen bestanden, E-Mail senden
+    email_params = {
+        'empfaenger_email': config.api_config['responsible_email'],
+        'betreff': f"{vorname} {nachname} hat das Saldo-Info-Limit erreicht",
+        'template_name_html': "email_notify_responsible_on_saldo_reached.html",
+        'template_name_text': "email_notify_responsible_on_saldo_reached.txt",
+        'template_context': {"vorname": vorname, "nachname": nachname, "notify_limit": notify_responsible_on_saldo_limit, 'app_name': config.app_name},
+        'logo_dateipfad': logo_pfad
+    }
+    if prepare_and_send_email(email_params, config.smtp_config):
+        logger.info("Info über Saldo-Limit-erreicht (ID: %s) an Verantwortliche gesendet.", user_id)
+    else:
+        logger.error("Fehler beim Senden der Saldo-Limit-erreicht-Info an ID: %s.", user_id)
 
 def _aktuellen_saldo_pruefen(target_user_id: int) -> Union[Literal[True], Tuple[Literal[False], float, int], Literal[False]]:
     """
@@ -333,7 +363,7 @@ def _aktuellen_saldo_pruefen(target_user_id: int) -> Union[Literal[True], Tuple[
 def aktuellen_saldo_pruefen_und_benachrichtigen(target_user_id: int):
     """
     Prüft den aktuellen Saldo eines Benutzers nach einer Transaktion und versendet ggf.
-    E-Mail-Benachrichtigungen für "Saldo erreicht Null" oder "Negativsaldo-Grenze erreicht",
+    E-Mail-Benachrichtigungen an den Benutzer oder die Verantwortlichen,
     basierend auf den Benutzereinstellungen und Systemeinstellungen.
 
     Args:
@@ -346,6 +376,7 @@ def aktuellen_saldo_pruefen_und_benachrichtigen(target_user_id: int):
         return
 
     user_vorname = user_details.get('vorname', '') # Default, falls 'vorname' fehlt
+    user_nachname = user_details.get('nachname', '') # Default, falls 'nachname' fehlt
     user_email = user_details.get('email')
 
     if not user_email:
@@ -365,9 +396,14 @@ def aktuellen_saldo_pruefen_und_benachrichtigen(target_user_id: int):
 
         logo_pfad_str = str(Path("static/logo/logo-80x109.png"))
 
+        # Saldo ist 0 Benachrichtigung
         if aktueller_saldo == 0:
             _send_saldo_null_benachrichtigung(target_user_id, user_vorname, user_email, aktueller_saldo, logo_pfad_str)
 
+        # Benachrichtige Verantwortliche wenn Saldo unter NOTIFY_RESPONSIBLE_ON_SALDO_REACHED
+        _send_responsible_benachrichtigung(target_user_id, user_vorname, user_nachname, aktueller_saldo, logo_pfad_str)
+
+        # Saldo ist negativ Warnung
         _send_negativsaldo_benachrichtigung(target_user_id, user_vorname, user_email, aktueller_saldo, logo_pfad_str)
 
     except Error as err:
