@@ -212,7 +212,7 @@ def get_user_details_for_notification(user_id_int: int) -> Optional[dict]:
         return None
     try:
         with cnx.cursor(dictionary=True) as cursor:
-            cursor.execute("SELECT id, vorname, email FROM users WHERE id = %s", (user_id_int,))
+            cursor.execute("SELECT id, vorname, nachname, email FROM users WHERE id = %s", (user_id_int,))
             return cursor.fetchone()
     except Error as err:
         logger.error("DB-Fehler in get_user_details_for_notification für User %s: %s", user_id_int, err)
