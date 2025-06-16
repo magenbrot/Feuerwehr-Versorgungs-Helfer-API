@@ -1,0 +1,14 @@
+<html><head><style>body {font-family: sans-serif;} .svg-icon { width: 28px; height: 28px; fill: #2db8ca;}</style></head>
+<body>
+    <h3>Hallo Person mit Verantwortung,</h3>
+    <p>wir hoffen, es geht dir gut!</p>
+    <p>Kurze Info von uns: {{ vorname }} {{ nachname }} hat eben das Benachrichtigungslimit von {{ notify_limit }}€ für sein Saldo erreicht.</p>
+    <p>Bitte erinnere ihn bei Gelegenheit daran sein Guthaben wieder aufzufüllen.</p>
+    <p>Danke dir und viele Grüße<br>
+    Dein {{ app_name }}</p>
+    {% if logo_exists_fuer_template %}
+    <p><img src="cid:logo" alt="Logo Feuerwehr-Versorgungs-Helfer"></p>
+    {% endif %}
+    {% include 'email_include_footer.html' %}
+</body>
+</html>

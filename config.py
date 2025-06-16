@@ -27,6 +27,7 @@ api_config = {
     'host': os.getenv("API_HOST", "127.0.0.1"),
     'port': os.getenv("API_PORT", "5000"),
     'debug_mode': os.getenv('API_DEBUG', 'False').lower() in ['true', '1', 'yes'],
+    'responsible_email': os.getenv("RESPONSIBLE_EMAIL"),
 }
 
 # nur relevant wenn nicht über uWSGI gestartet

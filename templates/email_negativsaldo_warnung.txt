@@ -2,7 +2,7 @@ Hallo {{ vorname }},
 
 wir hoffen, es geht dir gut!
 
-Kurze Info von uns: Dein Kontostand für Getränke und Essen ist aktuell bei {{ saldo }} €.
+Kurze Info von uns: Dein Kontostand für Getränke und Essen ist aktuell bei {{ saldo }}€.
 
 Bitte denk doch daran, es bei deinem nächsten Dienst oder bei Gelegenheit wieder auszugleichen. Sprich uns dafür einfach kurz an!
 
