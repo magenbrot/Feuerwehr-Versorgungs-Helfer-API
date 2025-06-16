@@ -288,7 +288,8 @@ def _send_responsible_benachrichtigung(user_id: int, vorname: str, nachname: str
         logger.error("Ungültiger Wert für NOTIFY_RESPONSIBLE_ON_SALDO_REACHED ('%s') in system_einstellungen.", notify_responsible_on_saldo_limit_str)
         return
 
-    if aktueller_saldo >= notify_responsible_on_saldo_limit: # Guard clause: Wenn Saldo nicht niedrig genug ist, abbrechen
+    # Breche ab, wenn der aktuelle Saldo gleich dem gesetzten Limit ist und gleichzeitig größer als das Limit -5
+    if aktueller_saldo == notify_responsible_on_saldo_limit > (notify_responsible_on_saldo_limit - 5):
         return
 
     # Alle Prüfungen bestanden, E-Mail senden
