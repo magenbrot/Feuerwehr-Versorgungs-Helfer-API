@@ -662,8 +662,8 @@ def nfc_transaction(api_user_id_auth: int, api_username_auth: str):
             saldo_pruefung = _aktuellen_saldo_pruefen(benutzer_info['id'])
             if isinstance(saldo_pruefung, tuple):
                 logger.warning("Transaktion für User %s blockiert, da das Guthaben von %s nicht ausreichend ist", benutzer_info['id'], saldo_pruefung[1])
-                return jsonify({'message': f"Hey {benutzer_info['vorname']}, leider unterschreitet dein Guthaben von {saldo_pruefung[2]} € das "
-                                "festgelegte Limit. Bitte melde dich bei einem Verantwortlichen, um dein Konto wieder aufzufüllen.",
+                return jsonify({'message': f"Hey {benutzer_info['vorname']}, dein Guthaben beträgt {saldo_pruefung[2]} € und "
+                                "unterschreitet das Limit. Bitte lade dein Konto wieder auf.",
                                 'action': "block"}), 200
             if saldo_pruefung is False:
                 logger.error("Fehler bei der Saldoprüfung für Benutzer %s. Aktion blockiert.", benutzer_info['id'])
@@ -768,8 +768,8 @@ def person_transaktion_erstellen(api_user_id_auth: int, api_username_auth: str, 
     saldo_pruefung = _aktuellen_saldo_pruefen(user_info['id'])
     if isinstance(saldo_pruefung, tuple):
         logger.warning("Transaktion für User %s blockiert, da das Guthaben von %s nicht ausreichend ist (Limit %s)", user_info['id'], saldo_pruefung[1], saldo_pruefung[2])
-        return jsonify({'message': f"Hey {user_info['vorname']}, leider unterschreitet dein Guthaben von {saldo_pruefung[2]} € das "
-                        "festgelegte Limit. Bitte melde dich bei einem Verantwortlichen, um dein Konto wieder aufzufüllen.",
+        return jsonify({'message': f"Hey {user_info['vorname']}, dein Guthaben beträgt {saldo_pruefung[2]} € und "
+                        "unterschreitet das Limit. Bitte lade dein Konto wieder auf.",
                         'action': "block"}), 200
     if saldo_pruefung is False:
         logger.error("Fehler bei der Saldoprüfung für Benutzer %s. Aktion blockiert.", user_info['id'])
