@@ -22,7 +22,7 @@ import email_sender
 import db_utils
 
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=config.gui_config['log_level'],
     format='%(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(sys.stderr)
@@ -35,7 +35,7 @@ if config.gui_config['static_url_prefix']:
 else:
     app = Flask(__name__)
 
-app.debug = config.gui_config['debug_mode']
+app.debug = config.gui_config['flask_debug_mode']
 
 app.config['SECRET_KEY'] = os.urandom(24)
 app.json.ensure_ascii = False
@@ -2437,4 +2437,4 @@ def logout():
     return redirect(BASE_URL + url_for('login'))
 
 if __name__ == '__main__':
-    app.run(host=config.gui_config['host'], port=config.gui_config['port'], debug=config.gui_config['debug_mode'])
+    app.run(host=config.gui_config['host'], port=config.gui_config['port'], debug=config.gui_config['flask_debug_mode'])

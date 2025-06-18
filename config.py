@@ -26,7 +26,8 @@ smtp_config = {
 api_config = {
     'host': os.getenv("API_HOST", "127.0.0.1"),
     'port': os.getenv("API_PORT", "5000"),
-    'debug_mode': os.getenv('API_DEBUG', 'False').lower() in ['true', '1', 'yes'],
+    'flask_debug_mode': os.getenv('API_DEBUG', 'False').lower() in ['true', '1', 'yes'],
+    'log_level': os.getenv("API_LOG_LEVEL", "INFO"),
     'responsible_email': os.getenv("RESPONSIBLE_EMAIL"),
 }
 
@@ -34,7 +35,8 @@ api_config = {
 gui_config = {
     'host': os.getenv("GUI_HOST", "127.0.0.1"),
     'port': os.getenv("GUI_PORT", "5001"),
-    'debug_mode': os.getenv('GUI_DEBUG', 'False').lower() in ['true', '1', 'yes'],
+    'flask_debug_mode': os.getenv('GUI_DEBUG', 'False').lower() in ['true', '1', 'yes'],
+    'log_level': os.getenv("GUI_LOG_LEVEL", "INFO"),
     'static_url_prefix': os.getenv("STATIC_URL_PREFIX"),
 }
 
