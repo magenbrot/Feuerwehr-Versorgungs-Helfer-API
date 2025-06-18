@@ -15,7 +15,7 @@ import db_utils
 import email_sender
 
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=config.api_config['log_level'],
     format='%(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(sys.stderr)
@@ -24,7 +24,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-app.debug = config.api_config['debug_mode']
+app.debug = config.api_config['flask_debug_mode']
 app.json.ensure_ascii = False
 app.json.mimetype = "application/json; charset=utf-8"
 
@@ -1163,4 +1163,4 @@ def person_transaktionen_loeschen(api_user_id: int, api_username: str, code: str
             db_utils.DatabaseConnectionPool.close_connection(cnx)
 
 if __name__ == '__main__':
-    app.run(host=config.api_config['host'], port=config.api_config['port'], debug=config.api_config['debug_mode'])
+    app.run(host=config.api_config['host'], port=config.api_config['port'], debug=config.api_config['flask_debug_mode'])
