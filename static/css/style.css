@@ -268,7 +268,7 @@ form button.red-button:hover {
     padding: 0;
     margin-bottom: 15px;
     width: 100%;
-    max-width: 400px;
+    max-width: 550px;
     box-sizing: border-box;
 }
 
@@ -497,6 +497,11 @@ a.styled-link:hover {
 }
 
 .right-column .form-section h3 {
+    margin-top: 0;
+    color: #333;
+}
+
+.right-column .form-section h4 {
     margin-top: 0;
     color: #333;
 }

@@ -94,7 +94,7 @@
         </div>
         <div class="column right-column">
             <div class="form-section">
-                <h3>Passwort ändern:</h3>
+                <h4>Passwort ändern:</h4>
                 <form method="POST" name="change_password" class="password-form"> <input type="hidden" name="change_password" value="true">
                     <div>
                         <label for="current_password">Aktuelles Passwort:</label>
@@ -112,7 +112,7 @@
                 </form>
             </div>
             <div class="form-section" style="margin-top: 20px;">
-                <h3>Emailadresse ändern:</h3>
+                <h4>Emailadresse ändern:</h4>
                 <form method="POST" name="change_email">
                     <input type="hidden" name="change_email" value="true">
                     <div>
@@ -124,7 +124,7 @@
             </div>
             {% if user.email %}
             <div class="form-section" style="margin-top: 20px;">
-                <h3>E-Mail-Benachrichtigungen verwalten:</h3>
+                <h4>E-Mail-Benachrichtigungen verwalten:</h4>
                 <form method="POST" name="update_notification_settings">
                     <label for="update_notification_settings">Wir schicken dir eine E-Mail</label>
                     <input type="hidden" name="update_notification_settings" value="true">
