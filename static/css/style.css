@@ -8,7 +8,7 @@ body {
     justify-content: center; /* Zentriert den Inhalt vertikal */
     align-items: center; /* Zentriert den Inhalt horizontal */
     min-height: 100vh;
-    max-width: 1200px; /* Beispiel für eine maximale Breite */
+    max-width: 1200px;
     box-sizing: border-box;
 }
 
@@ -54,6 +54,48 @@ body {
 
 .register-container .link p {
     margin-bottom: 0;
+}
+
+.privacy-policy-container {
+    background-color: #fff;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    max-width: 850px;
+    margin: 20px auto;
+    text-align: left;
+    line-height: 1.6;
+    color: #555;
+}
+
+.privacy-policy-container h3 h2{
+    color: #555;
+    margin-bottom: 15px;
+    text-align: left;
+}
+
+.privacy-policy-container p,
+.privacy-policy-container ul {
+    margin-bottom: 10px;
+    text-align: left;
+}
+
+.privacy-policy-container ul {
+    list-style-type: disc;
+    margin-left: 20px;
+}
+
+.privacy-policy-container li {
+    margin-bottom: 5px;
+}
+
+.privacy-policy-container a {
+    color: #007bff;
+    text-decoration: none;
+}
+
+.privacy-policy-container a:hover {
+    text-decoration: underline;
 }
 
 h2 {
@@ -183,7 +225,6 @@ table.zebra-table th {
     color: #333; /* Dunklere Schrift für Kopfzeile */
 }
 
-/* Hier kommt das Zebra-Striping */
 table.zebra-table tbody tr:nth-child(even) {
     background-color: #f9f9f9; /* Sehr heller Grauton für jede zweite Zeile */
 }
@@ -203,8 +244,8 @@ form {
     border: 1px solid #eee;
     border-radius: 5px;
     background-color: #f9f9f9;
-    width: 100%; /* Formulare nehmen die volle Breite ihres Containers ein */
-    max-width: 400px; /* Optionale maximale Breite für größere Bildschirme */
+    width: 100%;
+    max-width: 400px;
     box-sizing: border-box; /* Padding und Border werden in die Breite einbezogen */
 }
 
@@ -243,7 +284,7 @@ form button[type="submit"]:hover {
     background-color: #0056b3;
 }
 
-/* Stil für den Benutzer löschen Button */
+/* Stil für den Löschen Button */
 form button.red-button {
     background-color: #dc3545;
     color: white;
@@ -341,7 +382,7 @@ form button.red-button:hover {
     background-color: #0056b3;
 }
 
-/* Styles für die NFC-Token löschen-Buttons */
+/* Styles für die "in-Table-löschen-Buttons" */
 .compact-delete-form {
     display: inline-block;
     margin: 0;
@@ -358,74 +399,53 @@ form button.red-button:hover {
 
 /* Styles für das "Neue Transaktion und NFC-Token hinzufügen"-Formular */
 form.inline-form-transaction {
-    display: flex;          /* Elemente werden in einer Reihe angeordnet */
-    flex-wrap: wrap;        /* Ermöglicht Umbruch auf die nächste Zeile bei Platzmangel */
-    align-items: center;    /* Zentriert die Elemente vertikal in der Reihe */
-    gap: 10px;              /* Fügt Abstand zwischen den Elementen hinzu (empfohlen statt margins) */
-
-    /* Behalten Sie die bestehenden Stile für Rahmen, Padding, etc. bei */
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
     margin-top: 20px;
     padding: 15px;
     border: 1px solid #eee;
     border-radius: 5px;
     background-color: #f9f9f9;
     width: 100%;
-    max-width: 700px; /* Angepasst für breitere Inline-Formulare */
+    max-width: 700px;
     box-sizing: border-box;
 }
 
 form.inline-form-transaction label {
-    /* Label ist jetzt ein Flex-Item, display: block wird nicht mehr benötigt,
-       wenn es in der gleichen Zeile sein soll wie der Input-Feld-Teil */
-    /* Behalten Sie den margin-bottom, wenn das Label ÜBER dem Input-Feld stehen soll */
-    /* Oder entfernen/ändern Sie ihn, wenn Label und Input-Feld nebeneinander im selben "Block" stehen sollen */
-     display: block; /* Behält bei, dass das Label über dem Input steht */
-     margin-bottom: 5px; /* Behält den Abstand unter dem Label */
-     font-weight: bold; /* Von Ihrer bestehenden Regel */
-     /* Flexbox 'align-items: center' auf dem Formular kümmert sich um die vertikale Ausrichtung */
+     display: block;
+     margin-bottom: 5px;
+     font-weight: bold;
 }
 
 form.inline-form-transaction input[type="text2column"],
 form.inline-form-transaction input[type="number2column"] {
-     /* Input-Felder sind jetzt auch Flex-Items */
-     /* Die allgemeine width: calc(100% - 12px) passt hier nicht mehr, da sie sich auf den Container (das Formular) bezieht */
-     width: auto; /* Setzt die Breite automatisch basierend auf Inhalt und Flexbox-Regeln */
+     width: auto;
      max-width: 150px;
-     flex-grow: 1; /* Optional: Lässt die Input-Felder wachsen und den verfügbaren Platz füllen */
-
-
-     /* Behalten Sie Padding, Border, etc. bei */
+     flex-grow: 1;
      padding: 8px;
      border: 1px solid #ccc;
      border-radius: 4px;
      box-sizing: border-box;
-     font-size: 1em; /* Von Ihrer bestehenden Regel */
+     font-size: 1em;
 }
 
 form.inline-form-transaction input[type="email"],
 form.inline-form-transaction input[type="text"],
 form.inline-form-transaction input[type="number"] {
-     /* Input-Felder sind jetzt auch Flex-Items */
-     /* Die allgemeine width: calc(100% - 12px) passt hier nicht mehr, da sie sich auf den Container (das Formular) bezieht */
-     width: auto; /* Setzt die Breite automatisch basierend auf Inhalt und Flexbox-Regeln */
-     /* max-width: 150px; */
-     flex-grow: 1; /* Optional: Lässt die Input-Felder wachsen und den verfügbaren Platz füllen */
-
-
-     /* Behalten Sie Padding, Border, etc. bei */
+     width: auto;
+     flex-grow: 1;
      padding: 8px;
      border: 1px solid #ccc;
      border-radius: 4px;
      box-sizing: border-box;
-     font-size: 1em; /* Von Ihrer bestehenden Regel */
+     font-size: 1em;
 }
 
 form.inline-form-transaction button[type="submit"] {
-    /* Button ist jetzt auch ein Flex-Item */
-    margin-top: 0; /* Entfernt den unnötigen Abstand nach oben */
-    width: auto; /* Der Button nimmt nur die benötigte Breite ein */
-
-    /* Behalten Sie die Button-Stile bei */
+    margin-top: 0;
+    width: auto;
     background-color: #007bff;
     color: white;
     padding: 10px 15px;
@@ -436,7 +456,6 @@ form.inline-form-transaction button[type="submit"] {
     /* align-self: flex-end; */ /* Optional: Richtet den Button am unteren Rand der Reihe aus, falls nötig */
 }
 
-/* Passen Sie den Hover-Stil an, falls eine spezifischere Regel benötigt wird */
 form.inline-form-transaction button[type="submit"]:hover {
     background-color: #0056b3;
 }
@@ -459,7 +478,7 @@ a.styled-link:hover {
     max-width: 25%;
 }
 
-/* --- NEUE STYLES FÜR DAS ZWEISPALTIGE LAYOUT --- */
+/* --- STYLES FÜR DAS ZWEISPALTIGE LAYOUT --- */
 .container {
     display: flex;
     flex-wrap: wrap; /* Allows columns to wrap on smaller screens if needed */
@@ -491,9 +510,6 @@ a.styled-link:hover {
     border: 1px solid #ddd;
     border-radius: 5px;
     background-color: #f9f9f9;
-    /* Die Breite wird durch die .right-column und Flexbox gesteuert,
-       daher keine explizite width oder max-width hier, es sei denn,
-       es wird für einzelne .form-section benötigt */
 }
 
 .right-column .form-section h3 {
@@ -506,24 +522,20 @@ a.styled-link:hover {
     color: #333;
 }
 
-/* Anpassung für die inline-form-transaction innerhalb der .right-column,
-   falls die globale .inline-form-transaction Regel überschrieben werden muss.
-   Aktuell sollte die globale Regel passen. */
 .right-column form.inline-form-transaction {
     max-width: none; /* Erlaubt dem Formular, die Breite der rechten Spalte zu nutzen */
-    /* Weitere spezifische Anpassungen hier, falls nötig */
 }
 
 .right-column .action-buttons form {
-    margin-bottom: 10px; /* Space between action buttons */
-    border: none; /* Entfernt den Standard-Formularrahmen für diese Button-Gruppen */
-    padding: 0;   /* Entfernt das Standard-Formularpadding */
-    background-color: transparent; /* Macht den Hintergrund transparent */
-    max-width: none; /* Erlaubt volle Breite der Spalte */
+    margin-bottom: 10px;
+    border: none;
+    padding: 0;
+    background-color: transparent;
+    max-width: none;
 }
 
 .right-column .action-buttons form button[type="submit"] {
-    width: 100%; /* Buttons nehmen die volle Breite ihres Form-Containers ein */
+    width: 100%;
 }
 
 /* Responsive adjustments - stack columns on smaller screens */
@@ -547,8 +559,6 @@ form:not(.action-buttons form):not(.compact-delete-form) {
     border: 1px solid #eee;
     border-radius: 5px;
     background-color: #f9f9f9;
-    /* width: 100%; wird bereits von .inline-form-transaction oder .form-section gehandhabt */
-    /* max-width: 400px; ist okay für Standardformulare, aber .inline-form-transaction und .form-section haben eigene max-widths */
     box-sizing: border-box;
 }
 
