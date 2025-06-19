@@ -27,16 +27,16 @@
 
     <div class="container">
         <div class="column left-column">
-            <h2>Benutzerinformationen</h2>
+            <h3>Benutzerinformationen</h3>
             <p><strong>ID:</strong> {{ api_user.id }}</p>
             <p><strong>Username:</strong> {{ api_user.username }}</p>
-            <h2>Zugehörige API-Keys</h2>
+            <h3>Zugehörige API-Keys</h3>
             {% if api_keys %}
                 <table class="zebra-table">
                     <thead>
                         <tr>
                             <th>Key ID</th>
-                            <th>API Key</th>
+                            <th>Name</th>
                             <th>Aktion</th>
                         </tr>
                     </thead>
@@ -44,7 +44,7 @@
                         {% for key in api_keys %}
                         <tr>
                             <td>{{ key.id }}</td>
-                            <td>{{ key.api_key }}</td>
+                            <td>{{ key.api_key_name }}</td>
                             <td>
                                 <form method="POST" action="{{ url_for('admin_delete_api_key', api_key_id_route=key.id) }}" class="compact-delete-form" onsubmit="return confirm('Bist du sicher, dass du diesen API-Key unwiderruflich löschen möchtest?');">
                                     <input type="hidden" name="api_user_id_for_redirect" value="{{ api_user.id }}">
@@ -61,8 +61,11 @@
         </div>
         <div class="column right-column">
             <div class="form-section">
-                <h3>Neuen API-Key für {{ api_user.username }} generieren</h3>
+                <h4>Neuen API-Key für {{ api_user.username }} generieren</h4>
                 <form method="POST" action="{{ url_for('admin_generate_api_key_for_user', api_user_id_route=api_user.id) }}">
+                    <div class="form-group"> <label for="api_key_name">API-Key-Name:*</label>
+                        <input type="text" id="api_key_name" name="api_key_name" required>
+                    </div>
                     <button type="submit" class="button">Neuen API-Key erstellen</button>
                 </form>
             </div>
