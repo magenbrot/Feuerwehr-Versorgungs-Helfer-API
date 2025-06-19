@@ -732,7 +732,7 @@ def person_transaktion_erstellen(api_user_id_auth: int, api_username_auth: str, 
         api_username_auth (str): Der Benutzername des authentifizierten API-Benutzers.
         code (str): Der 10-stellige Code der Person.
 
-    Body (JSON): {"beschreibung": "text", "saldo_aenderung": int (optional), "saldo": int (optional}
+    Body (JSON): {"beschreibung": "text", "saldo_aenderung": int (optional), "saldo": int (optional), "vorname": str (optional)}
 
     Returns: flask.Response
     """
@@ -807,7 +807,7 @@ def person_transaktion_erstellen(api_user_id_auth: int, api_username_auth: str, 
             _send_new_transaction_email(user_details_for_email, transaction_details_for_email)
         aktuellen_saldo_pruefen_und_benachrichtigen(user_info['id'])
 
-        return jsonify({'message': f"Prost {user_info['vorname']}! Dein aktueller Kontostand beträgt: {neuer_saldo} €.", 'saldo': neuer_saldo}), 200
+        return jsonify({'message': f"Prost {user_info['vorname']}! Dein aktueller Kontostand beträgt: {neuer_saldo} €.", 'saldo': neuer_saldo, 'vorname': user_info['vorname']}), 200
 
     except Error as err:
         if cnx.is_connected():
