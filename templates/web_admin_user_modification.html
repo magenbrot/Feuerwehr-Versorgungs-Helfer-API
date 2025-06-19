@@ -9,7 +9,7 @@
 </head>
 <body>
     <h2>Verwaltung für {{ user.nachname }}, {{ user.vorname }} ({{ user.code }})</h2>
-    <h2>Aktueller Saldo: {{ saldo }} {% if user.is_locked %} (gesperrt){% endif %}{% if user.kommentar %} - {{ user.kommentar }}{% endif %}</h2>
+    <h3>Aktueller Saldo: {{ saldo }} {% if user.is_locked %} (gesperrt){% endif %}{% if user.kommentar %} - {{ user.kommentar }}{% endif %}</h3>
 
     <div class="admin-link">
         <a href="{{ url_for('admin_dashboard') }}">Zurück zum Admin Dashboard</a>
@@ -97,7 +97,7 @@
         </div>
         <div class="column right-column">
             <div class="form-section">
-                <h3>Neue Transaktion hinzufügen:</h3>
+                <h4>Neue Transaktion hinzufügen:</h4>
                 <form method="POST" class="inline-form-transaction">
                     <label for="beschreibung">Beschreibung:</label>
                     <input type="text2column" id="beschreibung" name="beschreibung" value="Guthaben eingezahlt" required>
@@ -109,7 +109,7 @@
                 </form>
             </div>
             <div class="form-section">
-                <h3>neuen NFC-Token hinzufügen:</h3>
+                <h4>neuen NFC-Token hinzufügen:</h4>
                 <form method="POST" class="inline-form-transaction">
                     <label for="nfc_token_name">NFC-Name:</label>
                     <input type="text2column" id="nfc_token_name" name="nfc_token_name" title="Bitte gib deinem Token einen Namen.">
@@ -119,21 +119,21 @@
                 </form>
             </div>
             <div class="form-section">
-                <h3>Kommentar aktualisieren:</h3>
+                <h4>Kommentar aktualisieren:</h4>
                 <form method="POST" class="inline-form-transaction"> <label for="kommentar">Kommentar:</label>
                     <input type="text" id="kommentar" name="kommentar" title="Bitte gib einen Kommentar ein." value="{{ user.kommentar if user.kommentar }}">
                     <button type="submit" name="update_user_comment">Speichern</button>
                 </form>
             </div>
             <div class="form-section">
-                <h3>Emailadresse aktualisierenn:</h3>
+                <h4>Emailadresse aktualisierenn:</h4>
                 <form method="POST" class="inline-form-transaction"> <label for="email">Emailadresse:</label>
                     <input type="email" id="email" name="email" title="Bitte gib die Emailadresse ein." value="{{ user.email if user.email }}">
                     <button type="submit" name="update_user_email">Speichern</button>
                 </form>
             </div>
             <div class="form-section action-buttons">
-                <h3>Benutzeraktionen:</h3>
+                <h4>Benutzeraktionen:</h4>
                 {% if user.is_locked %}
                 <form method="POST" onsubmit="return confirm('Möchtest du diesen Benutzer wirklich entsperren?');">
                     <input type="hidden" name="unlock_user" value="true">
