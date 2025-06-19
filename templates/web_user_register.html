@@ -50,7 +50,7 @@
             </div>
             <div>
                 <label for="datenschutz">Datenschutz *</label>
-                <input type="checkbox" id="datenschutz" name="datenschutz" required>Ich habe die <a href="https://feuerwehr-werdau.de/datenschutzerklaerung-chris/" title="Datenschutzerklärung lesen" target="_blank">Datenschutzerklärung</a> gelesen und bin einverstanden.
+                <input type="checkbox" id="datenschutz" name="datenschutz" required>Ich habe die <a href="{{ url_for('datenschutz') }}" title="Datenschutzerklärung lesen" target="_blank">Datenschutzerklärung</a> gelesen und bin einverstanden.
             </div>
             <button type="submit">Registrieren</button>
         </form>
