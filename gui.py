@@ -879,14 +879,14 @@ def get_api_keys_for_api_user(api_user_id):
 
     Returns:
         list: Eine Liste von Dictionaries, wobei jedes Dictionary einen API-Key repräsentiert
-              (id, api_key). Gibt eine leere Liste zurück, falls keine Keys gefunden werden oder ein Fehler auftritt.
+              (id, api_key_name, api_key). Gibt eine leere Liste zurück, falls keine Keys gefunden werden oder ein Fehler auftritt.
     """
 
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if cnx:
         cursor = cnx.cursor(dictionary=True)
         try:
-            query = "SELECT id, api_key FROM api_keys WHERE user_id = %s ORDER BY id"
+            query = "SELECT id, api_key_name, api_key FROM api_keys WHERE user_id = %s ORDER BY id"
             cursor.execute(query, (api_user_id,))
             keys = cursor.fetchall()
             return keys
@@ -1319,7 +1319,7 @@ def add_api_user_db(username):
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return None
 
-def add_api_key_for_user_db(api_user_id, api_key_string):
+def add_api_key_for_user_db(api_user_id, api_key_name_string, api_key_string):
     """
     Fügt einen neuen API-Key für einen API-Benutzer hinzu.
 
@@ -1335,8 +1335,8 @@ def add_api_key_for_user_db(api_user_id, api_key_string):
     if cnx:
         cursor = cnx.cursor()
         try:
-            query = "INSERT INTO api_keys (user_id, api_key) VALUES (%s, %s)"
-            cursor.execute(query, (api_user_id, api_key_string))
+            query = "INSERT INTO api_keys (user_id, api_key_name, api_key) VALUES (%s, %s, %s)"
+            cursor.execute(query, (api_user_id, api_key_name_string, api_key_string))
             cnx.commit()
             return True
         except IntegrityError: # Sollte extrem selten sein, falls der Key schon existiert
@@ -1620,6 +1620,7 @@ def _process_system_setting_update(key, new_value_str):
     Returns:
         bool: True, wenn die Aktualisierung für diese Einstellung erfolgreich war, sonst False.
     """
+
     if key == 'MAX_NEGATIVSALDO':
         try:
             val_int = int(new_value_str)
@@ -1649,6 +1650,7 @@ def inject_global_vars():
     Returns:
         dict: Ein Dictionary mit globalen Variablen.
     """
+
     return  {'app_name': config.app_name, 'app_slogan': config.app_slogan, 'version': app.config.get('version', 'unbekannt')}
 
 @app.route('/', methods=['GET', 'POST'])
@@ -2223,12 +2225,11 @@ def admin_generate_api_key_for_user(api_user_id_route):
         flash("API-Benutzer nicht gefunden, für den ein Key generiert werden soll.", "error")
         return redirect(BASE_URL + url_for('admin_api_user_manage'))
 
+    new_key_name_string = request.form['api_key_name']
     new_key_string = generate_api_key_string()
-    if add_api_key_for_user_db(api_user_id_route, new_key_string):
-        # WICHTIG: Den Key nur dieses eine Mal anzeigen!  -- Feature: keys einen Namen geben und den Key selbst dann verstecken
-        # https://github.com/magenbrot/Feuerwehr-Versorgungs-Helfer-API/issues/50
-        # flash(f"Neuer API-Key für '{target_api_user['username']}' generiert: {new_key_string}. Bitte sofort sicher kopieren!", "success")
-        flash(f"Neuer API-Key für '{target_api_user['username']}' generiert: {new_key_string}. Bitte sofort sicher kopieren!", "success")
+    if add_api_key_for_user_db(api_user_id_route, new_key_name_string, new_key_string):
+        flash(f"Neuer API-Key für '{target_api_user['username']}' generiert: {new_key_string} - "
+               "Bitte sofort sicher kopieren, er kann nicht wieder angezeigt werden!", "success")
     else:
         # Fehler wurde bereits in add_api_key_for_user_db geflasht
         pass
