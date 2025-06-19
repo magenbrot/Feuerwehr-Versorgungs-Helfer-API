@@ -1689,6 +1689,17 @@ def login():
             flash('Ungültiger Benutzername oder Passwort', 'error')
     return render_template('web_login.html')
 
+@app.route('/datenschutz')
+def datenschutz():
+    """
+    Rendert die Datenschutzerklärung-Seite.
+
+    Diese Funktion ist für die Anzeige der statischen HTML-Seite
+    der Datenschutzerklärung zuständig.
+    """
+
+    return render_template('web_privacy_policy.html')
+
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     """
