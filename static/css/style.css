@@ -307,8 +307,8 @@ form button.red-button:hover {
 .flashes {
     list-style: none;
     padding: 0;
-    margin-bottom: 15px;
-    width: 100%;
+    margin: 0 auto 15px auto;
+    width: fit-content;
     max-width: 550px;
     box-sizing: border-box;
 }
@@ -316,6 +316,7 @@ form button.red-button:hover {
 .flashes li {
     padding: 10px;
     border-radius: 5px;
+    text-align: left;
 }
 
 .flashes li.success {
