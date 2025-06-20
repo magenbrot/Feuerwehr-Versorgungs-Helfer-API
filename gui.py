@@ -220,6 +220,42 @@ def get_all_notification_types():
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return []
 
+def get_user_notification_preference(user_id_int: int, event_schluessel: str) -> bool:
+    """
+    Prüft, ob ein Benutzer eine bestimmte E-Mail-Benachrichtigung aktiviert hat.
+
+    Args:
+        user_id_int (int): Die ID des Benutzers.
+        event_schluessel (str): Der eindeutige Schlüssel des Benachrichtigungstyps
+                                (z.B. 'NEUE_TRANSAKTION').
+
+    Returns:
+        bool: True, wenn die Benachrichtigung für den Benutzer aktiviert ist, sonst False.
+    """
+
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
+    if not cnx:
+        logger.error("DB-Verbindungsfehler in get_user_notification_preference für User %s", user_id_int)
+        return False
+    # Verwendung eines try-finally Blocks, um sicherzustellen, dass die Verbindung geschlossen wird
+    try:
+        with cnx.cursor(dictionary=True) as cursor:
+            query = """
+                SELECT bba.email_aktiviert
+                FROM benutzer_benachrichtigungseinstellungen bba
+                JOIN benachrichtigungstypen bt ON bba.typ_id = bt.id
+                WHERE bba.benutzer_id = %s AND bt.event_schluessel = %s
+            """
+            cursor.execute(query, (user_id_int, event_schluessel))
+            result = cursor.fetchone()
+            return bool(result['email_aktiviert']) if result and result['email_aktiviert'] is not None else False
+    except Error as err:
+        logger.error("DB-Fehler in get_user_notification_preference für User %s, Event %s: %s", user_id_int, event_schluessel, err)
+        return False
+    finally:
+        if cnx:
+            db_utils.DatabaseConnectionPool.close_connection(cnx)
+
 def get_user_notification_settings(user_id):
     """
     Ruft die aktuellen E-Mail-Benachrichtigungseinstellungen für einen bestimmten Benutzer ab.
@@ -1337,9 +1373,9 @@ def _send_manual_transaction_email(target_user: dict, beschreibung: str, saldo_a
         'logo_dateipfad': logo_pfad
     }
     if prepare_and_send_email(email_params, config.smtp_config):
-        logger.info("Passwort Reset Benachrichtigung an %s gesendet.", target_user['email'])
+        logger.info("Manuelle Transaktion Benachrichtigung an %s gesendet.", target_user['email'])
     else:
-        logger.error("Fehler beim Senden der Passwort Reset Benachrichtigung an %s.", target_user['email'])
+        logger.error("Fehler beim Senden der Manuelle Transaktion Benachrichtigung an %s.", target_user['email'])
 
 def add_api_user_db(username):
     """
@@ -1501,9 +1537,10 @@ def _handle_add_user_transaction(form_data, target_user):
             saldo_aenderung = int(saldo_aenderung_str)
             # Die Funktion add_transaction flasht bereits Fehlermeldungen bei DB-Fehlern
             if add_transaction(target_user['id'], beschreibung, saldo_aenderung):
-                new_saldo=get_saldo_for_user(target_user['id'])
-                logo_pfad_str = str(Path("static/logo/logo-80x109.png"))
-                _send_manual_transaction_email(target_user, beschreibung, saldo_aenderung_str, new_saldo, logo_pfad_str)
+                if target_user['email'] and get_user_notification_preference(target_user['id'], 'NEUE_TRANSAKTION'):
+                    new_saldo=get_saldo_for_user(target_user['id'])
+                    logo_pfad_str = str(Path("static/logo/logo-80x109.png"))
+                    _send_manual_transaction_email(target_user, beschreibung, saldo_aenderung_str, new_saldo, logo_pfad_str)
                 flash('Transaktion erfolgreich hinzugefügt.', 'success')
         except ValueError:
             flash('Ungültiger Wert für Saldoänderung. Es muss eine Zahl sein.', 'error')
