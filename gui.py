@@ -4,6 +4,7 @@
 import sys
 import logging
 import binascii
+import datetime
 import json
 import os
 import io
@@ -352,7 +353,7 @@ def update_system_setting(einstellung_schluessel, einstellung_wert):
             query = "UPDATE system_einstellungen SET einstellung_wert = %s WHERE einstellung_schluessel = %s"
             cursor.execute(query, (einstellung_wert, einstellung_schluessel))
             cnx.commit()
-            return cursor.rowcount > 0
+            return True
         except Error as err:
             logger.error("Fehler beim Aktualisieren der Systemeinstellung '%s': %s", einstellung_schluessel, err)
             flash(f"Datenbankfehler beim Speichern der Einstellung '{einstellung_schluessel}'.", "error")
@@ -1254,7 +1255,17 @@ def prepare_and_send_email(email_params: dict, smtp_cfg: dict) -> bool:
     )
 
 def _send_user_register_email(vorname: str, email: str, code: int, logo_pfad: str):
-    """Hilfsfunktion zum Senden der "Neuer Benutzer" Benachrichtigung."""
+    """Sendet eine Willkommens-E-Mail mit Verifizierungscode an neue Benutzer.
+
+    Baut die E-Mail zusammen und ruft `prepare_and_send_email` für den
+    Versand auf. Das Ergebnis wird geloggt.
+
+    Args:
+        vorname (str): Der Vorname des neuen Benutzers.
+        email (str): Die E-Mail-Adresse des neuen Benutzers.
+        code (int): Der Verifizierungscode für die Registrierung.
+        logo_pfad (str): Der Dateipfad zum E-Mail-Logo.
+    """
 
     email_params = {
         'empfaenger_email': email,
@@ -1270,7 +1281,16 @@ def _send_user_register_email(vorname: str, email: str, code: int, logo_pfad: st
         logger.error("Fehler beim Senden der Neuer Benutzer Benachrichtigung an %s.", email)
 
 def _send_password_reset_email(email: str, token: str, logo_pfad: str):
-    """Hilfsfunktion zum Senden der "Passwort zurücksetzen" Benachrichtigung."""
+    """Versendet eine E-Mail mit einem Link zum Zurücksetzen des Passworts.
+
+    Der einzigartige Link wird aus dem Token generiert. Der Versandstatus
+    wird geloggt.
+
+    Args:
+        email (str): Die E-Mail-Adresse des Benutzers.
+        token (str): Das sichere Token zur Link-Generierung.
+        logo_pfad (str): Der Dateipfad zum E-Mail-Logo.
+    """
 
     reset_url = url_for('reset_with_token', token=token, _external=True)
     email_params = {
@@ -1285,6 +1305,41 @@ def _send_password_reset_email(email: str, token: str, logo_pfad: str):
         logger.info("Passwort Reset Benachrichtigung an %s gesendet.", email)
     else:
         logger.error("Fehler beim Senden der Passwort Reset Benachrichtigung an %s.", email)
+
+def _send_manual_transaction_email(target_user: dict, beschreibung: str, saldo_aenderung_str: str, new_saldo: str, logo_pfad: str):
+    """Informiert einen Benutzer per E-Mail über eine manuelle Transaktion.
+
+    Die E-Mail enthält Details zur Buchung. Das Ergebnis des Versands
+    wird geloggt.
+
+    Args:
+        target_user (dict): Benutzer-Dictionary mit 'email' und 'vorname'.
+        beschreibung (str): Beschreibung der Transaktion.
+        saldo_aenderung_str (str): Die formatierte Änderung des Saldos.
+        new_saldo (str): Der formatierte neue Saldo.
+        logo_pfad (str): Der Dateipfad zum E-Mail-Logo.
+    """
+
+    jetzt = datetime.now()
+    email_params = {
+        'empfaenger_email': target_user['email'],
+        'betreff': "Neue Transaktion auf deinem Konto",
+        'template_name_html': "email_neue_transaktion.html",
+        'template_name_text': "email_neue_transaktion.txt",
+        'template_context': {
+            "vorname": target_user['vorname'],
+            "beschreibung_transaktion": beschreibung,
+            "saldo_aenderung": saldo_aenderung_str,
+            "neuer_saldo": new_saldo,
+            "datum": jetzt.strftime("%d.%m.%Y"),
+            "uhrzeit": jetzt.strftime("%H:%M")
+        },
+        'logo_dateipfad': logo_pfad
+    }
+    if prepare_and_send_email(email_params, config.smtp_config):
+        logger.info("Passwort Reset Benachrichtigung an %s gesendet.", target_user['email'])
+    else:
+        logger.error("Fehler beim Senden der Passwort Reset Benachrichtigung an %s.", target_user['email'])
 
 def add_api_user_db(username):
     """
@@ -1426,13 +1481,13 @@ def _handle_delete_all_user_transactions(target_user_id):
     else:
         flash('Fehler beim Löschen der Transaktionen.', 'error')
 
-def _handle_add_user_transaction(form_data, target_user_id):
+def _handle_add_user_transaction(form_data, target_user):
     """
     Verarbeitet das Hinzufügen einer neuen Transaktion für einen Benutzer.
 
     Args:
         form_data (werkzeug.datastructures.ImmutableMultiDict): Die Formulardaten.
-        target_user_id (int): Die ID des Benutzers, für den die Transaktion hinzugefügt wird.
+        target_user (dict): Das Benutzerobjekt des Zielbenutzers.
     """
 
     beschreibung = form_data.get('beschreibung', '')
@@ -1445,7 +1500,10 @@ def _handle_add_user_transaction(form_data, target_user_id):
         try:
             saldo_aenderung = int(saldo_aenderung_str)
             # Die Funktion add_transaction flasht bereits Fehlermeldungen bei DB-Fehlern
-            if add_transaction(target_user_id, beschreibung, saldo_aenderung):
+            if add_transaction(target_user['id'], beschreibung, saldo_aenderung):
+                new_saldo=get_saldo_for_user(target_user['id'])
+                logo_pfad_str = str(Path("static/logo/logo-80x109.png"))
+                _send_manual_transaction_email(target_user, beschreibung, saldo_aenderung_str, new_saldo, logo_pfad_str)
                 flash('Transaktion erfolgreich hinzugefügt.', 'success')
         except ValueError:
             flash('Ungültiger Wert für Saldoänderung. Es muss eine Zahl sein.', 'error')
@@ -1611,7 +1669,7 @@ def _validate_register_form(form_data):
 def _process_system_setting_update(key, new_value_str):
     """
     Verarbeitet die Aktualisierung einer einzelnen Systemeinstellung.
-    Beinhaltet Validierung für MAX_NEGATIVSALDO.
+    Beinhaltet Validierung für MAX_NEGATIVSALDO und TRANSACTION_SALDO_CHANGE
 
     Args:
         key (str): Der Schlüssel der Systemeinstellung.
@@ -1626,6 +1684,16 @@ def _process_system_setting_update(key, new_value_str):
             val_int = int(new_value_str)
             if val_int > 0:
                 flash("Der Wert für 'Maximale Negativsaldo-Grenze' muss 0 oder negativ sein.", "error")
+                return False
+        except ValueError:
+            flash("Der Wert für 'Maximale Negativsaldo-Grenze' muss eine ganze Zahl sein.", "error")
+            return False
+
+    if key == 'TRANSACTION_SALDO_CHANGE':
+        try:
+            val_int = int(new_value_str)
+            if val_int >= 0:
+                flash("Der Wert für 'Transaktions-Saldo-Änderung' muss kleiner als 0 sein.", "error")
                 return False
         except ValueError:
             flash("Der Wert für 'Maximale Negativsaldo-Grenze' muss eine ganze Zahl sein.", "error")
@@ -2020,7 +2088,6 @@ def admin_dashboard():
                     new_value = request.form[key].strip()
                     if not _process_system_setting_update(key, new_value):
                         settings_updated_successfully = False
-
             if settings_updated_successfully:
                 flash("Systemeinstellungen erfolgreich aktualisiert.", "success")
             # Individuelle Fehler wurden bereits in _process_system_setting_update oder update_system_setting geflasht
@@ -2389,7 +2456,7 @@ def admin_user_modification(target_user_id):
 
         action_handlers = {
             'delete_transactions': lambda: _handle_delete_all_user_transactions(target_user_id),
-            'add_transaction': lambda: _handle_add_user_transaction(form_data, target_user_id),
+            'add_transaction': lambda: _handle_add_user_transaction(form_data, target_user),
             'lock_user': lambda: _handle_toggle_user_lock_state(target_user_id, target_user, True),
             'unlock_user': lambda: _handle_toggle_user_lock_state(target_user_id, target_user, False),
             'promote_user': lambda: _handle_toggle_user_admin_state(target_user_id, target_user, True),
