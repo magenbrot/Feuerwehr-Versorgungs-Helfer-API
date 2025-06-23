@@ -5,6 +5,7 @@ import sys
 import logging
 import binascii
 import datetime
+import functools
 import json
 import os
 import io
@@ -1741,7 +1742,101 @@ def _process_system_setting_update(key, new_value_str):
         return False
     return True
 
-# --- Flask Routen ---
+def _validate_bulk_change_form(form):
+    """
+    Validiert die Eingaben des Sammelbuchungsformulars.
+
+    Args:
+        form (werkzeug.datastructures.ImmutableMultiDict): Das request.form Objekt.
+
+    Returns:
+        tuple[bool, int, list[str]]: Ein Tupel mit (isValid, Saldo, UserIDs).
+                                     Bei Fehlern ist isValid False.
+    """
+
+    beschreibung = form.get('beschreibung')
+    saldo_aenderung_str = form.get('saldo_aenderung')
+    selected_user_ids = form.getlist('selected_users')
+    errors = False
+
+    if not beschreibung:
+        flash("Die Beschreibung darf nicht leer sein.", "error")
+        errors = True
+    if not saldo_aenderung_str:
+        flash("Die Saldoänderung darf nicht leer sein.", "error")
+        errors = True
+    if not selected_user_ids:
+        flash("Es muss mindestens ein Benutzer ausgewählt werden.", "error")
+        errors = True
+
+    saldo_aenderung = 0
+    if saldo_aenderung_str:
+        try:
+            saldo_aenderung = int(saldo_aenderung_str)
+        except ValueError:
+            flash("Die Saldoänderung muss eine ganze Zahl sein.", "error")
+            errors = True
+
+    return not errors, saldo_aenderung, selected_user_ids
+
+def _process_bulk_transactions(user_ids, beschreibung, saldo_aenderung):
+    """
+    Verarbeitet die Sammelbuchung, fügt Transaktionen hinzu und sendet E-Mails.
+
+    Args:
+        user_ids (list[str]): Liste der ausgewählten Benutzer-IDs.
+        beschreibung (str): Beschreibung für die Transaktion.
+        saldo_aenderung (int): Der zu buchende Betrag.
+
+    Returns:
+        tuple[int, int]: Ein Tupel mit (Anzahl erfolgreicher, Anzahl fehlgeschlagener Transaktionen).
+    """
+
+    successful = 0
+    failed = 0
+    for user_id_str in user_ids:
+        user_id_int = int(user_id_str)
+        if add_transaction(user_id_int, beschreibung, saldo_aenderung):
+            successful += 1
+            target_user = get_user_by_id(user_id_int)
+            if target_user and target_user.get('email') and get_user_notification_preference(user_id_int, 'NEUE_TRANSAKTION'):
+                new_saldo = get_saldo_for_user(user_id_int)
+                logo_pfad_str = str(Path("static/logo/logo-80x109.png"))
+                _send_manual_transaction_email(target_user, beschreibung, str(saldo_aenderung), str(new_saldo), logo_pfad_str)
+        else:
+            failed += 1
+    return successful, failed
+
+# --- Flask Decorator ---
+
+def admin_required(f):
+    """
+    Decorator, der sicherstellt, dass der Benutzer ein eingeloggter,
+    nicht gesperrter Administrator ist.
+    """
+
+    @functools.wraps(f)
+    def decorated_function(*args, **kwargs):
+        user_id = session.get('user_id')
+        if not user_id:
+            flash("Bitte zuerst einloggen.", "success")
+            return redirect(BASE_URL + url_for('login'))
+
+        admin_user = get_user_by_id(user_id)
+        if not (admin_user and admin_user.get('is_admin')):
+            flash("Zugriff verweigert. Admin-Rechte erforderlich.", "error")
+            return redirect(BASE_URL + url_for('user_info'))
+
+        if admin_user.get('is_locked'):
+            session.pop('user_id', None)
+            flash('Dein Administratorkonto wurde gesperrt.', 'error')
+            return redirect(BASE_URL + url_for('login'))
+
+        # Übergibt den geprüften Admin-Benutzer an die eigentliche Routen-Funktion
+        return f(admin_user, *args, **kwargs)
+    return decorated_function
+
+# --- Flask Injector ---
 
 @app.context_processor
 def inject_global_vars():
@@ -1757,6 +1852,8 @@ def inject_global_vars():
     """
 
     return  {'app_name': config.app_name, 'app_slogan': config.app_slogan, 'version': app.config.get('version', 'unbekannt')}
+
+# --- Flask Routen ---
 
 @app.route('/', methods=['GET', 'POST'])
 def login():
@@ -2084,6 +2181,7 @@ def generate_qr():
     return send_file(byte_io, mimetype='image/png')
 
 @app.route('/admin', methods=['GET', 'POST'])
+@admin_required
 def admin_dashboard():
     """
     Zeigt das Admin-Dashboard mit einer Benutzerübersicht und deren Salden.
@@ -2091,27 +2189,11 @@ def admin_dashboard():
 
     Bei GET-Anfragen werden Benutzerdaten und aktuelle Systemeinstellungen geladen.
     Bei POST-Anfragen können Systemeinstellungen aktualisiert werden.
-    Erfordert Admin-Rechte und eine aktive Benutzersitzung.
 
     Returns:
         str oder werkzeug.wrappers.response.Response: Die gerenderte Admin-Dashboard-Seite (`web_admin_dashboard.html`)
         oder eine Weiterleitung bei fehlenden Rechten, Fehlern oder wenn nicht eingeloggt.
     """
-
-    user_id = session.get('user_id')
-    if not user_id:
-        flash("Bitte zuerst einloggen.", "success")
-        return redirect(BASE_URL + url_for('login'))
-
-    admin_user = get_user_by_id(user_id)
-    if not (admin_user and admin_user['is_admin']):
-        flash("Zugriff verweigert. Admin-Rechte erforderlich.", "error")
-        return redirect(BASE_URL + url_for('user_info'))
-
-    if admin_user.get('is_locked'):
-        session.pop('user_id', None)
-        flash('Dein Administratorkonto wurde gesperrt.', 'error')
-        return redirect(BASE_URL + url_for('login'))
 
     if request.method == 'POST':
         if 'update_system_settings' in request.form:
@@ -2143,6 +2225,7 @@ def admin_dashboard():
                            version=app.config.get('version', 'unbekannt'))
 
 @app.route('/admin/add_user', methods=['GET', 'POST'])
+@admin_required
 def add_user():
     """
     Verarbeitet das Hinzufügen eines neuen regulären Benutzers (Frontend-Benutzer).
@@ -2151,21 +2234,6 @@ def add_user():
         str oder werkzeug.wrappers.response.Response: Die gerenderte Seite zum Hinzufügen
         eines Benutzers oder eine Weiterleitung.
     """
-
-    user_id = session.get('user_id')
-    if not user_id:
-        flash("Bitte zuerst einloggen.", "success")
-        return redirect(BASE_URL + url_for('login'))
-
-    admin_user = get_user_by_id(user_id)
-    if not (admin_user and admin_user['is_admin']):
-        flash("Zugriff verweigert. Admin-Rechte erforderlich.", "error")
-        return redirect(BASE_URL + url_for('user_info'))
-
-    if admin_user.get('is_locked'):
-        session.pop('user_id', None)
-        flash('Dein Administratorkonto wurde gesperrt.', 'error')
-        return redirect(BASE_URL + url_for('login'))
 
     if request.method == 'POST':
         form_data = request.form
@@ -2209,6 +2277,7 @@ def add_user():
     return render_template('web_user_add.html', user=admin_user, current_code=generated_code, form_data=None)
 
 @app.route('/admin/api_users', methods=['GET', 'POST'])
+@admin_required
 def admin_api_user_manage():
     """
     Verwaltet API-Benutzer, zeigt eine Liste an und erlaubt das Hinzufügen neuer.
@@ -2226,21 +2295,6 @@ def admin_api_user_manage():
         erfolgt eine Weiterleitung zur Login- bzw. Benutzerinformationsseite.
     """
 
-    user_id = session.get('user_id')
-    if not user_id:
-        flash("Bitte zuerst einloggen.", "success")
-        return redirect(BASE_URL + url_for('login'))
-
-    admin_user = get_user_by_id(user_id)
-    if not (admin_user and admin_user['is_admin']):
-        flash("Zugriff verweigert. Admin-Rechte erforderlich.", "error")
-        return redirect(BASE_URL + url_for('user_info'))
-
-    if admin_user.get('is_locked'):
-        session.pop('user_id', None)
-        flash('Dein Administratorkonto wurde gesperrt.', 'error')
-        return redirect(BASE_URL + url_for('login'))
-
     if request.method == 'POST':
         # Hinzufügen eines neuen API-Benutzers
         username = request.form.get('username')
@@ -2257,6 +2311,7 @@ def admin_api_user_manage():
     return render_template('web_admin_api_user_manage.html', user=admin_user, api_users=api_users_list)
 
 @app.route('/admin/api_user/<int:api_user_id_route>')
+@admin_required
 def admin_api_user_detail(api_user_id_route):
     """
     Zeigt die Detailansicht für einen spezifischen API-Benutzer inklusive seiner API-Keys.
@@ -2275,21 +2330,6 @@ def admin_api_user_detail(api_user_id_route):
         nicht gefunden wird, erfolgen entsprechende Weiterleitungen mit Flash-Nachrichten.
     """
 
-    user_id = session.get('user_id')
-    if not user_id:
-        flash("Bitte zuerst einloggen.", "success")
-        return redirect(BASE_URL + url_for('login'))
-
-    admin_user = get_user_by_id(user_id)
-    if not (admin_user and admin_user['is_admin']):
-        flash("Zugriff verweigert. Admin-Rechte erforderlich.", "error")
-        return redirect(BASE_URL + url_for('user_info'))
-
-    if admin_user.get('is_locked'):
-        session.pop('user_id', None)
-        flash('Dein Administratorkonto wurde gesperrt.', 'error')
-        return redirect(BASE_URL + url_for('login'))
-
     target_api_user = get_api_user_by_id(api_user_id_route)
     if not target_api_user:
         flash("API-Benutzer nicht gefunden.", "error")
@@ -2299,6 +2339,7 @@ def admin_api_user_detail(api_user_id_route):
     return render_template('web_admin_api_user_detail.html', user=admin_user, api_user=target_api_user, api_keys=api_keys_list)
 
 @app.route('/admin/api_user/<int:api_user_id_route>/generate_key', methods=['POST'])
+@admin_required
 def admin_generate_api_key_for_user(api_user_id_route):
     """
     Generiert einen neuen API-Key für einen spezifischen API-Benutzer.
@@ -2320,21 +2361,6 @@ def admin_generate_api_key_for_user(api_user_id_route):
         Weiterleitungen mit Flash-Nachrichten.
     """
 
-    user_id = session.get('user_id')
-    if not user_id:
-        flash("Bitte zuerst einloggen.", "success")
-        return redirect(BASE_URL + url_for('login'))
-
-    admin_user = get_user_by_id(user_id)
-    if not (admin_user and admin_user['is_admin']):
-        flash("Zugriff verweigert. Admin-Rechte erforderlich.", "error")
-        return redirect(BASE_URL + url_for('user_info'))
-
-    if admin_user.get('is_locked'):
-        session.pop('user_id', None)
-        flash('Dein Administratorkonto wurde gesperrt.', 'error')
-        return redirect(BASE_URL + url_for('login'))
-
     target_api_user = get_api_user_by_id(api_user_id_route)
     if not target_api_user:
         flash("API-Benutzer nicht gefunden, für den ein Key generiert werden soll.", "error")
@@ -2352,6 +2378,7 @@ def admin_generate_api_key_for_user(api_user_id_route):
     return redirect(BASE_URL + url_for('admin_api_user_detail', api_user_id_route=api_user_id_route))
 
 @app.route('/admin/api_key/<int:api_key_id_route>/delete', methods=['POST'])
+@admin_required
 def admin_delete_api_key(api_key_id_route):
     """
     Löscht einen spezifischen API-Key.
@@ -2373,21 +2400,6 @@ def admin_delete_api_key(api_key_id_route):
         zur Login- bzw. Benutzerinformationsseite.
     """
 
-    user_id = session.get('user_id')
-    if not user_id:
-        flash("Bitte zuerst einloggen.", "success")
-        return redirect(BASE_URL + url_for('login'))
-
-    admin_user = get_user_by_id(user_id)
-    if not (admin_user and admin_user['is_admin']):
-        flash("Zugriff verweigert. Admin-Rechte erforderlich.", "error")
-        return redirect(BASE_URL + url_for('user_info'))
-
-    if admin_user.get('is_locked'):
-        session.pop('user_id', None)
-        flash('Dein Administratorkonto wurde gesperrt.', 'error')
-        return redirect(BASE_URL + url_for('login'))
-
     api_user_id_for_redirect = request.form.get('api_user_id_for_redirect')
 
     if delete_api_key_db(api_key_id_route):
@@ -2407,6 +2419,7 @@ def admin_delete_api_key(api_key_id_route):
     return redirect(BASE_URL + url_for('admin_api_user_manage'))
 
 @app.route('/admin/api_user/<int:api_user_id_route>/delete', methods=['POST'])
+@admin_required
 def admin_delete_api_user(api_user_id_route):
     """
     Löscht einen API-Benutzer und alle zugehörigen API-Keys.
@@ -2426,21 +2439,6 @@ def admin_delete_api_user(api_user_id_route):
         Benutzerinformationsseite bei Authentifizierungs-/Autorisierungsfehlern.
     """
 
-    user_id = session.get('user_id')
-    if not user_id:
-        flash("Bitte zuerst einloggen.", "success")
-        return redirect(BASE_URL + url_for('login'))
-
-    admin_user = get_user_by_id(user_id)
-    if not (admin_user and admin_user['is_admin']):
-        flash("Zugriff verweigert. Admin-Rechte erforderlich.", "error")
-        return redirect(BASE_URL + url_for('user_info'))
-
-    if admin_user.get('is_locked'):
-        session.pop('user_id', None)
-        flash('Dein Administratorkonto wurde gesperrt.', 'error')
-        return redirect(BASE_URL + url_for('login'))
-
     api_user_to_delete = get_api_user_by_id(api_user_id_route)
     if not api_user_to_delete:
         flash("Zu löschender API-Benutzer nicht gefunden.", "error")
@@ -2454,61 +2452,17 @@ def admin_delete_api_user(api_user_id_route):
     return redirect(BASE_URL + url_for('admin_api_user_manage'))
 
 @app.route('/admin/bulk_change', methods=['GET', 'POST'])
-def admin_bulk_change():
+@admin_required
+def admin_bulk_change(admin_user):
     """
     Ermöglicht Admins das Erstellen von Sammelbuchungen für ausgewählte Benutzer.
-
-    Bei GET wird ein Formular mit allen Benutzern angezeigt.
-    Bei POST werden die Formulardaten verarbeitet und für jeden ausgewählten
-    Benutzer eine Transaktion mit dem angegebenen Wert und der Beschreibung erstellt.
-
-    Returns:
-        str oder werkzeug.wrappers.response.Response: Die gerenderte Seite
-        für Sammelbuchungen oder eine Weiterleitung bei fehlenden Rechten oder nach Erfolg.
+    Die Authentifizierung wird durch den @admin_required Decorator gehandhabt.
     """
 
-    user_id = session.get('user_id')
-    if not user_id:
-        flash("Bitte zuerst einloggen.", "success")
-        return redirect(BASE_URL + url_for('login'))
-
-    admin_user = get_user_by_id(user_id)
-    if not (admin_user and admin_user['is_admin']):
-        flash("Zugriff verweigert. Admin-Rechte erforderlich.", "error")
-        return redirect(BASE_URL + url_for('user_info'))
-
-    if admin_user.get('is_locked'):
-        session.pop('user_id', None)
-        flash('Dein Administratorkonto wurde gesperrt.', 'error')
-        return redirect(BASE_URL + url_for('login'))
-
-    # POST-Logik für die Formularverarbeitung
     if request.method == 'POST':
-        beschreibung = request.form.get('beschreibung')
-        saldo_aenderung_str = request.form.get('saldo_aenderung')
-        selected_user_ids = request.form.getlist('selected_users')
+        is_valid, saldo_aenderung, selected_user_ids = _validate_bulk_change_form(request.form)
 
-        # Validierung der Eingaben
-        errors = False
-        if not beschreibung:
-            flash("Die Beschreibung darf nicht leer sein.", "error")
-            errors = True
-        if not saldo_aenderung_str:
-            flash("Die Saldoänderung darf nicht leer sein.", "error")
-            errors = True
-        if not selected_user_ids:
-            flash("Es muss mindestens ein Benutzer ausgewählt werden.", "error")
-            errors = True
-
-        saldo_aenderung = 0
-        if saldo_aenderung_str:
-            try:
-                saldo_aenderung = int(saldo_aenderung_str)
-            except ValueError:
-                flash("Die Saldoänderung muss eine ganze Zahl sein.", "error")
-                errors = True
-
-        if errors:
+        if not is_valid:
             # Bei Fehlern zum Formular zurückkehren und eingegebene Daten beibehalten
             users_data = get_all_users()
             return render_template('web_admin_bulk_change.html',
@@ -2517,24 +2471,15 @@ def admin_bulk_change():
                                    form_data=request.form)
 
         # Verarbeitung der Sammelbuchung
-        successful_transactions = 0
-        failed_transactions = 0
-        for user_id_str in selected_user_ids:
-            user_id_int = int(user_id_str)
-            if add_transaction(user_id_int, beschreibung, saldo_aenderung):
-                successful_transactions += 1
-                # E-Mail-Benachrichtigung senden, falls vom Benutzer gewünscht
-                target_user = get_user_by_id(user_id_int)
-                if target_user and target_user.get('email') and get_user_notification_preference(user_id_int, 'NEUE_TRANSAKTION'):
-                    new_saldo = get_saldo_for_user(user_id_int)
-                    logo_pfad_str = str(Path("static/logo/logo-80x109.png"))
-                    _send_manual_transaction_email(target_user, beschreibung, str(saldo_aenderung), str(new_saldo), logo_pfad_str)
-            else:
-                failed_transactions += 1
+        successful, failed = _process_bulk_transactions(
+            selected_user_ids,
+            request.form.get('beschreibung'),
+            saldo_aenderung
+        )
 
-        flash(f"{successful_transactions} Transaktionen wurden erfolgreich erstellt.", "success")
-        if failed_transactions > 0:
-            flash(f"{failed_transactions} Transaktionen konnten nicht erstellt werden.", "error")
+        flash(f"{successful} Transaktionen erfolgreich erstellt.", "success")
+        if failed > 0:
+            flash(f"{failed} Transaktionen konnten nicht erstellt werden.", "error")
 
         return redirect(BASE_URL + url_for('admin_dashboard'))
 
@@ -2542,15 +2487,17 @@ def admin_bulk_change():
     users_data = get_all_users()
     today_str = datetime.now().strftime('%d.%m.%Y')
     default_form_data = {
-        'beschreibung': f'Essem zum Dienst am {today_str}',
+        'beschreibung': f'Essen zum Dienst am {today_str}',
         'saldo_aenderung': -3
     }
 
     return render_template('web_admin_bulk_change.html',
+                           user=admin_user,
                            users=users_data,
                            form_data=default_form_data)
 
 @app.route('/admin/user/<int:target_user_id>/transactions', methods=['GET', 'POST'])
+@admin_required
 def admin_user_modification(target_user_id):
     """
     Zeigt die Transaktionen eines bestimmten Benutzers an und ermöglicht diverse Modifikationen.
@@ -2562,20 +2509,6 @@ def admin_user_modification(target_user_id):
         str oder werkzeug.wrappers.response.Response: Die gerenderte Seite mit den Benutzerdaten
         (web_admin_user_modification.html) oder eine Weiterleitung.
     """
-    logged_in_user_id = session.get('user_id')
-    if not logged_in_user_id:
-        flash("Bitte zuerst einloggen.", "success")
-        return redirect(BASE_URL + url_for('login'))
-
-    current_admin_user = get_user_by_id(logged_in_user_id)
-    if not (current_admin_user and current_admin_user['is_admin']):
-        flash("Zugriff verweigert. Admin-Rechte erforderlich.", "error")
-        return redirect(BASE_URL + url_for('user_info'))
-
-    if current_admin_user.get('is_locked'):
-        session.pop('user_id', None)
-        flash('Dein Administratorkonto wurde gesperrt.', 'error')
-        return redirect(BASE_URL + url_for('login'))
 
     target_user = get_user_by_id(target_user_id)
     if not target_user:
