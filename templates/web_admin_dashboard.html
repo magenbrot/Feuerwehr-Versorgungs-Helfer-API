@@ -46,8 +46,8 @@
                     <tr>
                         <td><a href="{{ url_for('admin_user_modification', target_user_id=u.id) }}">{{ u.code }}</a></td>
                         <td>{{ u.nachname }}, {{ u.vorname }}</td>
-                        <td>{{ u.email }}</td>
-                        <td>{{ u.kommentar }}</td>
+                        <td>{{ u.email if u.email is not none else '' }}</td>
+                        <td>{{ u.kommentar if u.kommentar is not none else '' }}</td>
                         <td>{% if u.is_locked %}Gesperrt{% else %}Aktiv{% endif %}</td>
                         <td>{% if u.is_admin %}Ja{% else %}Nein{% endif %}</td>
                         <td>{{ saldo_by_user.get(u.id, 0) }}</td>

@@ -1091,8 +1091,8 @@ def add_regular_user_db(user_data):
                 user_data['nachname'],
                 user_data['vorname'],
                 hashed_password,
-                user_data.get('email'),
-                user_data.get('kommentar'),
+                user_data.get('email') or None,
+                user_data.get('kommentar') or None,
                 1 if user_data.get('acc_duties') else 0,
                 1 if user_data.get('acc_privacy_policy') else 0,
                 1 if user_data.get('is_locked') else 0,
@@ -1838,11 +1838,11 @@ def register():
                 generated_code = "" # Fallback
             user_details = {
                 'code': generated_code,
-                'nachname': form_data.get('nachname'),
-                'vorname': form_data.get('vorname'),
+                'nachname': form_data.get('nachname').strip(),
+                'vorname': form_data.get('vorname').strip(),
                 'password': form_data.get('password'),
-                'email': form_data.get('email', ''), # Optional
-                'kommentar': form_data.get('kommentar', ''), # Optional
+                'email': form_data.get('email', '').strip(), # Optional
+                'kommentar': form_data.get('kommentar', '').strip(), # Optional
                 'acc_duties': form_data.get('pflichten'),
                 'acc_privacy_policy': form_data.get('datenschutz'),
                 'is_locked': False,
@@ -2130,10 +2130,22 @@ def admin_dashboard():
             # Individuelle Fehler wurden bereits in _process_system_setting_update oder update_system_setting geflasht
         return redirect(BASE_URL + url_for('admin_dashboard'))
 
-    # GET Request
+    # GET Request - Daten holen
     users_data = get_all_users()
     saldo_by_user_data = get_saldo_by_user()
     system_settings_data = get_all_system_settings()
+
+    print("--- DEBUG-AUSGABE START ---")
+    print(f"Der Typ der Variable ist: {type(users_data)}")
+
+    if users_data:
+        print(f"Der Typ des ersten Elements ist: {type(users_data[0])}")
+        print("INHALT DER GESAMTEN LISTE:")
+        print(users_data)
+    else:
+        print("Die Liste ist leer.")
+
+    print("--- DEBUG-AUSGABE ENDE ---")
 
     return render_template('web_admin_dashboard.html',
                            user=admin_user,
