@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sammelbuchung ausführen</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo/logo-120x164-alpha.png') }}">
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <h2>Sammelbuchung durchführen</h2>
+
+    <div class="admin-link">
+        <a href="{{ url_for('admin_dashboard') }}">Zurück zum Admin Dashboard</a>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <ul class="flashes">
+        {% for category, message in messages %}
+            <li class="{{ category }}">{{ message }}</li>
+        {% endfor %}
+        </ul>
+        {% endif %}
+    {% endwith %}
+
+    <form method="post" action="{{ url_for('admin_bulk_change') }}" class="form-layout-full-width">
+
+        <div class="container">
+
+            <div class="column left-column">
+                <h3>Benutzer auswählen</h3>
+                <table class="zebra-table">
+                    <thead>
+                        <tr>
+                            <th><input type="checkbox" id="select-all" title="Alle auswählen/abwählen"></th>
+                            <th>Name</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for u in users %}
+                        <tr>
+                            <td><input type="checkbox" name="selected_users" value="{{ u.id }}"></td>
+                            <td>{{ u.nachname }}, {{ u.vorname }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="3">Keine Benutzer gefunden.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="column right-column">
+                <div class="form-section">
+                    <h3>Transaktionsdetails</h3>
+                    <div class="form-group">
+                        <label for="saldo_aenderung">Saldoänderung (negativer Wert für Abbuchung):</label>
+                        <input type="number" id="saldo_aenderung" name="saldo_aenderung" required value="{{ form_data.saldo_aenderung if form_data }}">
+                    </div>
+                    <div class="form-group">
+                        <label for="beschreibung">Beschreibung der Transaktion:</label>
+                        <input type="text" id="beschreibung" name="beschreibung" required value="{{ form_data.beschreibung if form_data }}">
+                    </div>
+                    <button type="submit" class="button">Sammelbuchung jetzt erstellen</button>
+                </div>
+                {% include 'web_include_info_block.html' %}
+            </div>
+
+        </div>
+    </form>
+
+    <script>
+        // JavaScript, um die "Alle auswählen"-Checkbox funktional zu machen
+        document.getElementById('select-all').addEventListener('click', function(event) {
+            var checkboxes = document.querySelectorAll('input[name="selected_users"]');
+            for (var checkbox of checkboxes) {
+                checkbox.checked = event.target.checked;
+            }
+        });
+    </script>
+
+    <div class="admin-link">
+        <a href="{{ url_for('user_info') }}">Zur eigenen Benutzeransicht</a> |
+        <a href="{{ url_for('logout') }}">Abmelden</a>
+    </div>
+    {% include 'web_include_footer.html' %}
+</body>
+</html>

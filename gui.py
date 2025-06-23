@@ -2135,18 +2135,6 @@ def admin_dashboard():
     saldo_by_user_data = get_saldo_by_user()
     system_settings_data = get_all_system_settings()
 
-    print("--- DEBUG-AUSGABE START ---")
-    print(f"Der Typ der Variable ist: {type(users_data)}")
-
-    if users_data:
-        print(f"Der Typ des ersten Elements ist: {type(users_data[0])}")
-        print("INHALT DER GESAMTEN LISTE:")
-        print(users_data)
-    else:
-        print("Die Liste ist leer.")
-
-    print("--- DEBUG-AUSGABE ENDE ---")
-
     return render_template('web_admin_dashboard.html',
                            user=admin_user,
                            users=users_data,
@@ -2464,6 +2452,98 @@ def admin_delete_api_user(api_user_id_route):
         pass
 
     return redirect(BASE_URL + url_for('admin_api_user_manage'))
+
+@app.route('/admin/bulk_change', methods=['GET', 'POST'])
+def admin_bulk_change():
+    """
+    Ermöglicht Admins das Erstellen von Sammelbuchungen für ausgewählte Benutzer.
+
+    Bei GET wird ein Formular mit allen Benutzern angezeigt.
+    Bei POST werden die Formulardaten verarbeitet und für jeden ausgewählten
+    Benutzer eine Transaktion mit dem angegebenen Wert und der Beschreibung erstellt.
+
+    Returns:
+        str oder werkzeug.wrappers.response.Response: Die gerenderte Seite
+        für Sammelbuchungen oder eine Weiterleitung bei fehlenden Rechten oder nach Erfolg.
+    """
+
+    user_id = session.get('user_id')
+    if not user_id:
+        flash("Bitte zuerst einloggen.", "success")
+        return redirect(BASE_URL + url_for('login'))
+
+    admin_user = get_user_by_id(user_id)
+    if not (admin_user and admin_user['is_admin']):
+        flash("Zugriff verweigert. Admin-Rechte erforderlich.", "error")
+        return redirect(BASE_URL + url_for('user_info'))
+
+    if admin_user.get('is_locked'):
+        session.pop('user_id', None)
+        flash('Dein Administratorkonto wurde gesperrt.', 'error')
+        return redirect(BASE_URL + url_for('login'))
+
+    # POST-Logik für die Formularverarbeitung
+    if request.method == 'POST':
+        beschreibung = request.form.get('beschreibung')
+        saldo_aenderung_str = request.form.get('saldo_aenderung')
+        selected_user_ids = request.form.getlist('selected_users')
+
+        # Validierung der Eingaben
+        errors = False
+        if not beschreibung:
+            flash("Die Beschreibung darf nicht leer sein.", "error")
+            errors = True
+        if not saldo_aenderung_str:
+            flash("Die Saldoänderung darf nicht leer sein.", "error")
+            errors = True
+        if not selected_user_ids:
+            flash("Es muss mindestens ein Benutzer ausgewählt werden.", "error")
+            errors = True
+
+        saldo_aenderung = 0
+        if saldo_aenderung_str:
+            try:
+                saldo_aenderung = int(saldo_aenderung_str)
+            except ValueError:
+                flash("Die Saldoänderung muss eine ganze Zahl sein.", "error")
+                errors = True
+
+        if errors:
+            # Bei Fehlern zum Formular zurückkehren und eingegebene Daten beibehalten
+            users_data = get_all_users()
+            return render_template('web_admin_bulk_change.html',
+                                   user=admin_user,
+                                   users=users_data,
+                                   form_data=request.form)
+
+        # Verarbeitung der Sammelbuchung
+        successful_transactions = 0
+        failed_transactions = 0
+        for user_id_str in selected_user_ids:
+            user_id_int = int(user_id_str)
+            if add_transaction(user_id_int, beschreibung, saldo_aenderung):
+                successful_transactions += 1
+                # E-Mail-Benachrichtigung senden, falls vom Benutzer gewünscht
+                target_user = get_user_by_id(user_id_int)
+                if target_user and target_user.get('email') and get_user_notification_preference(user_id_int, 'NEUE_TRANSAKTION'):
+                    new_saldo = get_saldo_for_user(user_id_int)
+                    logo_pfad_str = str(Path("static/logo/logo-80x109.png"))
+                    _send_manual_transaction_email(target_user, beschreibung, str(saldo_aenderung), str(new_saldo), logo_pfad_str)
+            else:
+                failed_transactions += 1
+
+        flash(f"{successful_transactions} Transaktionen wurden erfolgreich erstellt.", "success")
+        if failed_transactions > 0:
+            flash(f"{failed_transactions} Transaktionen konnten nicht erstellt werden.", "error")
+
+        return redirect(BASE_URL + url_for('admin_dashboard'))
+
+    # GET-Logik zum Anzeigen der Seite
+    users_data = get_all_users()
+    return render_template('web_admin_bulk_change.html',
+                           user=admin_user,
+                           users=users_data,
+                           form_data=None)
 
 @app.route('/admin/user/<int:target_user_id>/transactions', methods=['GET', 'POST'])
 def admin_user_modification(target_user_id):
