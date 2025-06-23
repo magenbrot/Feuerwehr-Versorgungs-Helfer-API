@@ -8,7 +8,7 @@
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-    <h1>API-Benutzer Details: {{ api_user.username }}</h1>
+    <h2>API-Benutzer Details: {{ api_user.username }}</h2>
 
     <div class="admin-link">
         <a href="{{ url_for('admin_api_user_manage') }}">Zurück zur API-Benutzer Verwaltung</a> |
