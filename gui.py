@@ -1579,7 +1579,7 @@ def _handle_toggle_user_admin_state(target_user_id, target_user, admin_state):
     else:
         flash(f'Fehler beim {"Befördern" if admin_state else "Degradieren"} des {role_text.lower()}s.', 'error')
 
-def _handle_delete_target_user(target_user_id, target_user, logged_in_user_id):
+def _handle_delete_target_user(target_user_id, target_user):
     """
     Verarbeitet die Löschanfrage für einen Benutzer. Verhindert Selbstlöschung.
 
@@ -1592,6 +1592,7 @@ def _handle_delete_target_user(target_user_id, target_user, logged_in_user_id):
         bool: True, wenn der Benutzer gelöscht wurde und eine Weiterleitung zum Dashboard erfolgen soll, sonst False.
     """
 
+    logged_in_user_id = session.get('user_id')
     if target_user_id == logged_in_user_id:
         flash("Du kannst dich nicht selbst löschen.", "warning")
         return False # Keine Weiterleitung zum Dashboard
@@ -2182,7 +2183,7 @@ def generate_qr():
 
 @app.route('/admin', methods=['GET', 'POST'])
 @admin_required
-def admin_dashboard():
+def admin_dashboard(admin_user):
     """
     Zeigt das Admin-Dashboard mit einer Benutzerübersicht und deren Salden.
     Ermöglicht Admins zudem die Verwaltung von globalen Systemeinstellungen.
@@ -2226,7 +2227,7 @@ def admin_dashboard():
 
 @app.route('/admin/add_user', methods=['GET', 'POST'])
 @admin_required
-def add_user():
+def add_user(admin_user):
     """
     Verarbeitet das Hinzufügen eines neuen regulären Benutzers (Frontend-Benutzer).
 
@@ -2278,7 +2279,7 @@ def add_user():
 
 @app.route('/admin/api_users', methods=['GET', 'POST'])
 @admin_required
-def admin_api_user_manage():
+def admin_api_user_manage(admin_user):
     """
     Verwaltet API-Benutzer, zeigt eine Liste an und erlaubt das Hinzufügen neuer.
 
@@ -2312,7 +2313,7 @@ def admin_api_user_manage():
 
 @app.route('/admin/api_user/<int:api_user_id_route>')
 @admin_required
-def admin_api_user_detail(api_user_id_route):
+def admin_api_user_detail(admin_user, api_user_id_route):
     """
     Zeigt die Detailansicht für einen spezifischen API-Benutzer inklusive seiner API-Keys.
 
@@ -2498,7 +2499,7 @@ def admin_bulk_change(admin_user):
 
 @app.route('/admin/user/<int:target_user_id>/transactions', methods=['GET', 'POST'])
 @admin_required
-def admin_user_modification(target_user_id):
+def admin_user_modification(admin_user, target_user_id):
     """
     Zeigt die Transaktionen eines bestimmten Benutzers an und ermöglicht diverse Modifikationen.
 
@@ -2542,7 +2543,7 @@ def admin_user_modification(target_user_id):
 
         # Spezielle Behandlung für 'delete_user', da es die Weiterleitungs-URL ändern kann
         if 'delete_user' in form_data and not action_handled: # 'not action_handled' zur Sicherheit
-            if _handle_delete_target_user(target_user_id, target_user, logged_in_user_id):
+            if _handle_delete_target_user(target_user_id, target_user):
                 redirect_url = BASE_URL + url_for('admin_dashboard')
             action_handled = True
 
@@ -2566,7 +2567,7 @@ def admin_user_modification(target_user_id):
                            nfc_tokens=nfc_tokens,
                            transactions=transactions,
                            saldo=saldo,
-                           admin_user=current_admin_user,
+                           admin_user=admin_user,
                            version=app.config.get('version', 'unbekannt'))
 
 @app.route('/logout')
