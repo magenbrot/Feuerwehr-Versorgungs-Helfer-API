@@ -4,6 +4,7 @@ SET time_zone = "+00:00";
 CREATE TABLE api_keys (
   id int NOT NULL,
   user_id int NOT NULL,
+  api_key_name varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   api_key varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -87,8 +88,8 @@ ALTER TABLE benutzer_benachrichtigungseinstellungen
 
 ALTER TABLE nfc_token
   ADD PRIMARY KEY (token_id),
-  ADD UNIQUE KEY token_daten (token_daten) USING BTREE,
-  ADD KEY user_id (user_id) USING BTREE;
+  ADD UNIQUE KEY token_daten (token_daten),
+  ADD KEY user_id (user_id);
 
 ALTER TABLE password_reset_tokens
   ADD PRIMARY KEY (id),
@@ -104,8 +105,8 @@ ALTER TABLE transactions
 
 ALTER TABLE users
   ADD PRIMARY KEY (id),
-  ADD UNIQUE KEY code (code);
-
+  ADD UNIQUE KEY code (code),
+  ADD UNIQUE KEY unique_email (email);
 
 ALTER TABLE api_keys
   MODIFY id int NOT NULL AUTO_INCREMENT;
