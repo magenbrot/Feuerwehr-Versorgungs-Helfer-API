@@ -1101,7 +1101,7 @@ def add_regular_user_db(user_data):
             cnx.commit()
             return True
         except IntegrityError:
-            flash(f"Benutzercode '{user_data['code']}' existiert bereits oder ein anderes eindeutiges Feld ist doppelt.", 'error')
+            flash(f"Die Emailadresse '{user_data['email']}' existiert bereits oder ein anderes eindeutiges Feld ist doppelt.", 'error')
             cnx.rollback()
             return False
         except Error as err:
