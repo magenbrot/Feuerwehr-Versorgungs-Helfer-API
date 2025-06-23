@@ -24,6 +24,7 @@
         <div class="column left-column">
             <h3>Benutzerverwaltung</h3>
             <div class="admin-link">
+                <a href="{{ url_for('admin_bulk_change') }}">Sammelbuchung</a> |
                 <a href="{{ url_for('add_user') }}">Neuen regulären Benutzer hinzufügen</a> |
                 <a href="{{ url_for('admin_api_user_manage') }}">API-Benutzer verwalten</a>
             </div>

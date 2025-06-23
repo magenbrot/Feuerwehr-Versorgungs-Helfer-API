@@ -240,6 +240,7 @@ table.zebra-table tbody tr:hover {
 /* Styles für Formulare auf der Admin-Transaktionsseite */
 form {
     margin-top: 20px;
+    margin-bottom: 15px;
     padding: 15px;
     border: 1px solid #eee;
     border-radius: 5px;
@@ -301,6 +302,20 @@ form button.red-button {
 
 form button.red-button:hover {
     background-color: #c82333;
+}
+
+/* Eigene Regel für das zweispaltige Formular-Layout */
+.form-layout-full-width {
+    max-width: 650px;
+    margin-top: 15px;
+    margin-bottom: 15px;
+    padding: 10px;
+    border: 1px solid #eee;
+    border-radius: 5px;
+    background-color: #f9f9f9;
+    box-sizing: border-box;
+    display: flex;
+    justify-content: center;
 }
 
 /* Styles für Flash-Nachrichten */
@@ -493,9 +508,9 @@ a.styled-link:hover {
 }
 
 .left-column {
-    flex: 1; /* Passt sich an, kann aber durch min/max-width begrenzt werden */
-    min-width: 300px; /* Mindestbreite, bevor es umbricht oder scrollt (anpassen nach Bedarf) */
-    margin-right: 20px; /* Space between columns */
+    width: fit-content; /* NEU: Breite passt sich dem Inhalt an */
+    min-width: 200px;   /* Optional: Verkleinert, um flexibler zu sein */
+    margin-right: 20px;
 }
 
 .right-column {
