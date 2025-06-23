@@ -7,4 +7,4 @@ Kurze Info von uns:
 Dein Kontostand für Getränke und Essen ist aktuell bei {{ neuer_saldo }} €.
 
 Viele Grüße
-Dein Team von der Abteilung Getränke
+Dein Team von der Abteilung Versorgung
