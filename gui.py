@@ -2540,10 +2540,15 @@ def admin_bulk_change():
 
     # GET-Logik zum Anzeigen der Seite
     users_data = get_all_users()
+    today_str = datetime.now().strftime('%d.%m.%Y')
+    default_form_data = {
+        'beschreibung': f'Essem zum Dienst am {today_str}',
+        'saldo_aenderung': -3
+    }
+
     return render_template('web_admin_bulk_change.html',
-                           user=admin_user,
                            users=users_data,
-                           form_data=None)
+                           form_data=default_form_data)
 
 @app.route('/admin/user/<int:target_user_id>/transactions', methods=['GET', 'POST'])
 def admin_user_modification(target_user_id):
