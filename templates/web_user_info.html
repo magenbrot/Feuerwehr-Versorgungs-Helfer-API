@@ -93,6 +93,31 @@
             </div>
         </div>
         <div class="column right-column">
+            {% if user.email %}
+            <div class="form-section" style="margin-top: 20px;">
+                <h4>E-Mail-Benachrichtigungen verwalten:</h4>
+                <form method="POST" name="update_notification_settings">
+                    <label for="update_notification_settings">Wir schicken dir eine E-Mail</label>
+                    <input type="hidden" name="update_notification_settings" value="true">
+                    {% if all_notification_types %}
+                        {% for n_type in all_notification_types %}
+                        <div class="checkbox-group" style="margin-bottom: 10px;">
+                            <label for="notification_type_{{ n_type.id }}">
+                                <input type="checkbox" id="notification_type_{{ n_type.id }}" name="notification_type_{{ n_type.id }}" value="{{ n_type.id }}"
+                                {% if user_notification_settings.get(n_type.id) %}checked{% endif %}>
+                                {{ n_type.beschreibung }}
+                            </label>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <p>Keine Benachrichtigungsoptionen verfügbar.</p>
+                    {% endif %}
+                    {% if all_notification_types %}
+                    <button type="submit" style="margin-top: 10px;">Benachrichtigungen speichern</button>
+                    {% endif %}
+                </form>
+            </div>
+            {% endif %}
             <div class="form-section">
                 <h4>Passwort ändern:</h4>
                 <form method="POST" name="change_password" class="password-form"> <input type="hidden" name="change_password" value="true">
@@ -122,31 +147,6 @@
                     <button type="submit">Emailadresse ändern</button>
                 </form>
             </div>
-            {% if user.email %}
-            <div class="form-section" style="margin-top: 20px;">
-                <h4>E-Mail-Benachrichtigungen verwalten:</h4>
-                <form method="POST" name="update_notification_settings">
-                    <label for="update_notification_settings">Wir schicken dir eine E-Mail</label>
-                    <input type="hidden" name="update_notification_settings" value="true">
-                    {% if all_notification_types %}
-                        {% for n_type in all_notification_types %}
-                        <div class="checkbox-group" style="margin-bottom: 10px;">
-                            <label for="notification_type_{{ n_type.id }}">
-                                <input type="checkbox" id="notification_type_{{ n_type.id }}" name="notification_type_{{ n_type.id }}" value="{{ n_type.id }}"
-                                {% if user_notification_settings.get(n_type.id) %}checked{% endif %}>
-                                {{ n_type.beschreibung }}
-                            </label>
-                        </div>
-                        {% endfor %}
-                    {% else %}
-                        <p>Keine Benachrichtigungsoptionen verfügbar.</p>
-                    {% endif %}
-                    {% if all_notification_types %}
-                    <button type="submit" style="margin-top: 10px;">Benachrichtigungen speichern</button>
-                    {% endif %}
-                </form>
-            </div>
-            {% endif %}
             {% include 'web_include_info_block.html' %}
         </div>
     </div>
