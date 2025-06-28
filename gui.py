@@ -2217,11 +2217,13 @@ def admin_dashboard(admin_user):
     users_data = get_all_users()
     saldo_by_user_data = get_saldo_by_user()
     system_settings_data = get_all_system_settings()
+    user_saldo_all = sum(saldo_by_user_data.values())
 
     return render_template('web_admin_dashboard.html',
                            user=admin_user,
                            users=users_data,
                            saldo_by_user=saldo_by_user_data,
+                           user_saldo_all=user_saldo_all,
                            system_settings=system_settings_data,
                            version=app.config.get('version', 'unbekannt'))
 
