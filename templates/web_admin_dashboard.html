@@ -58,7 +58,7 @@
                     {% endfor %}
                 </tbody>
             </table>
-            <p>Es sind {{ users|length }} Benutzer vorhanden.</p>
+            <p>Es sind {{ users | length }} Benutzer vorhanden. Diese verfügen insgesamt über ein Guthaben von {{ user_saldo_all }} €.</p>
             {% else %}
             <p>Keine Benutzer vorhanden.</p>
             {% endif %}
