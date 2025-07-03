@@ -470,7 +470,6 @@ def api_key_required(f):
 def finde_benutzer_zu_nfc_token(token_base64: str) -> Optional[dict]:
     """
     Findet einen Benutzer in der Datenbank anhand der Base64-kodierten Daten eines NFC-Tokens.
-    Beinhaltet jetzt auch die E-Mail-Adresse des Benutzers.
 
     Args:
         token_base64 (str): Die Base64-kodierte NFC-Daten des Tokens.
@@ -638,11 +637,11 @@ def nfc_transaction(api_user_id_auth: int, api_username_auth: str):
     Returns: flask.Response
     """
 
-    logger.info("NFC-Transaktion Anfrage von API-Benutzer: ID %s - %s.", api_user_id_auth, api_username_auth)
     daten = request.get_json()
     if not daten or 'token' not in daten or 'beschreibung' not in daten:
         return jsonify({'error': 'Ungültige Anfrage. Token und Beschreibung sind erforderlich.'}), 400
 
+    logger.info("NFC-Transaktion Anfrage zu Token '%s' von API-Benutzer: ID %s - %s.", daten['token'], api_user_id_auth, api_username_auth)
     benutzer_info = finde_benutzer_zu_nfc_token(daten['token'])
     if not benutzer_info:
         return jsonify({'error': f"Kein Benutzer mit dem Token {daten['token']} gefunden."}), 404
