@@ -2343,7 +2343,7 @@ def admin_api_user_detail(admin_user, api_user_id_route):
 
 @app.route('/admin/api_user/<int:api_user_id_route>/generate_key', methods=['POST'])
 @admin_required
-def admin_generate_api_key_for_user(api_user_id_route):
+def admin_generate_api_key_for_user(admin_user, api_user_id_route):
     """
     Generiert einen neuen API-Key für einen spezifischen API-Benutzer.
 
@@ -2382,7 +2382,7 @@ def admin_generate_api_key_for_user(api_user_id_route):
 
 @app.route('/admin/api_key/<int:api_key_id_route>/delete', methods=['POST'])
 @admin_required
-def admin_delete_api_key(api_key_id_route):
+def admin_delete_api_key(admin_user, api_key_id_route):
     """
     Löscht einen spezifischen API-Key.
 
@@ -2423,7 +2423,7 @@ def admin_delete_api_key(api_key_id_route):
 
 @app.route('/admin/api_user/<int:api_user_id_route>/delete', methods=['POST'])
 @admin_required
-def admin_delete_api_user(api_user_id_route):
+def admin_delete_api_user(admin_user, api_user_id_route):
     """
     Löscht einen API-Benutzer und alle zugehörigen API-Keys.
 
