@@ -107,11 +107,11 @@
                 </form>
             </div>
             <div class="form-section">
-                <h4>Infolimit:</h4>
-                Infomail an Verantwortliche wenn dieses Limit erreicht wurde.
+                <h4>Infomail-Schwelle:</h4>
+                Infomail an die Verantwortlichen senden, wenn diese Schwelle erreicht wurde.
                 <form method="POST" class="inline-form-transaction">
-                    <input type="number2column" id="info_limit" name="info_limit" title="Ab diesem Saldo werden die Verantwortlichen informiert." value="{{ user.info_limit if user.info_limit else 0 }}">
-                    <button type="submit" name="update_info_limit">Speichern</button>
+                    <input type="number2column" id="infomail_threshold" name="infomail_threshold" title="Ab diesem Saldo werden die Verantwortlichen informiert." value="{{ user.infomail_threshold if user.infomail_threshold else 0 }}">
+                    <button type="submit" name="update_infomail_threshold">Speichern</button>
                 </form>
             </div>
             <div class="form-section">
