@@ -15,6 +15,8 @@ import string
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 import qrcode
+import qrcode.constants
+from qrcode.image.pil import PilImage
 from PIL import Image, ImageDraw, ImageFont
 from flask import Flask, render_template, request, redirect, url_for, session, flash, send_file # pigar: required-packages=uWSGI
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -40,8 +42,8 @@ else:
 app.debug = config.gui_config['flask_debug_mode']
 
 app.config['SECRET_KEY'] = os.urandom(24)
-app.json.ensure_ascii = False
-app.json.mimetype = "application/json; charset=utf-8"
+app.config['DEBUG'] = config.api_config['flask_debug_mode']
+app.config['JSON_AS_ASCII'] = False
 
 if "BASE_URL" in os.environ:
     BASE_URL = os.environ.get('BASE_URL', '/')
@@ -129,7 +131,7 @@ def erzeuge_qr_code(daten, text):
     qr.add_data(daten)
     qr.make(fit=True)
 
-    img = qr.make_image(fill_color="black", back_color="white").convert("RGBA")
+    img = qr.make_image(image_factory=PilImage, fill_color="black", back_color="white").convert("RGBA")
 
     qr_breite, qr_hoehe = img.size
     text_farbe = "black"
@@ -153,20 +155,13 @@ def erzeuge_qr_code(daten, text):
 
     zeichne_temp = ImageDraw.Draw(Image.new("RGB", (1,1)))
 
-    if hasattr(zeichne_temp, "textbbox"): # Pillow 10.0.0+
-        # textbbox((0,0)...) gibt (x1, y1, x2, y2) relativ zum Ankerpunkt (0,0)
-        # Standardanker für textbbox ist 'la' (left-ascent), d.h. (0,0) ist links auf der Grundlinie.
-        # text_box[1] ist der y-Wert des höchsten Pixels (negativ für Aufstrich).
-        # text_box[3] ist der y-Wert des tiefsten Pixels (positiv für Abstriche).
-        text_box = zeichne_temp.textbbox((0, 0), text, font=schriftart)
-        text_breite_val = text_box[2] - text_box[0]
-        text_hoehe_val = text_box[3] - text_box[1] # Gesamthöhe des Textes
-    elif hasattr(zeichne_temp, "textsize"): # Ältere Pillow Versionen
-        text_breite_val, text_hoehe_val = zeichne_temp.textsize(text, font=schriftart)
-    else: # Fallback
-        text_breite_val = len(text) * (schriftgroesse // 2)
-        text_hoehe_val = schriftgroesse
-        logger.error("Konnte Textgröße nicht exakt bestimmen, verwende Schätzung.")
+    # textbbox((0,0)...) gibt (x1, y1, x2, y2) relativ zum Ankerpunkt (0,0)
+    # Standardanker für textbbox ist 'la' (left-ascent), d.h. (0,0) ist links auf der Grundlinie.
+    # text_box[1] ist der y-Wert des höchsten Pixels (negativ für Aufstrich).
+    # text_box[3] ist der y-Wert des tiefsten Pixels (positiv für Abstriche).
+    text_box = zeichne_temp.textbbox((0, 0), text, font=schriftart)
+    text_breite_val = text_box[2] - text_box[0]
+    text_hoehe_val = text_box[3] - text_box[1] # Gesamthöhe des Textes
 
     tatsaechliche_gesamthoehe_textbereich = max(text_abstand_unten, text_hoehe_val)
 
@@ -1258,6 +1253,12 @@ def prepare_and_send_email(email_params: dict, smtp_cfg: dict) -> bool:
         logger.error("Unvollständige E-Mail-Parameter. Benötigt: empfaenger_email, betreff, template_name_html, template_name_text.")
         return False
 
+    # Helfe Pylance mit Assertions, um den Typ zu verstehen
+    assert empfaenger_email is not None
+    assert betreff is not None
+    assert template_name_html is not None
+    assert template_name_text is not None
+
     logo_exists = False
     if logo_dateipfad_str:
         logo_path_obj = Path(logo_dateipfad_str)
@@ -1291,7 +1292,7 @@ def prepare_and_send_email(email_params: dict, smtp_cfg: dict) -> bool:
         smtp_cfg=smtp_cfg
     )
 
-def _send_user_register_email(vorname: str, email: str, code: int, logo_pfad: str):
+def _send_user_register_email(vorname: str, email: str, code: str, logo_pfad: str):
     """Sendet eine Willkommens-E-Mail mit Verifizierungscode an neue Benutzer.
 
     Baut die E-Mail zusammen und ruft `prepare_and_send_email` für den
@@ -1541,7 +1542,7 @@ def _handle_add_user_transaction(form_data, target_user):
                 if target_user['email'] and get_user_notification_preference(target_user['id'], 'NEUE_TRANSAKTION'):
                     new_saldo=get_saldo_for_user(target_user['id'])
                     logo_pfad_str = str(Path("static/logo/logo-80x109.png"))
-                    _send_manual_transaction_email(target_user, beschreibung, saldo_aenderung_str, new_saldo, logo_pfad_str)
+                    _send_manual_transaction_email(target_user, beschreibung, saldo_aenderung_str, str(new_saldo), logo_pfad_str)
                 flash('Transaktion erfolgreich hinzugefügt.', 'success')
         except ValueError:
             flash('Ungültiger Wert für Saldoänderung. Es muss eine Zahl sein.', 'error')
@@ -1936,8 +1937,8 @@ def register():
                 generated_code = "" # Fallback
             user_details = {
                 'code': generated_code,
-                'nachname': form_data.get('nachname').strip(),
-                'vorname': form_data.get('vorname').strip(),
+                'nachname': form_data.get('nachname', '').strip(),
+                'vorname': form_data.get('vorname', '').strip(),
                 'password': form_data.get('password'),
                 'email': form_data.get('email', '').strip(), # Optional
                 'kommentar': form_data.get('kommentar', '').strip(), # Optional
