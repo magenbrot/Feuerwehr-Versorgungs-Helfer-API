@@ -101,11 +101,17 @@
                 <form method="POST" class="inline-form-transaction">
                     <label for="beschreibung">Beschreibung:</label>
                     <input type="text2column" id="beschreibung" name="beschreibung" value="Guthaben eingezahlt" required>
-
                     <label for="saldo_aenderung">Änderung:</label>
                     <input type="number2column" id="saldo_aenderung" name="saldo_aenderung" value="0" required>
-
                     <button type="submit" name="add_transaction">Hinzufügen</button>
+                </form>
+            </div>
+            <div class="form-section">
+                <h4>Infolimit:</h4>
+                Infomail an Verantwortliche wenn dieses Limit erreicht wurde.
+                <form method="POST" class="inline-form-transaction">
+                    <input type="number2column" id="info_limit" name="info_limit" title="Ab diesem Saldo werden die Verantwortlichen informiert." value="{{ user.info_limit if user.info_limit else 0 }}">
+                    <button type="submit" name="update_info_limit">Speichern</button>
                 </form>
             </div>
             <div class="form-section">
@@ -120,14 +126,14 @@
             </div>
             <div class="form-section">
                 <h4>Kommentar aktualisieren:</h4>
-                <form method="POST" class="inline-form-transaction"> <label for="kommentar">Kommentar:</label>
+                <form method="POST" class="inline-form-transaction">
                     <input type="text" id="kommentar" name="kommentar" title="Bitte gib einen Kommentar ein." value="{{ user.kommentar if user.kommentar }}">
                     <button type="submit" name="update_user_comment">Speichern</button>
                 </form>
             </div>
             <div class="form-section">
                 <h4>Emailadresse aktualisieren:</h4>
-                <form method="POST" class="inline-form-transaction"> <label for="email">Emailadresse:</label>
+                <form method="POST" class="inline-form-transaction">
                     <input type="email" id="email" name="email" title="Bitte gib die Emailadresse ein." value="{{ user.email if user.email }}">
                     <button type="submit" name="update_user_email">Speichern</button>
                 </form>
