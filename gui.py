@@ -1705,7 +1705,6 @@ def _validate_register_form(form_data):
 
     return not errors
 
-
 def _process_system_setting_update(key, new_value_str):
     """
     Verarbeitet die Aktualisierung einer einzelnen Systemeinstellung.
