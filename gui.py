@@ -1593,7 +1593,7 @@ def _handle_add_user_transaction(form_data, target_user):
                     new_saldo=get_saldo_for_user(target_user['id'])
                     logo_pfad_str = str(Path("static/logo/logo-80x109.png"))
                     _send_manual_transaction_email(target_user, beschreibung, saldo_aenderung_str, str(new_saldo), logo_pfad_str)
-                    _send_responsible_benachrichtigung(target_user, new_saldo, logo_pfad_str) # TODO
+                    _send_responsible_benachrichtigung(target_user, new_saldo, logo_pfad_str)
                 flash('Transaktion erfolgreich hinzugefügt.', 'success')
         except ValueError:
             flash('Ungültiger Wert für Saldoänderung. Es muss eine Zahl sein.', 'error')
