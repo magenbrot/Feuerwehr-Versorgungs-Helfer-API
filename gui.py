@@ -695,12 +695,12 @@ def update_user_email(user_id, email):
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return False
 
-def fetch_user(code):
+def fetch_user(code_email):
     """
-    Ruft einen Benutzer aus der Datenbank anhand seines Codes ab.
+    Ruft einen Benutzer aus der Datenbank anhand seines Codes oder seiner Emailadresse ab.
 
     Args:
-        code (str): Der eindeutige Code des Benutzers.
+        code (str): Der eindeutige Code des Benutzers oder seine Emailadresse
 
     Returns:
         dict: Ein Dictionary mit den Benutzerdaten (id, code, nachname, vorname, password, is_admin, is_locked)
@@ -711,8 +711,8 @@ def fetch_user(code):
     if cnx:
         cursor = cnx.cursor(dictionary=True)
         try:
-            query = "SELECT id, code, nachname, vorname, password, is_admin, is_locked FROM users WHERE code = %s"
-            cursor.execute(query, (code,))
+            query = "SELECT id, code, nachname, vorname, password, is_admin, is_locked FROM users WHERE code = %s OR email = %s"
+            cursor.execute(query, (code_email, code_email,))
             user = cursor.fetchone()
             return user
         except Error as err:
@@ -1880,9 +1880,9 @@ def login():
         return redirect(BASE_URL + url_for('user_info'))
 
     if request.method == 'POST':
-        code = request.form['code']
+        code_email = request.form['code_email']
         password = request.form['password']
-        user = fetch_user(code)
+        user = fetch_user(code_email)
         if user and not user['is_locked'] and check_password_hash(user['password'], password):
             session['user_id'] = user['id']
             session.permanent = True
