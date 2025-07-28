@@ -3,6 +3,7 @@
 import sys
 import logging
 import base64
+import binascii
 import datetime
 import json
 from functools import wraps
@@ -24,9 +25,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-app.debug = config.api_config['flask_debug_mode']
-app.json.ensure_ascii = False
-app.json.mimetype = "application/json; charset=utf-8"
+app.config['DEBUG'] = config.api_config['flask_debug_mode']
+app.config['JSON_AS_ASCII'] = False
 
 # Konfigurationsprüfungen
 required_db_keys = ['host', 'port', 'user', 'password', 'database']
@@ -46,7 +46,7 @@ if not all(key in config.smtp_config and config.smtp_config[key] is not None for
     sys.exit(1)
 
 try:
-    config.smtp_config['port'] = int(config.smtp_config['port'])
+    config.smtp_config['port'] = config.smtp_config['port']
 except ValueError:
     logger.critical("Fehler: SMTP_PORT '%s' ist keine gültige Zahl.", config.smtp_config.get('port'))
     sys.exit(1)
@@ -96,6 +96,12 @@ def prepare_and_send_email(email_params: dict, smtp_cfg: dict) -> bool:
     if not all([empfaenger_email, betreff, template_name_html, template_name_text]):
         logger.error("Unvollständige E-Mail-Parameter. Benötigt: empfaenger_email, betreff, template_name_html, template_name_text.")
         return False
+
+    # Helfe Pylance mit Assertions, um den Typ zu verstehen
+    assert betreff is not None
+    assert empfaenger_email is not None
+    assert template_name_html is not None
+    assert template_name_text is not None
 
     logo_exists = False
     if logo_dateipfad_str:
@@ -322,6 +328,7 @@ def _aktuellen_saldo_pruefen(target_user_id: int) -> Union[Literal[True], Tuple[
         False: Im Falle eines Datenbank- oder Konfigurationsfehlers.
     """
 
+    max_negativ_saldo_str = ""
     try:
         max_negativ_saldo_str = get_system_setting('MAX_NEGATIVSALDO')
         if not max_negativ_saldo_str:
@@ -487,7 +494,7 @@ def finde_benutzer_zu_nfc_token(token_base64: str) -> Optional[dict]:
         with cnx.cursor(dictionary=True) as cursor:
             try:
                 token_bytes = base64.b64decode(token_base64)
-            except base64.binascii.Error:
+            except binascii.Error:
                 logger.error("Ungültiger Base64-String in finde_benutzer_zu_nfc_token: %s", token_base64)
                 return None
 
@@ -638,8 +645,9 @@ def nfc_transaction(api_user_id_auth: int, api_username_auth: str):
     Returns: flask.Response
     """
 
-    logger.info("NFC-Transaktion Anfrage von API-Benutzer: ID %s - %s.", api_user_id_auth, api_username_auth)
+    #logger.info("NFC-Transaktion Anfrage von API-Benutzer: ID %s - %s.", api_user_id_auth, api_username_auth)
     daten = request.get_json()
+    logger.info("NFC-Transaktion Anfrage zu Token '%s' von API-Benutzer: ID %s - %s.", daten['token'], api_user_id_auth, api_username_auth)
     if not daten or 'token' not in daten or 'beschreibung' not in daten:
         return jsonify({'error': 'Ungültige Anfrage. Token und Beschreibung sind erforderlich.'}), 400
 
