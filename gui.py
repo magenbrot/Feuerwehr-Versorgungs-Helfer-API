@@ -666,6 +666,35 @@ def update_user_comment(user_id, comment):
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return False
 
+def update_user_infomail_threshold(user_id, infomail_threshold):
+    """
+    Ändert die Infomail-Schwelle eines Benutzer anhand seiner ID.
+
+    Args:
+        user_id (int): Die ID des Benutzers.
+        infomail_threshold (str): Die Infomail-Schwelle für diesen Benutzer.
+
+    Returns:
+        bool: True bei Erfolg, False bei Fehler.
+    """
+
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
+    if cnx:
+        cursor = cnx.cursor()
+        try:
+            query = "UPDATE users SET infomail_threshold = %s WHERE id = %s"
+            cursor.execute(query, (infomail_threshold, user_id))
+            cnx.commit()
+            return True
+        except Error as err:
+            logger.error("Fehler beim Ändern der Infomail-Schwelle für den Benutzers: %s", err)
+            cnx.rollback()
+            return False
+        finally:
+            cursor.close()
+            db_utils.DatabaseConnectionPool.close_connection(cnx)
+    return False
+
 def update_user_email(user_id, email):
     """
     Ändert die Emailadresse eines Benutzer anhand seiner ID.
@@ -695,7 +724,7 @@ def update_user_email(user_id, email):
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return False
 
-def fetch_user(code_email):
+def fetch_user(code_or_email):
     """
     Ruft einen Benutzer aus der Datenbank anhand seines Codes oder seiner Emailadresse ab.
 
@@ -703,7 +732,7 @@ def fetch_user(code_email):
         code (str): Der eindeutige Code des Benutzers oder seine Emailadresse
 
     Returns:
-        dict: Ein Dictionary mit den Benutzerdaten (id, code, nachname, vorname, password, is_admin, is_locked)
+        dict: Ein Dictionary mit den Benutzerdaten (id, code, nachname, vorname, password, infomail_threshold, is_admin, is_locked)
               oder None, falls kein Benutzer gefunden wird.
     """
 
@@ -711,8 +740,8 @@ def fetch_user(code_email):
     if cnx:
         cursor = cnx.cursor(dictionary=True)
         try:
-            query = "SELECT id, code, nachname, vorname, password, is_admin, is_locked FROM users WHERE code = %s OR email = %s"
-            cursor.execute(query, (code_email, code_email,))
+            query = "SELECT id, code, nachname, vorname, password, infomail_threshold, is_admin, is_locked FROM users WHERE code = %s OR email = %s"
+            cursor.execute(query, (code_or_email, code_or_email,))
             user = cursor.fetchone()
             return user
         except Error as err:
@@ -732,7 +761,7 @@ def get_user_by_id(user_id):
         user_id (int): Die ID des Benutzers.
 
     Returns:
-        dict: Ein Dictionary mit den Benutzerdaten (id, code, nachname, vorname, email, kommentar, is_locked, is_admin, password)
+        dict: Ein Dictionary mit den Benutzerdaten (id, code, nachname, vorname, email, kommentar, infomail_threshold, is_locked, is_admin, password)
               oder None, falls kein Benutzer gefunden wird.
     """
 
@@ -741,7 +770,7 @@ def get_user_by_id(user_id):
         cursor = cnx.cursor(dictionary=True)
         try:
             query = """
-                SELECT id, code, nachname, vorname, email, kommentar, is_locked, is_admin, password
+                SELECT id, code, nachname, vorname, email, kommentar, infomail_threshold, is_locked, is_admin, password
                 FROM users
                 WHERE id = %s
             """
@@ -1379,6 +1408,27 @@ def _send_manual_transaction_email(target_user: dict, beschreibung: str, saldo_a
     else:
         logger.error("Fehler beim Senden der Manuelle Transaktion Benachrichtigung an %s.", target_user['email'])
 
+def _send_responsible_benachrichtigung(target_user: dict, aktueller_saldo: int, logo_pfad: str):
+    """Hilfsfunktion zur Information der Verantwortlichen wenn ein Benutzer das Limit unterschreitet."""
+
+    # Breche ab, wenn der aktuelle Saldo gleich dem gesetzten Limit ist und gleichzeitig größer als das Limit -5
+    if not (target_user['infomail_threshold'] - 5) < aktueller_saldo <= target_user['infomail_threshold']:
+        return
+
+    # Alle Prüfungen bestanden, E-Mail senden
+    email_params = {
+        'empfaenger_email': config.api_config['responsible_email'],
+        'betreff': f"{target_user['vorname']} {target_user['nachname']} hat das Saldo-Info-Limit erreicht",
+        'template_name_html': "email_notify_responsible_on_saldo_reached.html",
+        'template_name_text': "email_notify_responsible_on_saldo_reached.txt",
+        'template_context': {"vorname": target_user['vorname'], "nachname": target_user['nachname'], "infomail_threshold": target_user['infomail_threshold'], 'app_name': config.app_name},
+        'logo_dateipfad': logo_pfad
+    }
+    if prepare_and_send_email(email_params, config.smtp_config):
+        logger.info("Info über Saldo-Schwelle-erreicht (ID: %s) an Verantwortliche gesendet.", target_user['id'])
+    else:
+        logger.error("Fehler beim Senden der Saldo-Schwelle-erreicht-Info an ID: %s.", target_user['id'])
+
 def add_api_user_db(username):
     """
     Fügt einen neuen API-Benutzer der Datenbank hinzu.
@@ -1543,6 +1593,7 @@ def _handle_add_user_transaction(form_data, target_user):
                     new_saldo=get_saldo_for_user(target_user['id'])
                     logo_pfad_str = str(Path("static/logo/logo-80x109.png"))
                     _send_manual_transaction_email(target_user, beschreibung, saldo_aenderung_str, str(new_saldo), logo_pfad_str)
+                    _send_responsible_benachrichtigung(target_user, new_saldo, logo_pfad_str)
                 flash('Transaktion erfolgreich hinzugefügt.', 'success')
         except ValueError:
             flash('Ungültiger Wert für Saldoänderung. Es muss eine Zahl sein.', 'error')
@@ -1618,6 +1669,21 @@ def _handle_update_user_comment_admin(form_data, target_user_id):
         flash('Kommentar erfolgreich aktualisiert.', 'success')
     else:
         flash('Fehler beim Aktualisieren des Kommentars.', 'error') # Fallback, falls DB-Funktion nicht flasht
+
+def _handle_update_infomail_threshold_admin(form_data, target_user_id):
+    """
+    Verarbeitet die Aktualisierung der Infomail-Schwelle eines Benutzers durch einen Admin.
+
+    Args:
+        form_data (werkzeug.datastructures.ImmutableMultiDict): Die Formulardaten.
+        target_user_id (int): Die ID des Benutzers, dessen Infomail-Schwelle aktualisiert wird.
+    """
+
+    infomail_threshold = form_data.get('infomail_threshold')
+    if update_user_infomail_threshold(target_user_id, infomail_threshold if infomail_threshold is not None else ""):
+        flash('Infomail-Schwelle erfolgreich aktualisiert.', 'success')
+    else:
+        flash('Fehler beim Aktualisieren der Infomail-Schwelle.', 'error') # Fallback, falls DB-Funktion nicht flasht
 
 def _handle_update_user_email_admin(form_data, target_user_id):
     """
@@ -2533,6 +2599,7 @@ def admin_user_modification(admin_user, target_user_id):
             'demote_user': lambda: _handle_toggle_user_admin_state(target_user_id, target_user, False),
             'add_user_nfc_token': lambda: _handle_add_user_nfc_token_admin(form_data, target_user_id),
             'update_user_comment': lambda: _handle_update_user_comment_admin(form_data, target_user_id),
+            'update_infomail_threshold': lambda: _handle_update_infomail_threshold_admin(form_data, target_user_id),
             'update_user_email': lambda: _handle_update_user_email_admin(form_data, target_user_id),
             'delete_user_nfc_token': lambda: _handle_delete_user_nfc_token_admin(form_data, target_user_id),
         }

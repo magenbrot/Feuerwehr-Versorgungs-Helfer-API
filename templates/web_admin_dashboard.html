@@ -75,8 +75,6 @@
                             <label for="{{ key }}">{{ setting_data.beschreibung or key.replace('_', ' ')|title }}:</label>
                             {% if key == 'MAX_NEGATIVSALDO' %}
                             <input type="number" id="{{ key }}" name="{{ key }}" value="{{ setting_data.wert }}" required class="form-control" style="width: 100px; padding: 8px; margin-top: 5px;">
-                            {% elif key == 'NOTIFY_RESPONSIBLE_ON_SALDO_REACHED' %}
-                            <input type="number" id="{{ key }}" name="{{ key }}" value="{{ setting_data.wert }}" required class="form-control" style="width: 100px; padding: 8px; margin-top: 5px;">
                             {% elif key == 'TRANSACTION_SALDO_CHANGE' %}
                             <input type="number" id="{{ key }}" name="{{ key }}" value="{{ setting_data.wert }}" required class="form-control" style="width: 100px; padding: 8px; margin-top: 5px;">
                             {% else %}
