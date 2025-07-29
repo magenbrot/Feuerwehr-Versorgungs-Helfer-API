@@ -117,6 +117,14 @@
                     {% endif %}
                 </form>
             </div>
+            <div class="form-section">
+                <h4>Infomail-Guthaben:</h4>
+                Schick mir eine Email wenn mein Guthaben unter diesen Betrag fällt.
+                <form method="POST" class="inline-form-transaction">
+                    <input type="number" id="infomail_user_threshold" name="infomail_user_threshold" title="Ab diesem Saldo bekommst du eine Email." value="{{ user.infomail_user_threshold if user.infomail_user_threshold else 0 }}" required class="form-control" style="width: 100px; padding: 8px; margin-top: 5px;">
+                    <button type="submit" name="update_infomail_user_threshold">Speichern</button>
+                </form>
+            </div>
             {% endif %}
             <div class="form-section">
                 <h4>Passwort ändern:</h4>

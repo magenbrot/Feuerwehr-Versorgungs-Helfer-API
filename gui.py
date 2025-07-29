@@ -666,13 +666,13 @@ def update_user_comment(user_id, comment):
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return False
 
-def update_user_infomail_threshold(user_id, infomail_threshold):
+def update_user_infomail_responsible_threshold(user_id, infomail_responsible_threshold):
     """
-    Ändert die Infomail-Schwelle eines Benutzer anhand seiner ID.
+    Ändert die Infomail-Verantwortlichen-Schwelle eines Benutzer anhand seiner ID.
 
     Args:
         user_id (int): Die ID des Benutzers.
-        infomail_threshold (str): Die Infomail-Schwelle für diesen Benutzer.
+        infomail_responsible_threshold (str): Die Infomail-Schwelle für diesen Benutzer.
 
     Returns:
         bool: True bei Erfolg, False bei Fehler.
@@ -682,12 +682,41 @@ def update_user_infomail_threshold(user_id, infomail_threshold):
     if cnx:
         cursor = cnx.cursor()
         try:
-            query = "UPDATE users SET infomail_threshold = %s WHERE id = %s"
-            cursor.execute(query, (infomail_threshold, user_id))
+            query = "UPDATE users SET infomail_responsible_threshold = %s WHERE id = %s"
+            cursor.execute(query, (infomail_responsible_threshold, user_id))
             cnx.commit()
             return True
         except Error as err:
-            logger.error("Fehler beim Ändern der Infomail-Schwelle für den Benutzers: %s", err)
+            logger.error("Fehler beim Ändern der Infomail-Verantwortlichen-Schwelle für den Benutzers: %s", err)
+            cnx.rollback()
+            return False
+        finally:
+            cursor.close()
+            db_utils.DatabaseConnectionPool.close_connection(cnx)
+    return False
+
+def update_user_infomail_user_threshold(user_id, infomail_user_threshold):
+    """
+    Ändert die Infomail-User-Schwelle eines Benutzer anhand seiner ID.
+
+    Args:
+        user_id (int): Die ID des Benutzers.
+        infomail_user_threshold (str): Die Infomail-Schwelle für diesen Benutzer.
+
+    Returns:
+        bool: True bei Erfolg, False bei Fehler.
+    """
+
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
+    if cnx:
+        cursor = cnx.cursor()
+        try:
+            query = "UPDATE users SET infomail_user_threshold = %s WHERE id = %s"
+            cursor.execute(query, (infomail_user_threshold, user_id))
+            cnx.commit()
+            return True
+        except Error as err:
+            logger.error("Fehler beim Ändern der Infomail-User-Schwelle für den Benutzers: %s", err)
             cnx.rollback()
             return False
         finally:
@@ -732,7 +761,7 @@ def fetch_user(code_or_email):
         code (str): Der eindeutige Code des Benutzers oder seine Emailadresse
 
     Returns:
-        dict: Ein Dictionary mit den Benutzerdaten (id, code, nachname, vorname, password, infomail_threshold, is_admin, is_locked)
+        dict: Ein Dictionary mit den Benutzerdaten (id, code, nachname, vorname, password, infomail_user_threshold, infomail_responsible_threshold, is_admin, is_locked)
               oder None, falls kein Benutzer gefunden wird.
     """
 
@@ -740,7 +769,7 @@ def fetch_user(code_or_email):
     if cnx:
         cursor = cnx.cursor(dictionary=True)
         try:
-            query = "SELECT id, code, nachname, vorname, password, infomail_threshold, is_admin, is_locked FROM users WHERE code = %s OR email = %s"
+            query = "SELECT id, code, nachname, vorname, password, infomail_user_threshold, infomail_responsible_threshold, is_admin, is_locked FROM users WHERE code = %s OR email = %s"
             cursor.execute(query, (code_or_email, code_or_email,))
             user = cursor.fetchone()
             return user
@@ -761,7 +790,7 @@ def get_user_by_id(user_id):
         user_id (int): Die ID des Benutzers.
 
     Returns:
-        dict: Ein Dictionary mit den Benutzerdaten (id, code, nachname, vorname, email, kommentar, infomail_threshold, is_locked, is_admin, password)
+        dict: Ein Dictionary mit den Benutzerdaten (id, code, nachname, vorname, email, kommentar, infomail_user_threshold, infomail_responsible_threshold, is_locked, is_admin, password)
               oder None, falls kein Benutzer gefunden wird.
     """
 
@@ -770,7 +799,7 @@ def get_user_by_id(user_id):
         cursor = cnx.cursor(dictionary=True)
         try:
             query = """
-                SELECT id, code, nachname, vorname, email, kommentar, infomail_threshold, is_locked, is_admin, password
+                SELECT id, code, nachname, vorname, email, kommentar, infomail_user_threshold, infomail_responsible_threshold, is_locked, is_admin, password
                 FROM users
                 WHERE id = %s
             """
@@ -1412,16 +1441,16 @@ def _send_responsible_benachrichtigung(target_user: dict, aktueller_saldo: int, 
     """Hilfsfunktion zur Information der Verantwortlichen wenn ein Benutzer das Limit unterschreitet."""
 
     # Breche ab, wenn der aktuelle Saldo gleich dem gesetzten Limit ist und gleichzeitig größer als das Limit -5
-    if not (target_user['infomail_threshold'] - 5) < aktueller_saldo <= target_user['infomail_threshold']:
+    if not (target_user['infomail_responsible_threshold'] - 5) < aktueller_saldo <= target_user['infomail_responsible_threshold']:
         return
 
     # Alle Prüfungen bestanden, E-Mail senden
     email_params = {
         'empfaenger_email': config.api_config['responsible_email'],
         'betreff': f"{target_user['vorname']} {target_user['nachname']} hat das Saldo-Info-Limit erreicht",
-        'template_name_html': "email_notify_responsible_on_saldo_reached.html",
-        'template_name_text': "email_notify_responsible_on_saldo_reached.txt",
-        'template_context': {"vorname": target_user['vorname'], "nachname": target_user['nachname'], "infomail_threshold": target_user['infomail_threshold'], 'app_name': config.app_name},
+        'template_name_html': "email_info_responsible_threshold.html",
+        'template_name_text': "email_info_responsible_threshold.txt",
+        'template_context': {"vorname": target_user['vorname'], "nachname": target_user['nachname'], "infomail_responsible_threshold": target_user['infomail_responsible_threshold'], 'app_name': config.app_name},
         'logo_dateipfad': logo_pfad
     }
     if prepare_and_send_email(email_params, config.smtp_config):
@@ -1670,7 +1699,7 @@ def _handle_update_user_comment_admin(form_data, target_user_id):
     else:
         flash('Fehler beim Aktualisieren des Kommentars.', 'error') # Fallback, falls DB-Funktion nicht flasht
 
-def _handle_update_infomail_threshold_admin(form_data, target_user_id):
+def _handle_update_infomail_responsible_threshold_admin(form_data, target_user_id):
     """
     Verarbeitet die Aktualisierung der Infomail-Schwelle eines Benutzers durch einen Admin.
 
@@ -1679,8 +1708,8 @@ def _handle_update_infomail_threshold_admin(form_data, target_user_id):
         target_user_id (int): Die ID des Benutzers, dessen Infomail-Schwelle aktualisiert wird.
     """
 
-    infomail_threshold = form_data.get('infomail_threshold')
-    if update_user_infomail_threshold(target_user_id, infomail_threshold if infomail_threshold is not None else ""):
+    infomail_responsible_threshold = form_data.get('infomail_responsible_threshold')
+    if update_user_infomail_responsible_threshold(target_user_id, infomail_responsible_threshold if infomail_responsible_threshold is not None else ""):
         flash('Infomail-Schwelle erfolgreich aktualisiert.', 'success')
     else:
         flash('Fehler beim Aktualisieren der Infomail-Schwelle.', 'error') # Fallback, falls DB-Funktion nicht flasht
@@ -1774,7 +1803,7 @@ def _validate_register_form(form_data):
 def _process_system_setting_update(key, new_value_str):
     """
     Verarbeitet die Aktualisierung einer einzelnen Systemeinstellung.
-    Beinhaltet Validierung für MAX_NEGATIVSALDO und TRANSACTION_SALDO_CHANGE
+    Beinhaltet Validierung für TRANSACTION_SALDO_CHANGE
 
     Args:
         key (str): Der Schlüssel der Systemeinstellung.
@@ -1783,16 +1812,6 @@ def _process_system_setting_update(key, new_value_str):
     Returns:
         bool: True, wenn die Aktualisierung für diese Einstellung erfolgreich war, sonst False.
     """
-
-    if key == 'MAX_NEGATIVSALDO':
-        try:
-            val_int = int(new_value_str)
-            if val_int > 0:
-                flash("Der Wert für 'Maximale Negativsaldo-Grenze' muss 0 oder negativ sein.", "error")
-                return False
-        except ValueError:
-            flash("Der Wert für 'Maximale Negativsaldo-Grenze' muss eine ganze Zahl sein.", "error")
-            return False
 
     if key == 'TRANSACTION_SALDO_CHANGE':
         try:
@@ -2108,44 +2127,44 @@ def user_info():
     if not user_id:
         return redirect(BASE_URL + url_for('login'))
 
-    user = get_user_by_id(user_id) #
+    user = get_user_by_id(user_id)
     if not user:
-        session.pop('user_id', None) #
-        flash('Benutzer nicht gefunden oder Sitzung abgelaufen.', 'error') #
-        return redirect(BASE_URL + url_for('login')) #
+        session.pop('user_id', None)
+        flash('Benutzer nicht gefunden oder Sitzung abgelaufen.', 'error')
+        return redirect(BASE_URL + url_for('login'))
 
-    if user.get('is_locked'): #
-        session.pop('user_id', None) #
-        flash('Dein Konto wurde gesperrt. Bitte kontaktiere einen Administrator.', 'error') #
-        return redirect(BASE_URL + url_for('login')) #
+    if user.get('is_locked'):
+        session.pop('user_id', None)
+        flash('Dein Konto wurde gesperrt. Bitte kontaktiere einen Administrator.', 'error')
+        return redirect(BASE_URL + url_for('login'))
 
     if request.method == 'POST':
-        if 'change_password' in request.form: #
-            current_password = request.form['current_password'] #
-            new_password = request.form['new_password'] #
-            confirm_new_password = request.form['confirm_new_password'] #
+        if 'change_password' in request.form:
+            current_password = request.form['current_password']
+            new_password = request.form['new_password']
+            confirm_new_password = request.form['confirm_new_password']
 
-            if not check_password_hash(user['password'], current_password): #
-                flash('Falsches aktuelles Passwort.', 'error') #
-            elif new_password != confirm_new_password: #
-                flash('Die neuen Passwörter stimmen nicht überein.', 'error') #
-            elif len(new_password) < 8: #
-                flash('Das neue Passwort muss mindestens 8 Zeichen lang sein.', 'error') #
+            if not check_password_hash(user['password'], current_password):
+                flash('Falsches aktuelles Passwort.', 'error')
+            elif new_password != confirm_new_password:
+                flash('Die neuen Passwörter stimmen nicht überein.', 'error')
+            elif len(new_password) < 8:
+                flash('Das neue Passwort muss mindestens 8 Zeichen lang sein.', 'error')
             else:
-                new_password_hash = generate_password_hash(new_password) #
-                if update_password(user_id, new_password_hash): #
-                    flash('Passwort erfolgreich geändert.', 'success') #
+                new_password_hash = generate_password_hash(new_password)
+                if update_password(user_id, new_password_hash):
+                    flash('Passwort erfolgreich geändert.', 'success')
                 else:
-                    flash('Fehler beim Ändern des Passworts.', 'error') #
-            return redirect(BASE_URL + url_for('user_info')) #
+                    flash('Fehler beim Ändern des Passworts.', 'error')
+            return redirect(BASE_URL + url_for('user_info'))
 
-        if 'change_email' in request.form: #
-            new_email = request.form.get('new_email', '').strip() #
-            if update_user_email(user_id, new_email): #
-                flash('Emailadresse erfolgreich geändert.', 'success') #
+        if 'change_email' in request.form:
+            new_email = request.form.get('new_email', '').strip()
+            if update_user_email(user_id, new_email):
+                flash('Emailadresse erfolgreich geändert.', 'success')
             else:
-                flash('Fehler beim Ändern der Emailadresse.', 'error') #
-            return redirect(BASE_URL + url_for('user_info')) #
+                flash('Fehler beim Ändern der Emailadresse.', 'error')
+            return redirect(BASE_URL + url_for('user_info'))
 
         if 'update_notification_settings' in request.form:
             all_notification_types_db = get_all_notification_types() # Ruft alle Typen aus DB ab.
@@ -2161,16 +2180,24 @@ def user_info():
             # Fehler werden in update_user_notification_settings selbst geflasht.
             return redirect(BASE_URL + url_for('user_info'))
 
+        if 'update_infomail_user_threshold' in request.form:
+            new_user_threshold = request.form.get('infomail_user_threshold', '').strip()
+            if update_user_infomail_user_threshold(user_id, new_user_threshold):
+                flash('Infomail-Guthaben-Grenze erfolgreich geändert.', 'success')
+            else:
+                flash('Fehler beim Ändern der Infomail-Guthaben-Grenze.', 'error')
+            return redirect(BASE_URL + url_for('user_info'))
+
     # GET Request oder nach POST redirect
     user = get_user_by_id(user_id) # Erneut laden für aktuelle Daten
     if not user: # Sicherheitscheck
-        session.pop('user_id', None) #
-        flash('Benutzer nicht mehr vorhanden.', 'error') #
-        return redirect(BASE_URL + url_for('login')) #
+        session.pop('user_id', None)
+        flash('Benutzer nicht mehr vorhanden.', 'error')
+        return redirect(BASE_URL + url_for('login'))
 
-    nfc_tokens = get_user_nfc_tokens(user_id) #
-    transactions = get_user_transactions(user_id) #
-    saldo = sum(t['saldo_aenderung'] for t in transactions) if transactions else 0 #
+    nfc_tokens = get_user_nfc_tokens(user_id)
+    transactions = get_user_transactions(user_id)
+    saldo = sum(t['saldo_aenderung'] for t in transactions) if transactions else 0
 
     # Für Benachrichtigungseinstellungen
     all_notification_types_data = get_all_notification_types()
@@ -2599,7 +2626,7 @@ def admin_user_modification(admin_user, target_user_id):
             'demote_user': lambda: _handle_toggle_user_admin_state(target_user_id, target_user, False),
             'add_user_nfc_token': lambda: _handle_add_user_nfc_token_admin(form_data, target_user_id),
             'update_user_comment': lambda: _handle_update_user_comment_admin(form_data, target_user_id),
-            'update_infomail_threshold': lambda: _handle_update_infomail_threshold_admin(form_data, target_user_id),
+            'update_infomail_responsible_threshold': lambda: _handle_update_infomail_responsible_threshold_admin(form_data, target_user_id),
             'update_user_email': lambda: _handle_update_user_email_admin(form_data, target_user_id),
             'delete_user_nfc_token': lambda: _handle_delete_user_nfc_token_admin(form_data, target_user_id),
         }
