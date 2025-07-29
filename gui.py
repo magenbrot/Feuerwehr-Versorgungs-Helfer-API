@@ -1450,7 +1450,8 @@ def _send_responsible_benachrichtigung(target_user: dict, aktueller_saldo: int, 
         'betreff': f"{target_user['vorname']} {target_user['nachname']} hat das Saldo-Info-Limit erreicht",
         'template_name_html': "email_info_responsible_threshold.html",
         'template_name_text': "email_info_responsible_threshold.txt",
-        'template_context': {"vorname": target_user['vorname'], "nachname": target_user['nachname'], "infomail_responsible_threshold": target_user['infomail_responsible_threshold'], 'app_name': config.app_name},
+        'template_context': {"vorname": target_user['vorname'], "nachname": target_user['nachname'],
+                             "infomail_responsible_threshold": target_user['infomail_responsible_threshold'], 'app_name': config.app_name},
         'logo_dateipfad': logo_pfad
     }
     if prepare_and_send_email(email_params, config.smtp_config):
@@ -1893,6 +1894,68 @@ def _process_bulk_transactions(user_ids, beschreibung, saldo_aenderung):
             failed += 1
     return successful, failed
 
+def _process_user_info_form(form, user):
+    """
+    Verarbeitet die Formular-Aktionen von der Benutzerinformationsseite.
+
+    Args:
+        form (werkzeug.datastructures.ImmutableMultiDict): Die übermittelten Formulardaten.
+        user (dict): Das Objekt des aktuell angemeldeten Benutzers.
+
+    Returns:
+        bool: True, wenn eine Aktion verarbeitet wurde, andernfalls False.
+              Die Weiterleitung (Redirect) wird innerhalb der Funktion gehandhabt.
+    """
+    user_id = user['id']
+
+    if 'change_password' in form:
+        current_password = form['current_password']
+        new_password = form['new_password']
+        confirm_new_password = form['confirm_new_password']
+
+        if not check_password_hash(user['password'], current_password):
+            flash('Falsches aktuelles Passwort.', 'error')
+        elif new_password != confirm_new_password:
+            flash('Die neuen Passwörter stimmen nicht überein.', 'error')
+        elif len(new_password) < 8:
+            flash('Das neue Passwort muss mindestens 8 Zeichen lang sein.', 'error')
+        else:
+            new_password_hash = generate_password_hash(new_password)
+            if update_password(user_id, new_password_hash):
+                flash('Passwort erfolgreich geändert.', 'success')
+            else:
+                flash('Fehler beim Ändern des Passworts.', 'error')
+        return True
+
+    if 'change_email' in form:
+        new_email = form.get('new_email', '').strip()
+        if update_user_email(user_id, new_email):
+            flash('Emailadresse erfolgreich geändert.', 'success')
+        else:
+            flash('Fehler beim Ändern der Emailadresse.', 'error')
+        return True
+
+    if 'update_notification_settings' in form:
+        all_notification_types_db = get_all_notification_types()
+        active_type_ids = [
+            n_type["id"] for n_type in all_notification_types_db
+            if form.get(f'notification_type_{n_type["id"]}')
+        ]
+        if update_user_notification_settings(user_id, active_type_ids):
+            flash('Benachrichtigungseinstellungen erfolgreich gespeichert.', 'success')
+        # Fehler wird in der Funktion selbst geflasht
+        return True
+
+    if 'update_infomail_user_threshold' in form:
+        new_user_threshold = form.get('infomail_user_threshold', '').strip()
+        if update_user_infomail_user_threshold(user_id, new_user_threshold):
+            flash('Infomail-Guthaben-Grenze erfolgreich geändert.', 'success')
+        else:
+            flash('Fehler beim Ändern der Infomail-Guthaben-Grenze.', 'error')
+        return True
+
+    return False
+
 # --- Flask Decorator ---
 
 def admin_required(f):
@@ -2110,19 +2173,13 @@ def reset_with_token(token):
 @app.route('/user_info', methods=['GET', 'POST'])
 def user_info():
     """
-    Zeigt die Benutzerinformationen an und verarbeitet Passwortänderung, E-Mail-Änderung
-    sowie die Verwaltung der E-Mail-Benachrichtigungseinstellungen.
+    Zeigt Benutzerinformationen an und verarbeitet Änderungen (Passwort, E-Mail, Benachrichtigungen).
 
-    Bei GET-Anfragen werden Benutzerdaten, Transaktionen, Saldo, NFC-Token, verfügbare
-    Benachrichtigungstypen und die aktuellen Einstellungen des Benutzers geladen und angezeigt.
-    Bei POST-Anfragen werden Formulare für Passwortänderung, E-Mail-Änderung oder
-    Aktualisierung der Benachrichtigungseinstellungen verarbeitet.
+    Die POST-Logik ist in die Hilfsfunktion _process_user_info_form ausgelagert.
 
     Returns:
-        str oder werkzeug.wrappers.response.Response: Die gerenderte Benutzerinformationsseite (`web_user_info.html`)
-        oder eine Weiterleitung zur Login-Seite bei Fehlern oder wenn nicht eingeloggt.
+        str oder werkzeug.wrappers.response.Response: Die gerenderte Benutzerseite oder eine Weiterleitung.
     """
-
     user_id = session.get('user_id')
     if not user_id:
         return redirect(BASE_URL + url_for('login'))
@@ -2139,58 +2196,13 @@ def user_info():
         return redirect(BASE_URL + url_for('login'))
 
     if request.method == 'POST':
-        if 'change_password' in request.form:
-            current_password = request.form['current_password']
-            new_password = request.form['new_password']
-            confirm_new_password = request.form['confirm_new_password']
-
-            if not check_password_hash(user['password'], current_password):
-                flash('Falsches aktuelles Passwort.', 'error')
-            elif new_password != confirm_new_password:
-                flash('Die neuen Passwörter stimmen nicht überein.', 'error')
-            elif len(new_password) < 8:
-                flash('Das neue Passwort muss mindestens 8 Zeichen lang sein.', 'error')
-            else:
-                new_password_hash = generate_password_hash(new_password)
-                if update_password(user_id, new_password_hash):
-                    flash('Passwort erfolgreich geändert.', 'success')
-                else:
-                    flash('Fehler beim Ändern des Passworts.', 'error')
+        if _process_user_info_form(request.form, user):
             return redirect(BASE_URL + url_for('user_info'))
 
-        if 'change_email' in request.form:
-            new_email = request.form.get('new_email', '').strip()
-            if update_user_email(user_id, new_email):
-                flash('Emailadresse erfolgreich geändert.', 'success')
-            else:
-                flash('Fehler beim Ändern der Emailadresse.', 'error')
-            return redirect(BASE_URL + url_for('user_info'))
-
-        if 'update_notification_settings' in request.form:
-            all_notification_types_db = get_all_notification_types() # Ruft alle Typen aus DB ab.
-            active_type_ids = []
-            for n_type in all_notification_types_db: # Durchläuft alle in der DB definierten Typen.
-                # Prüft, ob für den aktuellen Typ eine Checkbox gesendet wurde (und damit aktiviert ist).
-                # Der `value` der Checkbox im HTML wurde auf `n_type.id` gesetzt.
-                if request.form.get(f'notification_type_{n_type["id"]}'):
-                    active_type_ids.append(n_type["id"])
-
-            if update_user_notification_settings(user_id, active_type_ids):
-                flash('Benachrichtigungseinstellungen erfolgreich gespeichert.', 'success')
-            # Fehler werden in update_user_notification_settings selbst geflasht.
-            return redirect(BASE_URL + url_for('user_info'))
-
-        if 'update_infomail_user_threshold' in request.form:
-            new_user_threshold = request.form.get('infomail_user_threshold', '').strip()
-            if update_user_infomail_user_threshold(user_id, new_user_threshold):
-                flash('Infomail-Guthaben-Grenze erfolgreich geändert.', 'success')
-            else:
-                flash('Fehler beim Ändern der Infomail-Guthaben-Grenze.', 'error')
-            return redirect(BASE_URL + url_for('user_info'))
-
-    # GET Request oder nach POST redirect
-    user = get_user_by_id(user_id) # Erneut laden für aktuelle Daten
-    if not user: # Sicherheitscheck
+    # GET Request oder nach POST-Redirect
+    # Benutzerdaten neu laden, um eventuelle Änderungen anzuzeigen
+    user_data = get_user_by_id(user_id)
+    if not user_data: # Sicherheitscheck, falls der Benutzer zwischenzeitlich gelöscht wurde
         session.pop('user_id', None)
         flash('Benutzer nicht mehr vorhanden.', 'error')
         return redirect(BASE_URL + url_for('login'))
@@ -2199,12 +2211,11 @@ def user_info():
     transactions = get_user_transactions(user_id)
     saldo = sum(t['saldo_aenderung'] for t in transactions) if transactions else 0
 
-    # Für Benachrichtigungseinstellungen
     all_notification_types_data = get_all_notification_types()
     user_notification_settings_data = get_user_notification_settings(user_id)
 
     return render_template('web_user_info.html',
-                           user=user,
+                           user=user_data,
                            nfc_tokens=nfc_tokens,
                            transactions=transactions,
                            saldo=saldo,

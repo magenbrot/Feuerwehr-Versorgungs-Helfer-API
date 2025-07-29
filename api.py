@@ -283,7 +283,8 @@ def _send_responsible_threshold_benachrichtigung(user_details: dict, aktueller_s
         'betreff': f"{user_details['vorname']} {user_details['nachname']} hat das Saldo-Info-Limit erreicht",
         'template_name_html': "email_info_responsible_threshold.html",
         'template_name_text': "email_info_responsible_threshold.txt",
-        'template_context': {"vorname": user_details['vorname'], "nachname": user_details['nachname'], "infomail_responsible_threshold": user_details['infomail_responsible_threshold'], 'app_name': config.app_name},
+        'template_context': {"vorname": user_details['vorname'], "nachname": user_details['nachname'],
+                             "infomail_responsible_threshold": user_details['infomail_responsible_threshold'], 'app_name': config.app_name},
         'logo_dateipfad': logo_pfad
     }
     if prepare_and_send_email(email_params, config.smtp_config):
