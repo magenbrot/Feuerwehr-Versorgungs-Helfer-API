@@ -1074,7 +1074,7 @@ def get_person_by_code(api_user_id: int, api_username: str, code: str): # Parame
                 "SELECT SUM(saldo_aenderung) AS saldo FROM transactions WHERE user_id = %s", (person_info['id'],)
             )
             saldo_data = cursor.fetchone()
-            aktueller_saldo = saldo_data['saldo'] if saldo_data and saldo_data['saldo'] is not None else 0.0
+            aktueller_saldo = saldo_data['saldo'] if saldo_data and saldo_data['saldo'] is not None else 0
 
         response_data = {
             "nachname": person_info['nachname'],
