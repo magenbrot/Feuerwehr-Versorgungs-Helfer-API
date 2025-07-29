@@ -73,9 +73,7 @@
                         {% for key, setting_data in system_settings.items() %}
                         <div class="form-group" style="margin-bottom: 15px;">
                             <label for="{{ key }}">{{ setting_data.beschreibung or key.replace('_', ' ')|title }}:</label>
-                            {% if key == 'MAX_NEGATIVSALDO' %}
-                            <input type="number" id="{{ key }}" name="{{ key }}" value="{{ setting_data.wert }}" required class="form-control" style="width: 100px; padding: 8px; margin-top: 5px;">
-                            {% elif key == 'TRANSACTION_SALDO_CHANGE' %}
+                            {% if key == 'TRANSACTION_SALDO_CHANGE' %}
                             <input type="number" id="{{ key }}" name="{{ key }}" value="{{ setting_data.wert }}" required class="form-control" style="width: 100px; padding: 8px; margin-top: 5px;">
                             {% else %}
                             <input type="text" id="{{ key }}" name="{{ key }}" value="{{ setting_data.wert }}" required class="form-control" style="padding: 8px; margin-top: 5px;">
