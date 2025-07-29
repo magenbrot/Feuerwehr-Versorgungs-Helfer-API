@@ -178,7 +178,7 @@ def get_system_setting(einstellung_schluessel: str) -> Optional[str]:
     Ruft den Wert einer Systemeinstellung aus der Datenbank ab.
 
     Args:
-        einstellung_schluessel (str): Der Schlüssel der Systemeinstellung (z.B. 'MAX_NEGATIVSALDO').
+        einstellung_schluessel (str): Der Schlüssel der Systemeinstellung (z.B. 'TRANSACTION_SALDO_CHANGE').
 
     Returns:
         Optional[str]: Der Wert der Einstellung als String, oder None wenn nicht gefunden oder bei Fehler.
@@ -218,7 +218,7 @@ def get_user_details_for_notification(user_id_int: int) -> Optional[dict]:
         return None
     try:
         with cnx.cursor(dictionary=True) as cursor:
-            cursor.execute("SELECT id, vorname, nachname, email, infomail_threshold FROM users WHERE id = %s", (user_id_int,))
+            cursor.execute("SELECT id, vorname, nachname, email, infomail_responsible_threshold FROM users WHERE id = %s", (user_id_int,))
             return cursor.fetchone()
     except Error as err:
         logger.error("DB-Fehler in get_user_details_for_notification für User %s: %s", user_id_int, err)
@@ -246,60 +246,50 @@ def _send_saldo_null_benachrichtigung(user_details: dict, aktueller_saldo: float
     else:
         logger.error("Fehler beim Senden der Saldo-Null Benachrichtigung an %s (ID: %s).", user_details['email'], user_details['id'])
 
-def _send_negativsaldo_benachrichtigung(user_details: dict, aktueller_saldo: int, logo_pfad: str):
-    """Hilfsfunktion zum Senden der "Negativsaldo" Benachrichtigung."""
+def _send_user_threshold_benachrichtigung(user_details: dict, aktueller_saldo: int, logo_pfad: str):
+    """Hilfsfunktion zum Senden der "Saldowarnung" Benachrichtigung."""
 
-    max_negativ_saldo_str = get_system_setting('MAX_NEGATIVSALDO')
-    if max_negativ_saldo_str is None:
-        logger.info("MAX_NEGATIVSALDO nicht konfiguriert, keine Negativsaldo-Prüfung für User %s.", user_details['id'])
+    # Breche ab, wenn der aktuelle Saldo gleich dem gesetzten Limit ist und gleichzeitig größer als das Limit -5
+    if not (user_details['infomail_user_threshold'] - 5) < aktueller_saldo <= user_details['infomail_user_threshold']:
         return
 
-    try:
-        max_negativ_saldo = int(max_negativ_saldo_str)
-    except ValueError:
-        logger.error("Ungültiger Wert für MAX_NEGATIVSALDO ('%s') in system_einstellungen.", max_negativ_saldo_str)
-        return
-
-    if aktueller_saldo > max_negativ_saldo: # Guard clause: Wenn Saldo nicht niedrig genug ist, abbrechen
-        return
-
-    if not get_user_notification_preference(user_details['id'], 'NEGATIVSALDO_GRENZE'): # Guard clause: Wenn User es nicht will, abbrechen
+    if not get_user_notification_preference(user_details['id'], 'THRESHOLD_REMINDER'): # Guard clause: Wenn User es nicht will, abbrechen
         return
 
     # Alle Prüfungen bestanden, E-Mail senden
     email_params = {
         'empfaenger_email': user_details['email'],
         'betreff': "Wichtiger Hinweis zu deinem Saldo",
-        'template_name_html': "email_negativsaldo_warnung.html",
-        'template_name_text': "email_negativsaldo_warnung.txt",
-        'template_context': {"vorname": user_details['vorname'], "saldo": aktueller_saldo, "grenzwert": max_negativ_saldo},
+        'template_name_html': "email_info_user_threshold.html",
+        'template_name_text': "email_info_user_threshold.txt",
+        'template_context': {"vorname": user_details['vorname'], "saldo": aktueller_saldo},
         'logo_dateipfad': logo_pfad
     }
     if prepare_and_send_email(email_params, config.smtp_config):
-        logger.info("Negativsaldo-Warnung an %s (ID: %s) gesendet.", user_details['email'], user_details['id'])
+        logger.info("Benutzer-Saldowarnung an %s (ID: %s) gesendet.", user_details['email'], user_details['id'])
     else:
-        logger.error("Fehler beim Senden der Negativsaldo-Warnung an %s (ID: %s).", user_details['email'], user_details['id'])
+        logger.error("Fehler beim Senden der Benutzer-Saldowarnung an %s (ID: %s).", user_details['email'], user_details['id'])
 
-def _send_responsible_benachrichtigung(user_details: dict, aktueller_saldo: int, logo_pfad: str):
-    """Hilfsfunktion zur Information der Verantwortlichen wenn ein Benutzer das Limit unterschreitet."""
+def _send_responsible_threshold_benachrichtigung(user_details: dict, aktueller_saldo: int, logo_pfad: str):
+    """Hilfsfunktion zur Information der Verantwortlichen wenn ein Benutzer das System-Limit unterschreitet."""
 
     # Breche ab, wenn der aktuelle Saldo gleich dem gesetzten Limit ist und gleichzeitig größer als das Limit -5
-    if not (user_details['infomail_threshold'] - 5) < aktueller_saldo <= user_details['infomail_threshold']:
+    if not (user_details['infomail_responsible_threshold'] - 5) < aktueller_saldo <= user_details['infomail_responsible_threshold']:
         return
 
     # Alle Prüfungen bestanden, E-Mail senden
     email_params = {
         'empfaenger_email': config.api_config['responsible_email'],
         'betreff': f"{user_details['vorname']} {user_details['nachname']} hat das Saldo-Info-Limit erreicht",
-        'template_name_html': "email_notify_responsible_on_saldo_reached.html",
-        'template_name_text': "email_notify_responsible_on_saldo_reached.txt",
-        'template_context': {"vorname": user_details['vorname'], "nachname": user_details['nachname'], "infomail_threshold": user_details['infomail_threshold'], 'app_name': config.app_name},
+        'template_name_html': "email_info_responsible_threshold.html",
+        'template_name_text': "email_info_responsible_threshold.txt",
+        'template_context': {"vorname": user_details['vorname'], "nachname": user_details['nachname'], "infomail_responsible_threshold": user_details['infomail_responsible_threshold'], 'app_name': config.app_name},
         'logo_dateipfad': logo_pfad
     }
     if prepare_and_send_email(email_params, config.smtp_config):
-        logger.info("Info über Saldo-Schwelle-erreicht (ID: %s) an Verantwortliche gesendet.", user_details['id'])
+        logger.info("Verantwortliche-Saldowarnung (%s %s) an Verantwortliche (%s)  gesendet.", user_details['vorname'], user_details['nachname'], config.api_config['responsible_email'])
     else:
-        logger.error("Fehler beim Senden der Saldo-Schwelle-erreicht-Info an ID: %s.", user_details['id'])
+        logger.error("Fehler beim Senden der Verantwortliche-Saldowarnung (%s %s) an Verantwortliche (%s).", user_details['vorname'], user_details['nachname'], config.api_config['responsible_email'])
 
 def _aktuellen_saldo_pruefen(target_user_id: int) -> Union[Literal[True], Tuple[Literal[False], float, int], Literal[False]]:
     """
@@ -310,23 +300,13 @@ def _aktuellen_saldo_pruefen(target_user_id: int) -> Union[Literal[True], Tuple[
 
     Returns:
         True: Wenn der Saldo ausreichend ist.
-        tuple[Literal[False], float, int]: Ein Tupel (False, aktueller_saldo, max_negativ_saldo_int),
+        tuple[Literal[False], float, int]: Ein Tupel (False, aktueller_saldo),
                                             wenn der Saldo das Limit unterschreitet.
                                             aktueller_saldo ist der tatsächliche Saldo.
-                                            max_negativ_saldo_int ist das erlaubte negative Limit.
         False: Im Falle eines Datenbank- oder Konfigurationsfehlers.
     """
 
-    max_negativ_saldo_str = ""
-    try:
-        max_negativ_saldo_str = get_system_setting('MAX_NEGATIVSALDO')
-        if not max_negativ_saldo_str:
-            logger.error("Systemeinstellung MAX_NEGATIVSALDO nicht gefunden oder leer.")
-            return False
-        max_negativ_saldo_int = int(max_negativ_saldo_str)
-    except ValueError:
-        logger.error("Ungültiger Wert für MAX_NEGATIVSALDO: %s", max_negativ_saldo_str)
-        return False
+    max_negativ_saldo = 0
 
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if not cnx:
@@ -340,9 +320,9 @@ def _aktuellen_saldo_pruefen(target_user_id: int) -> Union[Literal[True], Tuple[
 
             aktueller_saldo = float(saldo_data['saldo']) if saldo_data and saldo_data['saldo'] is not None else 0
 
-        if aktueller_saldo <= max_negativ_saldo_int:
+        if aktueller_saldo <= max_negativ_saldo:
             # Saldo ist zu niedrig
-            return (False, aktueller_saldo, max_negativ_saldo_int)
+            return (False, aktueller_saldo, max_negativ_saldo)
         # Saldo ist ausreichend
         return True
 
@@ -392,11 +372,11 @@ def aktuellen_saldo_pruefen_und_benachrichtigen(target_user_id: int):
         if aktueller_saldo == 0:
             _send_saldo_null_benachrichtigung(user_details, aktueller_saldo, logo_pfad_str)
 
-        # Benachrichtige Verantwortliche wenn Saldo unter Infomail-Schwelle
-        _send_responsible_benachrichtigung(user_details, aktueller_saldo, logo_pfad_str)
+        # Benachrichtige Benutzer wenn Saldo unter Infomail-Schwelle
+        _send_user_threshold_benachrichtigung(user_details, aktueller_saldo, logo_pfad_str)
 
-        # Saldo ist negativ Warnung
-        _send_negativsaldo_benachrichtigung(user_details, aktueller_saldo, logo_pfad_str)
+        # Benachrichtige Verantwortliche wenn Saldo unter Infomail-Schwelle
+        _send_responsible_threshold_benachrichtigung(user_details, aktueller_saldo, logo_pfad_str)
 
     except Error as err:
         logger.error("DB-Fehler in aktuellen_saldo_pruefen_und_benachrichtigen für User %s: %s", target_user_id, err)

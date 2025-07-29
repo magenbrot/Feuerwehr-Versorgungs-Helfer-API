@@ -110,8 +110,8 @@
                 <h4>Infomail-Schwelle:</h4>
                 Infomail an die Verantwortlichen senden, wenn diese Schwelle erreicht wurde.
                 <form method="POST" class="inline-form-transaction">
-                    <input type="number2column" id="infomail_threshold" name="infomail_threshold" title="Ab diesem Saldo werden die Verantwortlichen informiert." value="{{ user.infomail_threshold if user.infomail_threshold else 0 }}">
-                    <button type="submit" name="update_infomail_threshold">Speichern</button>
+                    <input type="number2column" id="infomail_responsible_threshold" name="infomail_responsible_threshold" title="Ab diesem Saldo werden die Verantwortlichen informiert." value="{{ user.infomail_responsible_threshold if user.infomail_responsible_threshold else 0 }}">
+                    <button type="submit" name="update_infomail_responsible_threshold">Speichern</button>
                 </form>
             </div>
             <div class="form-section">
