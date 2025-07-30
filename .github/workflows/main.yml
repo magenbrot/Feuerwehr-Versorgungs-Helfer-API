@@ -2,7 +2,10 @@ name: Main Workflow
 
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'
 
 permissions:
   contents: read
