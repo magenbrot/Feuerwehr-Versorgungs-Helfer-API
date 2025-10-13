@@ -6,5 +6,5 @@ mysql-connector-python==9.4.0
 pillow==11.3.0
 python-dotenv==1.1.1
 qrcode==8.2
-uWSGI==2.0.30
+uWSGI==2.0.31
 Werkzeug==3.1.3
