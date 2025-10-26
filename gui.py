@@ -49,7 +49,7 @@ if "BASE_URL" in os.environ:
     BASE_URL = os.environ.get('BASE_URL', '/')
     logger.info("BASE_URL: %s", BASE_URL)
 else:
-    BASE_URL=""
+    BASE_URL = ""  # pylint: disable=C0103
 
 # Konfigurationsprüfungen
 required_db_keys = ['host', 'port', 'user', 'password', 'database']
