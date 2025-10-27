@@ -13,12 +13,11 @@ import random
 import secrets
 import string
 from pathlib import Path
-from datetime import datetime, timedelta, timezone
 import qrcode
 import qrcode.constants
 from qrcode.image.pil import PilImage
 from PIL import Image, ImageDraw, ImageFont
-from flask import Flask, render_template, request, redirect, url_for, session, flash, send_file # pigar: required-packages=uWSGI
+from flask import Flask, render_template, request, redirect, url_for, session, flash, send_file  # pigar: required-packages=uWSGI
 from werkzeug.security import check_password_hash, generate_password_hash
 from mysql.connector import Error, IntegrityError
 import config
@@ -82,12 +81,14 @@ except FileNotFoundError:
 
 logger.info("Feuerwehr-Versorgungs-Helfer GUI (Version %s) wurde gestartet", app.config.get('version'))
 
+
 def generate_api_key_string(length=32):
     """
     Generiert einen sicheren, zufälligen API-Key-String.
     """
 
     return secrets.token_hex(length)
+
 
 def hex_to_binary(hex_string):
     """
@@ -113,6 +114,7 @@ def hex_to_binary(hex_string):
     except TypeError:
         logger.error("Fehler bei der Hexadezimal-Konvertierung: Ungültiger Typ für Hexadezimalstring: %s", type(hex_string))
         return None
+
 
 def erzeuge_qr_code(daten, text):
     """
@@ -157,7 +159,7 @@ def erzeuge_qr_code(daten, text):
         logger.error("Keine der bevorzugten Schriftarten gefunden. Lade Standardschriftart.")
         schriftart = ImageFont.load_default(size=schriftgroesse)
 
-    zeichne_temp = ImageDraw.Draw(Image.new("RGB", (1,1)))
+    zeichne_temp = ImageDraw.Draw(Image.new("RGB", (1, 1)))
 
     # textbbox((0,0)...) gibt (x1, y1, x2, y2) relativ zum Ankerpunkt (0,0)
     # Standardanker für textbbox ist 'la' (left-ascent), d.h. (0,0) ist links auf der Grundlinie.
@@ -165,7 +167,7 @@ def erzeuge_qr_code(daten, text):
     # text_box[3] ist der y-Wert des tiefsten Pixels (positiv für Abstriche).
     text_box = zeichne_temp.textbbox((0, 0), text, font=schriftart)
     text_breite_val = text_box[2] - text_box[0]
-    text_hoehe_val = text_box[3] - text_box[1] # Gesamthöhe des Textes
+    text_hoehe_val = text_box[3] - text_box[1]  # Gesamthöhe des Textes
 
     tatsaechliche_gesamthoehe_textbereich = max(text_abstand_unten, text_hoehe_val)
 
@@ -178,7 +180,7 @@ def erzeuge_qr_code(daten, text):
 
     # Neues Bild erstellen
     neues_bild = Image.new("RGBA", (qr_breite, neue_bild_hoehe), hintergrund_farbe)
-    neues_bild.paste(img, (0, 0)) # QR-Code auf das neue Bild kopieren
+    neues_bild.paste(img, (0, 0))  # QR-Code auf das neue Bild kopieren
 
     # Text auf das neue Bild zeichnen
     zeichne_neu = ImageDraw.Draw(neues_bild)
@@ -191,6 +193,7 @@ def erzeuge_qr_code(daten, text):
     zeichne_neu.text((text_x, text_y), text, fill=text_farbe, font=schriftart)
 
     return neues_bild
+
 
 # Benachrichtigungseinstellungen
 def get_all_notification_types():
@@ -219,6 +222,7 @@ def get_all_notification_types():
                 cursor.close()
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return []
+
 
 def get_user_notification_preference(user_id_int: int, event_schluessel: str) -> bool:
     """
@@ -256,6 +260,7 @@ def get_user_notification_preference(user_id_int: int, event_schluessel: str) ->
         if cnx:
             db_utils.DatabaseConnectionPool.close_connection(cnx)
 
+
 def get_user_notification_settings(user_id):
     """
     Ruft die aktuellen E-Mail-Benachrichtigungseinstellungen für einen bestimmten Benutzer ab.
@@ -272,7 +277,7 @@ def get_user_notification_settings(user_id):
     """
 
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
-    settings = {} # Key: typ_id, Value: email_aktiviert (True/False)
+    settings = {}  # Key: typ_id, Value: email_aktiviert (True/False)
     if cnx:
         cursor = cnx.cursor(dictionary=True)
         try:
@@ -289,6 +294,7 @@ def get_user_notification_settings(user_id):
                 cursor.close()
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return {}
+
 
 def update_user_notification_settings(user_id, active_notification_type_ids_int):
     """
@@ -339,6 +345,7 @@ def update_user_notification_settings(user_id, active_notification_type_ids_int)
         cursor.close()
         db_utils.DatabaseConnectionPool.close_connection(cnx)
 
+
 # Systemeinstellungen (Admin)
 def get_all_system_settings():
     """
@@ -351,7 +358,7 @@ def get_all_system_settings():
     """
 
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
-    settings = {} # Key: einstellung_schluessel, Value: {'wert': ..., 'beschreibung': ...}
+    settings = {}  # Key: einstellung_schluessel, Value: {'wert': ..., 'beschreibung': ...}
     if cnx:
         cursor = cnx.cursor(dictionary=True)
         try:
@@ -368,6 +375,7 @@ def get_all_system_settings():
                 cursor.close()
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return {}
+
 
 def update_system_setting(einstellung_schluessel, einstellung_wert):
     """
@@ -400,6 +408,7 @@ def update_system_setting(einstellung_schluessel, einstellung_wert):
                 cursor.close()
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return False
+
 
 # NFC-Token Handling
 def add_user_nfc_token(user_id, token_name, token_hex):
@@ -447,6 +456,7 @@ def add_user_nfc_token(user_id, token_name, token_hex):
             return False
     return False
 
+
 def delete_user_nfc_token(user_id, token_id):
     """
     Entfernt einen NFC-Token aus der Datenbank.
@@ -481,6 +491,7 @@ def delete_user_nfc_token(user_id, token_id):
             return False
     return False
 
+
 def get_user_nfc_tokens(user_id):
     """
     Ruft alle Tokens eines Benutzer ab, absteigend sortiert nach dem Zeitpunkt der letzten Verwendung.
@@ -514,6 +525,7 @@ def get_user_nfc_tokens(user_id):
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return None
 
+
 def _handle_add_user_nfc_token_admin(form_data, target_user_id):
     """
     Verarbeitet das Hinzufügen eines NFC-Tokens für einen Benutzer durch einen Admin.
@@ -524,12 +536,13 @@ def _handle_add_user_nfc_token_admin(form_data, target_user_id):
     """
 
     nfc_token_name = form_data.get('nfc_token_name')
-    nfc_token_daten = form_data.get('nfc_token_daten') # HEX Format erwartet
+    nfc_token_daten = form_data.get('nfc_token_daten')  # HEX Format erwartet
     if not nfc_token_name or not nfc_token_daten:
         flash('Token Name und Token Daten (HEX) dürfen nicht leer sein.', 'error')
     # Die Funktion add_user_nfc_token flasht bereits Fehlermeldungen bei ungültigen Daten
     elif add_user_nfc_token(target_user_id, nfc_token_name, nfc_token_daten):
         flash('NFC-Token erfolgreich hinzugefügt.', 'success')
+
 
 def _handle_delete_user_nfc_token_admin(form_data, target_user_id):
     """
@@ -547,6 +560,7 @@ def _handle_delete_user_nfc_token_admin(form_data, target_user_id):
     # Die Funktion delete_user_nfc_token flasht bereits Fehlermeldungen
     elif delete_user_nfc_token(target_user_id, nfc_token_id):
         flash('NFC-Token erfolgreich entfernt.', 'success')
+
 
 # Benutzerfunktionen
 def delete_user(user_id):
@@ -576,6 +590,7 @@ def delete_user(user_id):
             cursor.close()
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return False
+
 
 def toggle_user_admin(user_id, admin_state):
     """
@@ -609,6 +624,7 @@ def toggle_user_admin(user_id, admin_state):
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return False
 
+
 def toggle_user_lock(user_id, lock_state):
     """
     Sperrt einen Benutzer anhand seiner ID oder entsperrt ihn.
@@ -641,6 +657,7 @@ def toggle_user_lock(user_id, lock_state):
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return False
 
+
 def update_user_comment(user_id, comment):
     """
     Ändert den Kommentar eines Benutzer anhand seiner ID.
@@ -669,6 +686,7 @@ def update_user_comment(user_id, comment):
             cursor.close()
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return False
+
 
 def update_user_infomail_responsible_threshold(user_id, infomail_responsible_threshold):
     """
@@ -699,6 +717,7 @@ def update_user_infomail_responsible_threshold(user_id, infomail_responsible_thr
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return False
 
+
 def update_user_infomail_user_threshold(user_id, infomail_user_threshold):
     """
     Ändert die Infomail-User-Schwelle eines Benutzer anhand seiner ID.
@@ -727,6 +746,7 @@ def update_user_infomail_user_threshold(user_id, infomail_user_threshold):
             cursor.close()
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return False
+
 
 def update_user_email(user_id, email):
     """
@@ -757,6 +777,7 @@ def update_user_email(user_id, email):
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return False
 
+
 def fetch_user(code_or_email):
     """
     Ruft einen Benutzer aus der Datenbank anhand seines Codes oder seiner Emailadresse ab.
@@ -785,6 +806,7 @@ def fetch_user(code_or_email):
                 cursor.close()
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return None
+
 
 def get_user_by_id(user_id):
     """
@@ -819,6 +841,7 @@ def get_user_by_id(user_id):
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return None
 
+
 def get_saldo_for_user(user_id):
     """
     Berechnet das Saldo für den Benutzer mit der übergebenen user_id.
@@ -847,6 +870,7 @@ def get_saldo_for_user(user_id):
                 cursor.close()
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return 0
+
 
 def get_saldo_by_user():
     """
@@ -879,6 +903,7 @@ def get_saldo_by_user():
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return {}
 
+
 def get_all_users():
     """
     Ruft alle Benutzer aus der Datenbank ab, sortiert nach Namen.
@@ -910,6 +935,7 @@ def get_all_users():
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return []
 
+
 def get_all_api_users():
     """
     Ruft alle API-Benutzer aus der Datenbank ab, sortiert nach Username.
@@ -935,6 +961,7 @@ def get_all_api_users():
                 cursor.close()
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return []
+
 
 def get_api_user_by_id(api_user_id):
     """
@@ -965,6 +992,7 @@ def get_api_user_by_id(api_user_id):
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return None
 
+
 def get_api_keys_for_api_user(api_user_id):
     """
     Ruft alle API-Keys für einen bestimmten API-Benutzer ab.
@@ -994,6 +1022,7 @@ def get_api_keys_for_api_user(api_user_id):
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return []
 
+
 def get_user_transactions(user_id):
     """
     Ruft alle Transaktionen für einen bestimmten Benutzer ab, sortiert nach Zeitstempel (neueste zuerst).
@@ -1022,6 +1051,7 @@ def get_user_transactions(user_id):
                 cursor.close()
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return None
+
 
 def add_transaction(user_id, beschreibung, saldo_aenderung):
     """
@@ -1055,6 +1085,7 @@ def add_transaction(user_id, beschreibung, saldo_aenderung):
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return False
 
+
 def delete_all_transactions(user_id):
     """
     Löscht alle Transaktionen eines Benutzers.
@@ -1083,6 +1114,7 @@ def delete_all_transactions(user_id):
                 cursor.close()
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return False
+
 
 def update_password(user_id, new_password_hash):
     """
@@ -1113,6 +1145,7 @@ def update_password(user_id, new_password_hash):
                 cursor.close()
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return False
+
 
 def add_regular_user_db(user_data):
     """
@@ -1172,6 +1205,7 @@ def add_regular_user_db(user_data):
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return False
 
+
 def get_user_by_email(email):
     """
     Ruft einen Benutzer anhand seiner E-Mail-Adresse ab.
@@ -1199,6 +1233,7 @@ def get_user_by_email(email):
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return None
 
+
 def store_reset_token(user_id, token):
     """
     Speichert einen Passwort-Reset-Token in der Datenbank.
@@ -1219,7 +1254,7 @@ def store_reset_token(user_id, token):
         # Alte Tokens für diesen Benutzer löschen, um Missbrauch zu vermeiden
         cursor.execute("DELETE FROM password_reset_tokens WHERE user_id = %s", (user_id,))
         # Neuen Token mit 1 Stunde Gültigkeit einfügen
-        expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
+        expires_at = datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=1)
         query = "INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES (%s, %s, %s)"
         cursor.execute(query, (user_id, token, expires_at))
         cnx.commit()
@@ -1231,6 +1266,7 @@ def store_reset_token(user_id, token):
     finally:
         cursor.close()
         db_utils.DatabaseConnectionPool.close_connection(cnx)
+
 
 def get_user_by_reset_token(token):
     """
@@ -1253,7 +1289,7 @@ def get_user_by_reset_token(token):
             JOIN password_reset_tokens prt ON u.id = prt.user_id
             WHERE prt.token = %s AND prt.expires_at > %s
         """
-        cursor.execute(query, (token, datetime.now(timezone.utc)))
+        cursor.execute(query, (token, datetime.now(datetime.timezone.utc)))
         return cursor.fetchone()
     except Error as err:
         logger.error("Fehler beim Validieren des Reset-Tokens: %s", err)
@@ -1261,6 +1297,7 @@ def get_user_by_reset_token(token):
     finally:
         cursor.close()
         db_utils.DatabaseConnectionPool.close_connection(cnx)
+
 
 def delete_reset_token(token):
     """
@@ -1283,6 +1320,7 @@ def delete_reset_token(token):
     finally:
         cursor.close()
         db_utils.DatabaseConnectionPool.close_connection(cnx)
+
 
 def prepare_and_send_email(email_params: dict, smtp_cfg: dict) -> bool:
     """
@@ -1337,7 +1375,7 @@ def prepare_and_send_email(email_params: dict, smtp_cfg: dict) -> bool:
             final_html_body = render_template(template_name_html, **template_context_final)
             final_text_body = render_template(template_name_text, **template_context_final)
 
-    except Exception as e: # pylint: disable=W0718
+    except Exception as e:  # pylint: disable=W0718
         logger.error("Fehler beim Rendern der E-Mail-Templates für '%s': %s", template_name_html, e, exc_info=True)
         return False
 
@@ -1353,6 +1391,7 @@ def prepare_and_send_email(email_params: dict, smtp_cfg: dict) -> bool:
         content=email_content_dict,
         smtp_cfg=smtp_cfg
     )
+
 
 def _send_user_register_email(vorname: str, email: str, code: str, logo_pfad: str):
     """Sendet eine Willkommens-E-Mail mit Verifizierungscode an neue Benutzer.
@@ -1380,6 +1419,7 @@ def _send_user_register_email(vorname: str, email: str, code: str, logo_pfad: st
     else:
         logger.error("Fehler beim Senden der Neuer Benutzer Benachrichtigung an %s.", email)
 
+
 def _send_password_reset_email(email: str, token: str, logo_pfad: str):
     """Versendet eine E-Mail mit einem Link zum Zurücksetzen des Passworts.
 
@@ -1405,6 +1445,7 @@ def _send_password_reset_email(email: str, token: str, logo_pfad: str):
         logger.info("Passwort Reset Benachrichtigung an %s gesendet.", email)
     else:
         logger.error("Fehler beim Senden der Passwort Reset Benachrichtigung an %s.", email)
+
 
 def _send_manual_transaction_email(target_user: dict, beschreibung: str, saldo_aenderung_str: str, new_saldo: str, logo_pfad: str):
     """Informiert einen Benutzer per E-Mail über eine manuelle Transaktion.
@@ -1441,6 +1482,7 @@ def _send_manual_transaction_email(target_user: dict, beschreibung: str, saldo_a
     else:
         logger.error("Fehler beim Senden der Manuelle Transaktion Benachrichtigung an %s.", target_user['email'])
 
+
 def _send_responsible_benachrichtigung(target_user: dict, aktueller_saldo: int, logo_pfad: str):
     """Hilfsfunktion zur Information der Verantwortlichen wenn ein Benutzer das Limit unterschreitet."""
 
@@ -1463,6 +1505,7 @@ def _send_responsible_benachrichtigung(target_user: dict, aktueller_saldo: int, 
     else:
         logger.error("Fehler beim Senden der Saldo-Schwelle-erreicht-Info an ID: %s.", target_user['id'])
 
+
 def add_api_user_db(username):
     """
     Fügt einen neuen API-Benutzer der Datenbank hinzu.
@@ -1481,7 +1524,7 @@ def add_api_user_db(username):
             query = "INSERT INTO api_users (username) VALUES (%s)"
             cursor.execute(query, (username,))
             cnx.commit()
-            return cursor.lastrowid # Gibt die ID des eingefügten Datensatzes zurück
+            return cursor.lastrowid  # Gibt die ID des eingefügten Datensatzes zurück
         except IntegrityError:
             flash(f"API-Benutzername '{username}' existiert bereits.", 'error')
             cnx.rollback()
@@ -1495,6 +1538,7 @@ def add_api_user_db(username):
             cursor.close()
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return None
+
 
 def add_api_key_for_user_db(api_user_id, api_key_name_string, api_key_string):
     """
@@ -1516,7 +1560,7 @@ def add_api_key_for_user_db(api_user_id, api_key_name_string, api_key_string):
             cursor.execute(query, (api_user_id, api_key_name_string, api_key_string))
             cnx.commit()
             return True
-        except IntegrityError: # Sollte extrem selten sein, falls der Key schon existiert
+        except IntegrityError:  # Sollte extrem selten sein, falls der Key schon existiert
             flash("Generierter API-Key existiert bereits. Bitte erneut versuchen.", 'error')
             cnx.rollback()
             return False
@@ -1529,6 +1573,7 @@ def add_api_key_for_user_db(api_user_id, api_key_name_string, api_key_string):
             cursor.close()
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return False
+
 
 def delete_api_key_db(api_key_id):
     """
@@ -1560,6 +1605,7 @@ def delete_api_key_db(api_key_id):
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return False
 
+
 def delete_api_user_and_keys_db(api_user_id):
     """
     Löscht einen API-Benutzer und alle zugehörigen API-Keys.
@@ -1590,6 +1636,7 @@ def delete_api_user_and_keys_db(api_user_id):
             db_utils.DatabaseConnectionPool.close_connection(cnx)
     return False
 
+
 def _handle_delete_all_user_transactions(target_user_id):
     """
     Verarbeitet die Löschanfrage für alle Transaktionen eines Benutzers.
@@ -1602,6 +1649,7 @@ def _handle_delete_all_user_transactions(target_user_id):
         flash('Alle Transaktionen für diesen Benutzer wurden gelöscht.', 'success')
     else:
         flash('Fehler beim Löschen der Transaktionen.', 'error')
+
 
 def _handle_add_user_transaction(form_data, target_user):
     """
@@ -1624,13 +1672,14 @@ def _handle_add_user_transaction(form_data, target_user):
             # Die Funktion add_transaction flasht bereits Fehlermeldungen bei DB-Fehlern
             if add_transaction(target_user['id'], beschreibung, saldo_aenderung):
                 if target_user['email'] and get_user_notification_preference(target_user['id'], 'NEUE_TRANSAKTION'):
-                    new_saldo=get_saldo_for_user(target_user['id'])
+                    new_saldo = get_saldo_for_user(target_user['id'])
                     logo_pfad_str = str(Path("static/logo/logo-80x109.png"))
                     _send_manual_transaction_email(target_user, beschreibung, saldo_aenderung_str, str(new_saldo), logo_pfad_str)
                     _send_responsible_benachrichtigung(target_user, new_saldo, logo_pfad_str)
                 flash('Transaktion erfolgreich hinzugefügt.', 'success')
         except ValueError:
             flash('Ungültiger Wert für Saldoänderung. Es muss eine Zahl sein.', 'error')
+
 
 def _handle_toggle_user_lock_state(target_user_id, target_user, lock_state):
     """
@@ -1647,6 +1696,7 @@ def _handle_toggle_user_lock_state(target_user_id, target_user, lock_state):
         flash(f'Benutzer "{target_user.get("nachname", "")}, {target_user.get("vorname", "")}" (ID {target_user_id}) wurde {action_text}.', 'success')
     else:
         flash(f'Fehler beim {action_text} des Benutzers.', 'error')
+
 
 def _handle_toggle_user_admin_state(target_user_id, target_user, admin_state):
     """
@@ -1665,6 +1715,7 @@ def _handle_toggle_user_admin_state(target_user_id, target_user, admin_state):
     else:
         flash(f'Fehler beim {"Befördern" if admin_state else "Degradieren"} des {role_text.lower()}s.', 'error')
 
+
 def _handle_delete_target_user(target_user_id, target_user):
     """
     Verarbeitet die Löschanfrage für einen Benutzer. Verhindert Selbstlöschung.
@@ -1681,13 +1732,14 @@ def _handle_delete_target_user(target_user_id, target_user):
     logged_in_user_id = session.get('user_id')
     if target_user_id == logged_in_user_id:
         flash("Du kannst dich nicht selbst löschen.", "warning")
-        return False # Keine Weiterleitung zum Dashboard
+        return False  # Keine Weiterleitung zum Dashboard
 
     if delete_user(target_user_id):
         flash(f'Benutzer "{target_user.get("nachname", "")}, {target_user.get("vorname", "")}" (ID {target_user_id}) wurde gelöscht.', 'success')
-        return True # Weiterleitung zum Dashboard
+        return True  # Weiterleitung zum Dashboard
     flash('Fehler beim Löschen des Benutzers.', 'error')
     return False
+
 
 def _handle_update_user_comment_admin(form_data, target_user_id):
     """
@@ -1702,7 +1754,8 @@ def _handle_update_user_comment_admin(form_data, target_user_id):
     if update_user_comment(target_user_id, comment if comment is not None else ""):
         flash('Kommentar erfolgreich aktualisiert.', 'success')
     else:
-        flash('Fehler beim Aktualisieren des Kommentars.', 'error') # Fallback, falls DB-Funktion nicht flasht
+        flash('Fehler beim Aktualisieren des Kommentars.', 'error')  # Fallback, falls DB-Funktion nicht flasht
+
 
 def _handle_update_infomail_responsible_threshold_admin(form_data, target_user_id):
     """
@@ -1717,7 +1770,8 @@ def _handle_update_infomail_responsible_threshold_admin(form_data, target_user_i
     if update_user_infomail_responsible_threshold(target_user_id, infomail_responsible_threshold if infomail_responsible_threshold is not None else ""):
         flash('Infomail-Schwelle erfolgreich aktualisiert.', 'success')
     else:
-        flash('Fehler beim Aktualisieren der Infomail-Schwelle.', 'error') # Fallback, falls DB-Funktion nicht flasht
+        flash('Fehler beim Aktualisieren der Infomail-Schwelle.', 'error')  # Fallback, falls DB-Funktion nicht flasht
+
 
 def _handle_update_user_email_admin(form_data, target_user_id):
     """
@@ -1732,7 +1786,8 @@ def _handle_update_user_email_admin(form_data, target_user_id):
     if update_user_email(target_user_id, email):
         flash('Emailadresse erfolgreich aktualisiert.', 'success')
     else:
-        flash('Fehler beim Aktualisieren der Emailadresse.', 'error') # Fallback
+        flash('Fehler beim Aktualisieren der Emailadresse.', 'error')  # Fallback
+
 
 def _validate_add_user_form(form_data):
     """
@@ -1753,15 +1808,15 @@ def _validate_add_user_form(form_data):
             errors = True
             # Nicht nach erstem Fehler abbrechen, um alle fehlenden Felder zu melden (optional)
 
-    if errors: # Wenn schon Pflichtfelder fehlen, sind die folgenden Prüfungen ggf. nicht sinnvoll
-        if not all(form_data.get(field) for field in ['password', 'confirm_password']): # Sicherstellen, dass beide PW-Felder existieren
-            flash("Passwortfelder dürfen nicht leer sein.", "error") # Redundant, aber zur Sicherheit
-        return False # Frühzeitiger Ausstieg bei fehlenden Pflichtfeldern
+    if errors:  # Wenn schon Pflichtfelder fehlen, sind die folgenden Prüfungen ggf. nicht sinnvoll
+        if not all(form_data.get(field) for field in ['password', 'confirm_password']):  # Sicherstellen, dass beide PW-Felder existieren
+            flash("Passwortfelder dürfen nicht leer sein.", "error")  # Redundant, aber zur Sicherheit
+        return False  # Frühzeitiger Ausstieg bei fehlenden Pflichtfeldern
 
     if form_data.get('password') != form_data.get('confirm_password'):
         flash("Die Passwörter stimmen nicht überein.", "error")
         errors = True
-    if form_data.get('password') and len(form_data.get('password')) < 8: # type: ignore
+    if form_data.get('password') and len(form_data.get('password')) < 8:  # type: ignore
         flash('Das Passwort muss mindestens 8 Zeichen lang sein.', 'error')
         errors = True
     # fetch_user benötigt code, der oben schon als Pflichtfeld geprüft wurde
@@ -1769,6 +1824,7 @@ def _validate_add_user_form(form_data):
         flash(f"Der Code '{form_data.get('code')}' wird bereits verwendet. Bitte wähle einen anderen.", "error")
         errors = True
     return not errors
+
 
 def _validate_register_form(form_data):
     """
@@ -1789,7 +1845,7 @@ def _validate_register_form(form_data):
             errors = True
 
     if errors:
-        return False # Frühzeitiger Ausstieg
+        return False  # Frühzeitiger Ausstieg
 
     if form_data.get('password') != form_data.get('confirm_password'):
         flash("Die Passwörter stimmen nicht überein.", "error")
@@ -1804,6 +1860,7 @@ def _validate_register_form(form_data):
         errors = True
 
     return not errors
+
 
 def _process_system_setting_update(key, new_value_str):
     """
@@ -1832,6 +1889,7 @@ def _process_system_setting_update(key, new_value_str):
         # Fehler wird bereits in update_system_setting geflasht
         return False
     return True
+
 
 def _validate_bulk_change_form(form):
     """
@@ -1870,6 +1928,7 @@ def _validate_bulk_change_form(form):
 
     return not errors, saldo_aenderung, selected_user_ids
 
+
 def _process_bulk_transactions(user_ids, beschreibung, saldo_aenderung):
     """
     Verarbeitet die Sammelbuchung, fügt Transaktionen hinzu und sendet E-Mails.
@@ -1897,6 +1956,7 @@ def _process_bulk_transactions(user_ids, beschreibung, saldo_aenderung):
         else:
             failed += 1
     return successful, failed
+
 
 def _process_user_info_form(form, user):
     """
@@ -1960,8 +2020,8 @@ def _process_user_info_form(form, user):
 
     return False
 
-# --- Flask Decorator ---
 
+# --- Flask Decorator ---
 def admin_required(f):
     """
     Decorator, der sicherstellt, dass der Benutzer ein eingeloggter,
@@ -1989,8 +2049,8 @@ def admin_required(f):
         return f(admin_user, *args, **kwargs)
     return decorated_function
 
-# --- Flask Injector ---
 
+# --- Flask Injector ---
 @app.context_processor
 def inject_global_vars():
     """
@@ -2004,10 +2064,10 @@ def inject_global_vars():
         dict: Ein Dictionary mit globalen Variablen.
     """
 
-    return  {'app_name': config.app_name, 'app_slogan': config.app_slogan, 'version': app.config.get('version', 'unbekannt')}
+    return {'app_name': config.app_name, 'app_slogan': config.app_slogan, 'version': app.config.get('version', 'unbekannt')}
+
 
 # --- Flask Routen ---
-
 @app.route('/', methods=['GET', 'POST'])
 def login():
     """
@@ -2044,6 +2104,7 @@ def login():
             flash('Ungültiger Benutzername oder Passwort', 'error')
     return render_template('web_login.html')
 
+
 @app.route('/datenschutz')
 def datenschutz():
     """
@@ -2054,6 +2115,7 @@ def datenschutz():
     """
 
     return render_template('web_privacy_policy.html')
+
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -2078,25 +2140,25 @@ def register():
         if _validate_register_form(form_data):
             # GET Request
             generated_code = None
-            for _ in range(100): # Max 100 attempts
+            for _ in range(100):  # Max 100 attempts
                 potential_code = ''.join(random.choices(string.digits, k=10))
                 if not fetch_user(potential_code):
                     generated_code = potential_code
                     break
             if not generated_code:
                 flash("Ich konnte keinen eindeutigen Code generieren. Bitte versuche es später erneut.", "warning")
-                generated_code = "" # Fallback
+                generated_code = ""  # Fallback
             user_details = {
                 'code': generated_code,
                 'nachname': form_data.get('nachname', '').strip(),
                 'vorname': form_data.get('vorname', '').strip(),
                 'password': form_data.get('password'),
-                'email': form_data.get('email', '').strip(), # Optional
-                'kommentar': form_data.get('kommentar', '').strip(), # Optional
+                'email': form_data.get('email', '').strip(),  # Optional
+                'kommentar': form_data.get('kommentar', '').strip(),  # Optional
                 'acc_duties': form_data.get('pflichten'),
                 'acc_privacy_policy': form_data.get('datenschutz'),
                 'is_locked': False,
-                'is_admin': False # Neue Benutzer sind niemals Admins
+                'is_admin': False  # Neue Benutzer sind niemals Admins
             }
             if add_regular_user_db(user_details):
                 if user_details['email']:
@@ -2104,7 +2166,7 @@ def register():
                     _send_user_register_email(user_details['vorname'], user_details['email'], generated_code, logo_pfad_str)
 
                 flash(f"Registrierung erfolgreich! Du kannst dich nun anmelden mit dem Code '{generated_code}'. Bitte notiere dir "
-                       "diesen Code für künftige Logins!", "success")
+                      "diesen Code für künftige Logins!", "success")
                 return redirect(BASE_URL + url_for('login'))
         # Bei Validierungsfehler oder DB-Fehler, das Formular erneut mit den
         # eingegebenen Daten anzeigen.
@@ -2116,6 +2178,7 @@ def register():
     return render_template('web_user_register.html',
                            form_data=None,
                            version=app.config.get('version', 'unbekannt'))
+
 
 @app.route('/request-password-reset', methods=['GET', 'POST'])
 def request_password_reset():
@@ -2142,6 +2205,7 @@ def request_password_reset():
 
     return render_template('web_request_reset.html')
 
+
 @app.route('/reset-password/<token>', methods=['GET', 'POST'])
 def reset_with_token(token):
     """
@@ -2167,12 +2231,13 @@ def reset_with_token(token):
         else:
             new_password_hash = generate_password_hash(password)
             if update_password(user['id'], new_password_hash):
-                delete_reset_token(token) # Wichtig: Token nach Nutzung entwerten
+                delete_reset_token(token)  # Wichtig: Token nach Nutzung entwerten
                 flash('Dein Passwort wurde erfolgreich zurückgesetzt. Du kannst dich nun anmelden.', 'success')
                 return redirect(url_for('login'))
             flash('Beim Aktualisieren des Passworts ist ein Fehler aufgetreten.', 'error')
 
     return render_template('web_reset_password.html', token=token)
+
 
 @app.route('/user_info', methods=['GET', 'POST'])
 def user_info():
@@ -2206,7 +2271,7 @@ def user_info():
     # GET Request oder nach POST-Redirect
     # Benutzerdaten neu laden, um eventuelle Änderungen anzuzeigen
     user_data = get_user_by_id(user_id)
-    if not user_data: # Sicherheitscheck, falls der Benutzer zwischenzeitlich gelöscht wurde
+    if not user_data:  # Sicherheitscheck, falls der Benutzer zwischenzeitlich gelöscht wurde
         session.pop('user_id', None)
         flash('Benutzer nicht mehr vorhanden.', 'error')
         return redirect(BASE_URL + url_for('login'))
@@ -2226,6 +2291,7 @@ def user_info():
                            all_notification_types=all_notification_types_data,
                            user_notification_settings=user_notification_settings_data,
                            version=app.config.get('version', 'unbekannt'))
+
 
 @app.route('/qr_code')
 def generate_qr():
@@ -2284,10 +2350,11 @@ def generate_qr():
     # Bild in einem In-Memory Bytes-Puffer speichern
     byte_io = io.BytesIO()
     img.save(byte_io, 'PNG')
-    byte_io.seek(0) # Wichtig: Den Puffer an den Anfang zurücksetzen
+    byte_io.seek(0)  # Wichtig: Den Puffer an den Anfang zurücksetzen
 
     # Bild als Datei-Antwort senden
     return send_file(byte_io, mimetype='image/png')
+
 
 @app.route('/admin', methods=['GET', 'POST'])
 @admin_required
@@ -2335,6 +2402,7 @@ def admin_dashboard(admin_user):
                            system_settings=system_settings_data,
                            version=app.config.get('version', 'unbekannt'))
 
+
 @app.route('/admin/add_user', methods=['GET', 'POST'])
 @admin_required
 def add_user(admin_user):
@@ -2367,25 +2435,21 @@ def add_user(admin_user):
                 return redirect(BASE_URL + url_for('admin_dashboard'))
         # Bei Validierungsfehler oder DB-Fehler (geflasht in add_regular_user_db oder _validate_add_user_form),
         # das Formular mit den eingegebenen Daten erneut anzeigen
-        return render_template('web_user_add.html',
-                               user=admin_user,
-                               current_code=form_data.get('code'),
-                               form_data=form_data,
-                               version=app.config.get('version', 'unbekannt')
-                              )
+        return render_template('web_user_add.html', user=admin_user, current_code=form_data.get('code'), form_data=form_data, version=app.config.get('version', 'unbekannt'))
 
     # GET Request
     generated_code = None
-    for _ in range(100): # Max 100 attempts
+    for _ in range(100):  # Max 100 attempts
         potential_code = ''.join(random.choices(string.digits, k=10))
         if not fetch_user(potential_code):
             generated_code = potential_code
             break
     if not generated_code:
         flash("Konnte keinen eindeutigen Code generieren. Bitte versuche es später erneut.", "warning")
-        generated_code = "" # Fallback
+        generated_code = ""  # Fallback
 
     return render_template('web_user_add.html', user=admin_user, current_code=generated_code, form_data=None)
+
 
 @app.route('/admin/api_users', methods=['GET', 'POST'])
 @admin_required
@@ -2421,6 +2485,7 @@ def admin_api_user_manage(admin_user):
     api_users_list = get_all_api_users()
     return render_template('web_admin_api_user_manage.html', user=admin_user, api_users=api_users_list)
 
+
 @app.route('/admin/api_user/<int:api_user_id_route>')
 @admin_required
 def admin_api_user_detail(admin_user, api_user_id_route):
@@ -2448,6 +2513,7 @@ def admin_api_user_detail(admin_user, api_user_id_route):
 
     api_keys_list = get_api_keys_for_api_user(api_user_id_route)
     return render_template('web_admin_api_user_detail.html', user=admin_user, api_user=target_api_user, api_keys=api_keys_list)
+
 
 @app.route('/admin/api_user/<int:api_user_id_route>/generate_key', methods=['POST'])
 @admin_required
@@ -2481,12 +2547,13 @@ def admin_generate_api_key_for_user(_admin_user, api_user_id_route):
     new_key_string = generate_api_key_string()
     if add_api_key_for_user_db(api_user_id_route, new_key_name_string, new_key_string):
         flash(f"Neuer API-Key für '{target_api_user['username']}' generiert: {new_key_string} - "
-               "Bitte sofort sicher kopieren, er kann nicht wieder angezeigt werden!", "success")
+              "Bitte sofort sicher kopieren, er kann nicht wieder angezeigt werden!", "success")
     else:
         # Fehler wurde bereits in add_api_key_for_user_db geflasht
         pass
 
     return redirect(BASE_URL + url_for('admin_api_user_detail', api_user_id_route=api_user_id_route))
+
 
 @app.route('/admin/api_key/<int:api_key_id_route>/delete', methods=['POST'])
 @admin_required
@@ -2529,6 +2596,7 @@ def admin_delete_api_key(_admin_user, api_key_id_route):
     # Fallback, falls die api_user_id nicht ermittelt werden konnte oder ungültig war
     return redirect(BASE_URL + url_for('admin_api_user_manage'))
 
+
 @app.route('/admin/api_user/<int:api_user_id_route>/delete', methods=['POST'])
 @admin_required
 def admin_delete_api_user(_admin_user, api_user_id_route):
@@ -2561,6 +2629,7 @@ def admin_delete_api_user(_admin_user, api_user_id_route):
         pass
 
     return redirect(BASE_URL + url_for('admin_api_user_manage'))
+
 
 @app.route('/admin/bulk_change', methods=['GET', 'POST'])
 @admin_required
@@ -2607,6 +2676,7 @@ def admin_bulk_change(admin_user):
                            users=users_data,
                            form_data=default_form_data)
 
+
 @app.route('/admin/user/<int:target_user_id>/transactions', methods=['GET', 'POST'])
 @admin_required
 def admin_user_modification(admin_user, target_user_id):
@@ -2650,10 +2720,10 @@ def admin_user_modification(admin_user, target_user_id):
             if action_key in form_data:
                 handler_func()
                 action_handled = True
-                break # Nur eine Aktion pro POST-Request annehmen
+                break  # Nur eine Aktion pro POST-Request annehmen
 
         # Spezielle Behandlung für 'delete_user', da es die Weiterleitungs-URL ändern kann
-        if 'delete_user' in form_data and not action_handled: # 'not action_handled' zur Sicherheit
+        if 'delete_user' in form_data and not action_handled:  # 'not action_handled' zur Sicherheit
             if _handle_delete_target_user(target_user_id, target_user):
                 redirect_url = BASE_URL + url_for('admin_dashboard')
             action_handled = True
@@ -2668,7 +2738,7 @@ def admin_user_modification(admin_user, target_user_id):
     transactions = get_user_transactions(target_user_id)
     saldo = get_saldo_for_user(target_user_id)
 
-    refreshed_target_user = get_user_by_id(target_user_id) # Für aktuelle Daten im Template
+    refreshed_target_user = get_user_by_id(target_user_id)  # Für aktuelle Daten im Template
     if not refreshed_target_user:
         flash("Zielbenutzer konnte nicht erneut geladen werden.", "error")
         return redirect(BASE_URL + url_for('admin_dashboard'))
@@ -2680,6 +2750,7 @@ def admin_user_modification(admin_user, target_user_id):
                            saldo=saldo,
                            admin_user=admin_user,
                            version=app.config.get('version', 'unbekannt'))
+
 
 @app.route('/logout')
 def logout():
@@ -2693,6 +2764,7 @@ def logout():
     session.pop('user_id', None)
     flash("Erfolgreich abgemeldet.", "success")
     return redirect(BASE_URL + url_for('login'))
+
 
 if __name__ == '__main__':
     app.run(host=config.gui_config['host'], port=config.gui_config['port'], debug=config.gui_config['flask_debug_mode'])
