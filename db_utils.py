@@ -8,6 +8,7 @@ from mysql.connector import pooling, Error  # Error hier importiert
 
 logger = logging.getLogger(__name__)
 
+
 class DatabaseConnectionPool:
     """
     Verwaltet den Datenbankverbindungspool für die Anwendung.

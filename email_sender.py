@@ -11,6 +11,7 @@ from typing import Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
 
+
 def _validate_smtp_config(smtp_cfg: Dict[str, Any]) -> bool:
     """Prüft die SMTP-Konfiguration auf Vollständigkeit und korrekten Port-Typ."""
 
@@ -19,11 +20,12 @@ def _validate_smtp_config(smtp_cfg: Dict[str, Any]) -> bool:
         logger.error("Unvollständige SMTP-Konfiguration. Benötigt: %s.", ", ".join(required_keys))
         return False
     try:
-        int(smtp_cfg['port']) # Prüft, ob Port eine Zahl ist
+        int(smtp_cfg['port'])  # Prüft, ob Port eine Zahl ist
     except ValueError:
         logger.error("SMTP-Port '%s' ist keine gültige Zahl.", smtp_cfg.get('port'))
         return False
     return True
+
 
 def _prepare_html_with_logo(html_content: str, logo_pfad_content: Optional[str], logo_cid: str) -> str:
     """Bereitet den HTML-Inhalt vor, ersetzt ggf. Logo-CID oder entfernt Logo-Referenz."""
@@ -35,6 +37,7 @@ def _prepare_html_with_logo(html_content: str, logo_pfad_content: Optional[str],
         logger.warning("Logo-Platzhalter 'cid:logo' im HTML gefunden, aber kein gültiger logo_pfad ('%s') oder Datei nicht gefunden. Logo-Referenz wird entfernt.", logo_pfad_content)
         html_to_send = re.sub(r'<img[^>]*src\s*=\s*["\']cid:logo["\'][^>]*>', '', html_content, flags=re.IGNORECASE)
     return html_to_send
+
 
 def _create_mime_message(empfaenger_email: str, betreff: str, content: Dict[str, Any]) -> MIMEMultipart:
     """Erstellt das MIMEMultipart-Objekt mit Text, HTML und optionalem Logo."""
@@ -68,11 +71,12 @@ def _create_mime_message(empfaenger_email: str, betreff: str, content: Dict[str,
                 msg.attach(img)
             except FileNotFoundError:
                 logger.warning("Logo-Datei nicht gefunden unter %s (trotz vorheriger Prüfung).", logo_pfad_content)
-            except Exception as e: # pylint: disable=W0718
+            except Exception as e:  # pylint: disable=W0718
                 logger.error("Fehler beim Einbetten des Logos '%s': %s.", logo_pfad_content, e, exc_info=True)
         else:
             pass
     return msg
+
 
 def _send_email_via_smtp(msg: MIMEMultipart, smtp_cfg: Dict[str, Any], empfaenger_email: str) -> bool:
     """Stellt die SMTP-Verbindung her und sendet die vorbereitete E-Mail."""
@@ -93,16 +97,17 @@ def _send_email_via_smtp(msg: MIMEMultipart, smtp_cfg: Dict[str, Any], empfaenge
     except smtplib.SMTPHeloError as e:
         logger.error("Der Server hat auf HELO/EHLO nicht korrekt geantwortet: %s", e)
     except smtplib.SMTPRecipientsRefused as e:
-        logger.error("Alle Empfänger wurden abgelehnt: %s", e.recipients) # type: ignore
+        logger.error("Alle Empfänger wurden abgelehnt: %s", e.recipients)  # type: ignore
     except smtplib.SMTPSenderRefused as e:
         logger.error("Die Absenderadresse wurde abgelehnt: %s", e.sender)
     except smtplib.SMTPDataError as e:
         logger.error("Der Server hat die Nachrichtendaten nicht akzeptiert: %s - %s", e.smtp_code, e.smtp_error)
     except ConnectionRefusedError:
         logger.error("Verbindung zu %s:%s wurde abgelehnt. Läuft der Server und ist der Port korrekt?", smtp_cfg.get('host'), smtp_cfg.get('port'))
-    except Exception as e: # pylint: disable=W0718
+    except Exception as e:  # pylint: disable=W0718
         logger.error("Ein unerwarteter Fehler ist beim E-Mail-Versand aufgetreten: %s", e, exc_info=True)
     return False
+
 
 def sende_formatierte_email(empfaenger_email: str, betreff: str, content: Dict[str, Any], smtp_cfg: Dict[str, Any]) -> bool:
     """
