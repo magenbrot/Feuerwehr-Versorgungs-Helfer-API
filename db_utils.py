@@ -1,6 +1,8 @@
 """Verwaltet den Datenbankverbindungspool für die Anwendung."""
 import logging
 import sys
+import time
+import threading
 import mysql.connector
 from mysql.connector import pooling, Error  # Error hier importiert
 
@@ -46,6 +48,79 @@ class DatabaseConnectionPool:
                     "Fehler beim Initialisieren des Datenbankverbindungspools: %s", e
                 )
                 raise  # Wirf den Fehler weiter, damit die Anwendung reagieren kann
+
+    @classmethod
+    def _health_check_loop(cls):
+        """
+        Prüft periodisch die Verbindung des Datenbankpools zur Datenbank
+
+        Alle 30 Sekunden wird ein "SELECT 1" ausgeführt, um die Verbindung
+        zum Datenbankpool zu testen und die Verbindung am Leben zu halten
+        and verify pool status.
+        """
+
+        logger.info("Datenbank Health-Check gestartet (Interval: 30s).")
+        while True:
+            if cls._connection_pool is None:
+                logger.warning(
+                    "Health-Check: Pool wurde noch nicht initialisiert. Warte 30 Sekunden."
+                )
+                time.sleep(30)
+                continue
+
+            cnx = None
+            try:
+                # 1. Get connection from pool
+                cnx = cls.get_connection()
+
+                if cnx:
+                    # 2. Perform a simple query
+                    with cnx.cursor() as cursor:
+                        cursor.execute("SELECT 1")
+                        cursor.fetchone()
+                    logger.debug("Datenbank Health-Check erfolgreich.")
+                else:
+                    logger.warning(
+                        "Datenbank Health-Check nicht erfolgreich. Konnte keine Verbindung aus dem Pool bekommen."
+                    )
+
+            except Error as err:
+                # Error from mysql.connector (e.g., connection lost)
+                logger.error("Datenbank Health-Check Query fehlgeschlagen: %s", err)
+            except RuntimeError as e:
+                # This might happen if pool is None and get_connection raises it
+                logger.error("Datenbank Health-Check runtime error (pool not init?): %s", e)
+            except Exception as e:  # pylint: disable=W0718
+                # Catch other potential unexpected errors
+                logger.error("Unerwarteter Fehler beim Datenbank Health-Check: %s", e)
+
+            finally:
+                # 3. Always release the connection back to the pool
+                if cnx:
+                    cls.close_connection(cnx)
+
+            # 4. Wait for 30 seconds
+            time.sleep(30)
+
+    @classmethod
+    def start_health_check_thread(cls):
+        """
+        Startet den Health-Check im Hintergrund
+        """
+
+        if cls._connection_pool is None:
+            logger.error("Konnte den Health-Check nicht starten, da der Pool noch nicht initialisiert ist!")
+            return
+
+        try:
+            health_thread = threading.Thread(
+                target=cls._health_check_loop, daemon=True
+            )
+            health_thread.start()
+        except Exception as e:  # pylint: disable=W0718
+            logger.critical(
+                "Unbekannter Fehler beim Starten des Datenbank Health-Check Threads: %s", e
+            )
 
     @classmethod
     def get_connection(cls, database_config=None):
