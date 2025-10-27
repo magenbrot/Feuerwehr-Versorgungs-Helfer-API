@@ -58,6 +58,10 @@ except Error as e:
     logger.info("Kritischer Fehler beim Starten der Datenbankverbindung: %s", e)
     sys.exit(1)
 
+# Starte den Health-Check-Thread, nachdem der Pool initialisiert wurde
+db_utils.DatabaseConnectionPool.start_health_check_thread()
+
+# Lade das Manifest mit Author- und Versionsinfos
 try:
     with open('manifest.json', 'r', encoding='utf-8') as manifest:
         app.config.update(json.load(manifest))
