@@ -59,7 +59,7 @@ except Error as e:
     sys.exit(1)
 
 # Starte den Health-Check-Thread, nachdem der Pool initialisiert wurde
-db_utils.DatabaseConnectionPool.start_health_check_thread()
+#db_utils.DatabaseConnectionPool.start_health_check_thread()
 
 # Lade das Manifest mit Author- und Versionsinfos
 try:
