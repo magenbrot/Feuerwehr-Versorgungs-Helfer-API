@@ -4,7 +4,6 @@
 import sys
 import logging
 import binascii
-import datetime
 import functools
 import json
 import os
@@ -12,6 +11,7 @@ import io
 import random
 import secrets
 import string
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import qrcode
 import qrcode.constants
@@ -1254,7 +1254,7 @@ def store_reset_token(user_id, token):
         # Alte Tokens für diesen Benutzer löschen, um Missbrauch zu vermeiden
         cursor.execute("DELETE FROM password_reset_tokens WHERE user_id = %s", (user_id,))
         # Neuen Token mit 1 Stunde Gültigkeit einfügen
-        expires_at = datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=1)
+        expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
         query = "INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES (%s, %s, %s)"
         cursor.execute(query, (user_id, token, expires_at))
         cnx.commit()
@@ -1289,7 +1289,7 @@ def get_user_by_reset_token(token):
             JOIN password_reset_tokens prt ON u.id = prt.user_id
             WHERE prt.token = %s AND prt.expires_at > %s
         """
-        cursor.execute(query, (token, datetime.now(datetime.timezone.utc)))
+        cursor.execute(query, (token, datetime.now(timezone.utc)))
         return cursor.fetchone()
     except Error as err:
         logger.error("Fehler beim Validieren des Reset-Tokens: %s", err)
