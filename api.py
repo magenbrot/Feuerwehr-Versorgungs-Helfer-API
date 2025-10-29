@@ -719,7 +719,7 @@ def nfc_transaction(api_user_id_auth: int, api_username_auth: str):
 @api_key_required
 def person_transaktion_erstellen(api_user_id_auth: int, api_username_auth: str, code: str):
     """
-    Erstellt eine manuelle Transaktion für einen Benutzer anhand seines Codes.
+    Erstellt eine Transaktion für einen Benutzer anhand seines Codes.
     Löst ggf. E-Mail-Benachrichtigungen aus.
 
     Args:
@@ -732,7 +732,7 @@ def person_transaktion_erstellen(api_user_id_auth: int, api_username_auth: str, 
     Returns: flask.Response
     """
 
-    logger.info("Manuelle Transaktion für Code %s von API-Benutzer: ID %s - %s.", code, api_user_id_auth, api_username_auth)
+    logger.info("Transaktion für Code %s von API-Benutzer: ID %s - %s.", code, api_user_id_auth, api_username_auth)
     daten = request.get_json()
     if not daten or 'beschreibung' not in daten:
         return jsonify({'error': 'Ungültige Anfrage. Beschreibung ist erforderlich.'}), 400
@@ -777,7 +777,7 @@ def person_transaktion_erstellen(api_user_id_auth: int, api_username_auth: str, 
             cursor.execute("INSERT INTO transactions (user_id, beschreibung, saldo_aenderung) VALUES (%s, %s, %s)",
                            (user_info['id'], daten['beschreibung'], trans_saldo_aenderung))
             cnx.commit()
-            logger.info("Manuelle Transaktion für %s (ID: %s, Code: %s), '%s', Saldo: %s erfolgreich erstellt.",
+            logger.info("Transaktion für %s (ID: %s, Code: %s), '%s', Saldo: %s erfolgreich erstellt.",
                         user_info['vorname'], user_info['id'], code, daten['beschreibung'], trans_saldo_aenderung)
 
             cursor.execute("SELECT SUM(saldo_aenderung) AS saldo FROM transactions WHERE user_id = %s", (user_info['id'],))
@@ -807,7 +807,7 @@ def person_transaktion_erstellen(api_user_id_auth: int, api_username_auth: str, 
     except Error as err:
         if cnx.is_connected():
             cnx.rollback()
-        logger.error("Fehler bei manueller Transaktion für Code %s: %s", code, err)
+        logger.error("Fehler bei Transaktion für Code %s: %s", code, err)
         return jsonify({'error': 'Fehler beim Erstellen der Transaktion.'}), 500
     finally:
         if cnx:
