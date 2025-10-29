@@ -9,7 +9,7 @@
 </head>
 <body>
     <h2>Verwaltung für {{ user.nachname }}, {{ user.vorname }} ({{ user.code }})</h2>
-    <h3>Aktueller Saldo: {{ saldo }} {% if user.is_locked %} (gesperrt){% endif %}{% if user.kommentar %} - {{ user.kommentar }}{% endif %}</h3>
+    <h3>Aktueller Saldo: {{ saldo }} €{% if user.is_locked %} (gesperrt){% endif %}{% if user.kommentar %} - {{ user.kommentar }}{% endif %}</h3>
 
     <div class="admin-link">
         <a href="{{ url_for('admin_dashboard') }}">Zurück zum Admin Dashboard</a>
@@ -41,7 +41,7 @@
                     {% for transaction in transactions %}
                     <tr>
                         <td>{{ transaction.beschreibung }}</td>
-                        <td>{{ transaction.saldo_aenderung }}</td>
+                        <td>{{ transaction.saldo_aenderung }} €</td>
                         <td>{{ transaction.timestamp }}</td>
                     </tr>
                     {% endfor %}
