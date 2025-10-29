@@ -37,6 +37,7 @@ gui_config = {
     'port': os.getenv("GUI_PORT", "5001"),
     'flask_debug_mode': os.getenv('GUI_DEBUG', 'False').lower() in ['true', '1', 'yes'],
     'log_level': os.getenv("GUI_LOG_LEVEL", "INFO"),
+    'secret_key': os.getenv("APP_SECRET"),
     'static_url_prefix': os.getenv("STATIC_URL_PREFIX"),
 }
 
