@@ -40,7 +40,11 @@ else:
 
 app.debug = config.gui_config['flask_debug_mode']
 
-app.config['SECRET_KEY'] = os.urandom(24)
+app.config['SECRET_KEY'] = config.gui_config.get('secret_key')
+if not app.config['SECRET_KEY']:
+    logger.critical("Fehler: APP_SECRET ist in der Konfiguration (.env) nicht gesetzt!")
+    sys.exit(1)
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)
 app.config['DEBUG'] = config.api_config['flask_debug_mode']
 app.config['JSON_AS_ASCII'] = False
 
@@ -2048,6 +2052,16 @@ def admin_required(f):
         # Übergibt den geprüften Admin-Benutzer an die eigentliche Routen-Funktion
         return f(admin_user, *args, **kwargs)
     return decorated_function
+
+
+@app.before_request
+def make_session_permanent():
+    """
+    Setzt die Session-Lebensdauer bei jeder Anfrage zurück.
+    """
+
+    if 'user_id' in session:
+        session.permanent = True
 
 
 # --- Flask Injector ---
