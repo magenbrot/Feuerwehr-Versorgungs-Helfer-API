@@ -15,7 +15,7 @@ jobs:
         
       - name: 2. Clone Wiki Repository
         run: |
-          git clone "https://${{ github.actor }}:${{ secrets.WIKI_TOKEN }}@github.com/${{ github.repository }}.wiki.git" wiki_repo
+          git clone "https://${{ github.actor }}:${{ secrets.WIKI_TOKEN }}@github.com/magenbrot/Feuerwehr-Versorgungs-Helfer.wiki.git" wiki_repo
           cd wiki_repo
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
