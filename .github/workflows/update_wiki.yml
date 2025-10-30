@@ -1,0 +1,41 @@
+name: Update Wiki Footer on 
+
+on:
+  push:
+    paths:
+      - 'manifest.json'
+
+jobs:
+  update-footer:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 1. Checkout Main Repository
+        uses: actions/checkout@v4
+        
+      - name: 2. Clone Wiki Repository
+        run: |
+          git clone "https://${{ github.actor }}:${{ secrets.WIKI_TOKEN }}@github.com/${{ github.repository }}.wiki.git" wiki_repo
+          cd wiki_repo
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+      - name: 3. Generate and Update Footer
+        # Read the new version number from the event and write it to the _Footer.md file
+        run: |
+          NEW_VERSION=${{ github.event.release.tag_name }}
+          FOOTER_CONTENT="$(date +'%Y') Feuerwehr-Versorgungs-Helfer | Version $NEW_VERSION | [Unterstütze den Entwickler](https://github.com/sponsors/magenbrot)"
+          
+          # Write the new content to the _Footer.md file in the cloned wiki repo
+          echo "$FOOTER_CONTENT" > wiki_repo/_Footer.md
+          
+      - name: 4. Commit and Push Changes to Wiki
+        run: |
+          cd wiki_repo
+          git add _Footer.md
+          # Check if there are changes before committing
+          if ! git diff --cached --exit-code; then
+            git commit -m "chore(wiki): Auto update footer version to $NEW_VERSION [skip ci]"
+            git push
+          else
+            echo "No changes in _Footer.md, skipping commit."
+          fi
