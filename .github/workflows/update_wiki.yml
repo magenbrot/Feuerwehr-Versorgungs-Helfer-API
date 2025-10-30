@@ -25,8 +25,8 @@ jobs:
       - name: Generate and Update Footer
         run: |
           NEW_VERSION=$(jq '.version' main/manifest.json)
-          AUTHOR=$(jq '.author' main/manifest.json)
-          FOOTER_CONTENT="$(date +'%Y') Feuerwehr-Versorgungs-Helfer | Version $NEW_VERSION | [Unterstütze den Entwickler](https://github.com/sponsors/magenbrot)"
+          AUTHOR=$(jq -r '.author' main/manifest.json)
+          FOOTER_CONTENT="$(date +'%Y') Feuerwehr-Versorgungs-Helfer ($AUTHOR) | Version $NEW_VERSION | [Unterstütze den Entwickler](https://github.com/sponsors/magenbrot)"
           echo "$FOOTER_CONTENT" > wiki-repo/_Footer.md
           
       - name: Commit and Push Changes to Wiki
