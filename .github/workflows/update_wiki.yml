@@ -1,6 +1,7 @@
 name: Update Wiki Footer on 
 
 on:
+  workflow_dispatch:
   push:
     paths:
       - 'manifest.json'
