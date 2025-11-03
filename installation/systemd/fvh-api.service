@@ -1,14 +1,13 @@
 [Unit]
 Description=uWSGI instance to serve Feuerwehr-Versorgungs-Helfer API
 After=network.target
-InitialStartLimitSec=30s
-StartLimitBurst=1
 
 [Service]
 User=www-data
 Group=www-data
 WorkingDirectory=<Pfad zum Code>
 Environment="PATH=<Pfad zum Code>/venv/bin"
+ExecStartPre=/bin/sleep 30
 ExecStart=<Pfad zum Code>/venv/bin/uwsgi --ini api.ini
 
 [Install]
