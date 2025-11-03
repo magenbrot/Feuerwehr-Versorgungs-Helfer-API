@@ -1,6 +1,8 @@
 [Unit]
 Description=uWSGI instance to serve Feuerwehr-Versorgungs-Helfer GUI
 After=network.target
+InitialStartLimitSec=30s
+StartLimitBurst=1
 
 [Service]
 User=www-data
