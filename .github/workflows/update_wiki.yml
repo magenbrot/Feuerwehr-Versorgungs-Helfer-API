@@ -11,12 +11,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Main Repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           path: main
 
       - name: Checkout Wiki
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           repository: magenbrot/Feuerwehr-Versorgungs-Helfer.wiki
           path: wiki-repo
