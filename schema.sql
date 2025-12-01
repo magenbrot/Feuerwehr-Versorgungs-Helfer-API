@@ -1,6 +1,7 @@
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 SET time_zone = "+00:00";
 
+DROP TABLE IF EXISTS api_keys;
 CREATE TABLE api_keys (
   id int NOT NULL,
   user_id int NOT NULL,
@@ -8,23 +9,27 @@ CREATE TABLE api_keys (
   api_key varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+DROP TABLE IF EXISTS api_users;
 CREATE TABLE api_users (
   id int NOT NULL,
   username varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+DROP TABLE IF EXISTS benachrichtigungstypen;
 CREATE TABLE benachrichtigungstypen (
   id int NOT NULL,
   event_schluessel varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   beschreibung varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+DROP TABLE IF EXISTS benutzer_benachrichtigungseinstellungen;
 CREATE TABLE benutzer_benachrichtigungseinstellungen (
   benutzer_id int NOT NULL,
   typ_id int NOT NULL,
   email_aktiviert tinyint(1) NOT NULL DEFAULT '0'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+DROP TABLE IF EXISTS nfc_token;
 CREATE TABLE nfc_token (
   token_id int NOT NULL,
   user_id int NOT NULL,
@@ -33,6 +38,7 @@ CREATE TABLE nfc_token (
   last_used datetime DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+DROP TABLE IF EXISTS password_reset_tokens;
 CREATE TABLE password_reset_tokens (
   id int NOT NULL,
   user_id int NOT NULL,
@@ -40,12 +46,14 @@ CREATE TABLE password_reset_tokens (
   expires_at datetime NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+DROP TABLE IF EXISTS system_einstellungen;
 CREATE TABLE system_einstellungen (
   einstellung_schluessel varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   einstellung_wert varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   beschreibung text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+DROP TABLE IF EXISTS transactions;
 CREATE TABLE transactions (
   id int NOT NULL,
   user_id int NOT NULL,
@@ -54,6 +62,7 @@ CREATE TABLE transactions (
   timestamp datetime NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+DROP TABLE IF EXISTS users;
 CREATE TABLE users (
   id int NOT NULL,
   code varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '10-stelliger eindeutiger Zahlencode (für den QR-Code und Login)',
@@ -62,12 +71,13 @@ CREATE TABLE users (
   password varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   email varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   kommentar varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'wird nur den Admins angezeigt',
+  infomail_user_threshold int NOT NULL DEFAULT '5' COMMENT 'bei Erreichen dieser Schwelle wird dem Benutzer eine Nachricht geschickt',
+  infomail_responsible_threshold int NOT NULL DEFAULT '5' COMMENT 'bei Erreichen dieser Schwelle wird eine Email an die Verantwortlichen geschickt',
   acc_duties tinyint(1) NOT NULL DEFAULT '0' COMMENT 'Buchungs und Mitwirkungspflicht akzeptiert',
   acc_privacy_policy tinyint(1) NOT NULL DEFAULT '0' COMMENT 'Datenschutzerklärung akzeptiert',
   is_locked tinyint(1) NOT NULL DEFAULT '0' COMMENT 'Benutzer gesperrt',
   is_admin tinyint(1) NOT NULL DEFAULT '0' COMMENT 'Benutzer ist Admin'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
 
 ALTER TABLE api_keys
   ADD PRIMARY KEY (id),
@@ -88,8 +98,8 @@ ALTER TABLE benutzer_benachrichtigungseinstellungen
 
 ALTER TABLE nfc_token
   ADD PRIMARY KEY (token_id),
-  ADD UNIQUE KEY token_daten (token_daten),
-  ADD KEY user_id (user_id);
+  ADD UNIQUE KEY token_daten (token_daten) USING BTREE,
+  ADD KEY user_id (user_id) USING BTREE;
 
 ALTER TABLE password_reset_tokens
   ADD PRIMARY KEY (id),
@@ -105,7 +115,7 @@ ALTER TABLE transactions
 
 ALTER TABLE users
   ADD PRIMARY KEY (id),
-  ADD UNIQUE KEY code (code),
+  ADD UNIQUE KEY code (code) USING BTREE,
   ADD UNIQUE KEY unique_email (email);
 
 ALTER TABLE api_keys
@@ -129,7 +139,6 @@ ALTER TABLE transactions
 ALTER TABLE users
   MODIFY id int NOT NULL AUTO_INCREMENT;
 
-
 ALTER TABLE api_keys
   ADD CONSTRAINT api_keys_ibfk_1 FOREIGN KEY (user_id) REFERENCES api_users (id);
 
@@ -146,5 +155,5 @@ ALTER TABLE password_reset_tokens
 ALTER TABLE transactions
   ADD CONSTRAINT transactions_ibfk_1 FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE RESTRICT;
 
-INSERT INTO `users` (`id`, `code`, `nachname`, `vorname`, `password`, `email`, `kommentar`, `acc_duties`, `acc_privacy_policy`, `is_locked`, `is_admin`) VALUES
-(1, '9876543210', 'Admin', 'Admin', 'scrypt:32768:8:1$bcfcz3jpgHWmlN7L$6b6bddb744712e0a8291d9688288aaed470b0fed7c22c4e1be2b8fe0aa4a6ef1d05f1cf2090ed25c678a827309b9d8f33652440f40d83472c9d2629eb015aaed', '', '', 1, 1, 0, 1);
+INSERT INTO users (id, code, nachname, vorname, password, email, kommentar, infomail_user_threshold, infomail_responsible_threshold, acc_duties, acc_privacy_policy, is_locked, is_admin) VALUES
+(1, '9876543210', 'Admin', 'Admin', 'scrypt:32768:8:1$IYudZaaf6cnGNisf$eb1afcc60e85d6b3b88741544c2c19ca7588794313022c5323db740b83213a65740290ada3aa31ea28132323b7a269dd278d26286b958ef3911a5deb6815c620', '', 'Default-Admin', 5, 5, 1, 1, 0, 1);
