@@ -1,6 +1,7 @@
 """Verwaltet den Datenbankverbindungspool für die Anwendung."""
 import logging
 import sys
+import contextlib
 import time
 import threading
 import mysql.connector
@@ -91,6 +92,10 @@ class DatabaseConnectionPool:
             except RuntimeError as e:
                 # This might happen if pool is None and get_connection raises it
                 logger.error("Datenbank Health-Check runtime error (pool not init?): %s", e)
+                # Exportiere die wichtigsten Methoden als Modulattribute
+                fetch_one = DatabaseConnectionPool.fetch_one
+                fetch_all = DatabaseConnectionPool.fetch_all
+                execute_commit = DatabaseConnectionPool.execute_commit
             except Exception as e:  # pylint: disable=W0718
                 # Catch other potential unexpected errors
                 logger.error("Unerwarteter Fehler beim Datenbank Health-Check: %s", e)
@@ -183,3 +188,82 @@ class DatabaseConnectionPool:
         """
         if cnx:
             cnx.close()
+
+    @classmethod
+    @contextlib.contextmanager
+    def connection_manager(cls, database_config=None):
+        """
+        Kontextmanager, der eine Verbindung aus dem Pool bereitstellt und
+        beim Verlassen automatisch wieder schliesst.
+
+        Verwendung:
+            with DatabaseConnectionPool.connection_manager(config.db_config) as cnx:
+                with cnx.cursor(dictionary=True) as cursor:
+                    cursor.execute(...)
+        """
+        cnx = None
+        try:
+            cnx = cls.get_connection(database_config)
+            yield cnx
+        finally:
+            if cnx:
+                cls.close_connection(cnx)
+
+    @classmethod
+    def fetch_all(cls, query, params=None, dictionary=True):
+        """Führt eine SELECT-Abfrage aus und gibt alle Zeilen zurück.
+
+        Gibt eine leere Liste bei Fehlern zurück.
+        """
+        try:
+            with cls.connection_manager(database_config=None) as cnx:
+                if not cnx:
+                    return []
+                with cnx.cursor(dictionary=dictionary) as cursor:
+                    cursor.execute(query, params or ())
+                    return cursor.fetchall()
+        except Error as e:
+            logger.error("fetch_all Fehler: %s | Query: %s | Params: %s", e, query, params)
+            return []
+
+    @classmethod
+    def fetch_one(cls, query, params=None, dictionary=True):
+        """Führt eine SELECT-Abfrage aus und gibt die erste Zeile zurück oder None bei Fehlern."""
+        try:
+            with cls.connection_manager(database_config=None) as cnx:
+                if not cnx:
+                    return None
+                with cnx.cursor(dictionary=dictionary) as cursor:
+                    cursor.execute(query, params or ())
+                    return cursor.fetchone()
+        except Error as e:
+            logger.error("fetch_one Fehler: %s | Query: %s | Params: %s", e, query, params)
+            return None
+
+    @classmethod
+    def execute_commit(cls, query, params=None):
+        """Führt ein INSERT/UPDATE/DELETE aus, committet und gibt Cursor-Infos zurück.
+
+        Rückgabe: (True, lastrowid) bei Erfolg, (False, None) bei Fehler.
+        """
+        cnx = None
+        try:
+            with cls.connection_manager(database_config=None) as cnx:
+                if not cnx:
+                    return False, None
+                with cnx.cursor() as cursor:
+                    cursor.execute(query, params or ())
+                    cnx.commit()
+                    return True, getattr(cursor, 'lastrowid', None)
+        except Error as e:
+            logger.error("execute_commit Fehler: %s | Query: %s | Params: %s", e, query, params)
+            if cnx:
+                try:
+                    cnx.rollback()
+                except Error as rb_err:
+                    logger.debug("Rollback fehlgeschlagen: %s", rb_err)
+
+# Exportiere die wichtigsten Methoden als Modulattribute
+fetch_one = DatabaseConnectionPool.fetch_one
+fetch_all = DatabaseConnectionPool.fetch_all
+execute_commit = DatabaseConnectionPool.execute_commit
