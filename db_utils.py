@@ -92,10 +92,6 @@ class DatabaseConnectionPool:
             except RuntimeError as e:
                 # This might happen if pool is None and get_connection raises it
                 logger.error("Datenbank Health-Check runtime error (pool not init?): %s", e)
-                # Exportiere die wichtigsten Methoden als Modulattribute
-                fetch_one = DatabaseConnectionPool.fetch_one
-                fetch_all = DatabaseConnectionPool.fetch_all
-                execute_commit = DatabaseConnectionPool.execute_commit
             except Exception as e:  # pylint: disable=W0718
                 # Catch other potential unexpected errors
                 logger.error("Unerwarteter Fehler beim Datenbank Health-Check: %s", e)
@@ -263,7 +259,7 @@ class DatabaseConnectionPool:
                 except Error as rb_err:
                     logger.debug("Rollback fehlgeschlagen: %s", rb_err)
             return False, None
-        except Exception as e:
+        except Exception as e:  # pylint: disable=W0718
             logger.error("execute_commit Unerwarteter Fehler: %s | Query: %s | Params: %s", e, query, params)
             return False, None
 
