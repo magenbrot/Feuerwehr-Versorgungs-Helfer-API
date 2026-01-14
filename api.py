@@ -526,6 +526,13 @@ def health_protected_route(api_user_id: int, api_username: str):
     finally:
         if cnx:
             db_utils.DatabaseConnectionPool.close_connection(cnx)
+        row = db_utils.fetch_one("SELECT 1", dictionary=False)
+        if row is not None:
+            logger.debug("Datenbankverbindung erfolgreich für Healthcheck. Authentifizierter API-Benutzer: ID %s - %s", api_user_id, api_username)
+            return jsonify({'message': f"Healthcheck OK! Authentifizierter API-Benutzer ID {api_user_id} ({api_username})."})
+        else:
+            logger.error("Datenbankverbindung fehlgeschlagen im Healthcheck.")
+            return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
 
 
 @app.route('/users', methods=['GET'])
@@ -563,6 +570,14 @@ def get_all_users(api_user_id: int, api_username: str):
     finally:
         if cnx:
             db_utils.DatabaseConnectionPool.close_connection(cnx)
+        logger.info("API-Benutzer authentifiziert: ID %s - %s. Rufe alle Benutzer ab.", api_user_id, api_username)
+        users_list = db_utils.fetch_all("SELECT code, nachname, vorname FROM users ORDER BY nachname, vorname;", dictionary=True)
+        if users_list is not None:
+            logger.info("%s Benutzer erfolgreich aus der Datenbank abgerufen.", len(users_list))
+            return jsonify(users_list), 200
+        else:
+            logger.error("Fehler beim Abrufen aller Benutzer aus der Datenbank.")
+            return jsonify({'error': "Ein interner Fehler ist aufgetreten."}), 500
 
 
 @app.route('/nfc-transaktion', methods=['PUT'])
