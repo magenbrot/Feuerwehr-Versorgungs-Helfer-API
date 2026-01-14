@@ -18,6 +18,7 @@ import qrcode.constants
 from qrcode.image.pil import PilImage
 from PIL import Image, ImageDraw, ImageFont
 from flask import Flask, render_template, request, redirect, url_for, session, flash, send_file  # pigar: required-packages=uWSGI
+from jinja2 import TemplateError
 from werkzeug.security import check_password_hash, generate_password_hash
 from mysql.connector import Error, IntegrityError
 import config
@@ -236,7 +237,7 @@ def get_user_notification_preference(user_id_int: int, event_schluessel: str) ->
     row = db_utils.fetch_one(query, (user_id_int, event_schluessel), dictionary=True)
     try:
         return bool(row['email_aktiviert']) if row and row.get('email_aktiviert') is not None else False
-    except Exception:
+    except (KeyError, TypeError):
         return False
 
 
@@ -377,9 +378,8 @@ def add_user_nfc_token(user_id, token_name, token_hex):
         success = result[0] if result else False
         if success:
             return True
-        else:
-            flash('Fehler beim Hinzufügen des NFC-Tokens.', 'error')
-            return False
+        flash('Fehler beim Hinzufügen des NFC-Tokens.', 'error')
+        return False
     except IntegrityError as err:
         if err.errno == 1062:
             logger.warning("Versuch, einen doppelten NFC-Token hinzuzufügen: %s", token_hex)
@@ -414,9 +414,8 @@ def delete_user_nfc_token(user_id, token_id):
     success = result[0] if result else False
     if success:
         return True
-    else:
-        flash('Fehler beim Entfernen des NFC-Tokens.', 'error')
-        return False
+    flash('Fehler beim Entfernen des NFC-Tokens.', 'error')
+    return False
 
 
 def get_user_nfc_tokens(user_id):
@@ -1061,20 +1060,23 @@ def delete_reset_token(token):
 
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if not cnx:
-        query = """
-            SELECT u.id, COALESCE(SUM(t.saldo_aenderung), 0) AS saldo
-            FROM users u
-            LEFT JOIN transactions t ON u.id = t.user_id
-            GROUP BY u.id
-        """
-        try:
-            rows = db_utils.fetch_all(query, dictionary=True)
-            return {row['id']: row['saldo'] for row in rows} if rows else {}
-        except Error as err:
-            logger.error("Datenbankfehler beim Berechnen der Saldos: %s", err)
-            return {}
-
-
+        logger.error("Konnte keine DB-Verbindung für delete_reset_token herstellen.")
+        return False
+    cursor = None
+    try:
+        cursor = cnx.cursor()
+        query = "DELETE FROM password_reset_tokens WHERE token = %s"
+        cursor.execute(query, (token,))
+        cnx.commit()
+        return True
+    except db_utils.Error as err:
+        logger.error("Fehler beim Löschen des Reset-Tokens: %s", err)
+        cnx.rollback()
+        return False
+    finally:
+        if cursor is not None:
+            cursor.close()
+        db_utils.DatabaseConnectionPool.close_connection(cnx)
 
 
 # --- E-Mail Hilfsfunktion: Template-Rendering und Versand ---
@@ -1118,7 +1120,7 @@ def prepare_and_send_email(email_params: dict, smtp_cfg: dict) -> bool:
     try:
         final_html_body = render_template(template_name_html, **template_context)
         final_text_body = render_template(template_name_text, **template_context)
-    except Exception as err:
+    except TemplateError as err:
         logger.error("Fehler beim Rendern der E-Mail-Templates: %s", err)
         return False
 
@@ -1496,9 +1498,8 @@ def _handle_add_user_transaction(form_data, target_user):
             _send_manual_transaction_email(target_user, beschreibung, saldo_aenderung_str_fmt, new_saldo_fmt, logo_pfad)
         flash('Transaktion erfolgreich hinzugefügt.', 'success')
         return True
-    else:
-        flash('Fehler beim Hinzufügen der Transaktion.', 'error')
-        return False
+    flash('Fehler beim Hinzufügen der Transaktion.', 'error')
+    return False
 
 
 def _handle_delete_target_user(target_user_id, target_user):
@@ -1689,9 +1690,8 @@ def _handle_toggle_user_admin_state(target_user_id, target_user, admin_state):
     if toggle_user_admin(target_user_id, admin_state):
         flash(f'Benutzer "{target_user.get("nachname", "")}, {target_user.get("vorname", "")}" (ID {target_user_id}) wurde {"zum Admin befördert" if admin_state else "zum normalen Benutzer degradiert"}.', 'success')
         return True
-    else:
-        flash(f'Fehler beim {"Befördern zum Admin" if admin_state else "Degradieren zum normalen Benutzer"} des Benutzers.', 'error')
-        return False
+    flash(f'Fehler beim {"Befördern zum Admin" if admin_state else "Degradieren zum normalen Benutzer"} des Benutzers.', 'error')
+    return False
 
 
 def _process_bulk_transactions(user_ids, beschreibung, saldo_aenderung):
@@ -1875,8 +1875,7 @@ def login():
             session.modified = True
             logger.debug(f"[login] Nach Setzen: session['user_id'] = {session.get('user_id')}")
             # Logging für gesetzte Cookies
-            from flask import request as flask_request
-            logger.debug(f"[login] Request cookies vor Redirect: {flask_request.cookies}")
+            logger.debug(f"[login] Request cookies vor Redirect: {request.cookies}")
             response = redirect(BASE_URL + url_for('user_info'))
             logger.debug(f"[login] Response-Objekt vor Rückgabe: {response}")
             return response
