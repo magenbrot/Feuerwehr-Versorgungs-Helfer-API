@@ -255,9 +255,19 @@ def get_user_notification_settings(user_id):
               Gibt ein leeres Dictionary zurück, wenn keine Einstellungen gefunden werden oder ein Fehler auftritt.
     """
 
+    # Hole alle Typen
+    all_types = db_utils.fetch_all("SELECT id FROM benachrichtigungstypen", dictionary=True)
+    type_ids = [int(row['id']) for row in all_types] if all_types else []
+
+    # Hole die Einstellungen des Benutzers
     query = "SELECT typ_id, email_aktiviert FROM benutzer_benachrichtigungseinstellungen WHERE benutzer_id = %s"
     rows = db_utils.fetch_all(query, (user_id,), dictionary=True)
-    settings = {row['typ_id']: bool(row['email_aktiviert']) for row in rows} if rows else {}
+    settings = {int(row['typ_id']): bool(row['email_aktiviert']) for row in rows} if rows else {}
+
+    # Setze Default False für nicht gesetzte Typen
+    for tid in type_ids:
+        if tid not in settings:
+            settings[tid] = False
     return settings
 
 
@@ -1051,18 +1061,18 @@ def delete_reset_token(token):
 
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if not cnx:
-            query = """
-                SELECT u.id, COALESCE(SUM(t.saldo_aenderung), 0) AS saldo
-                FROM users u
-                LEFT JOIN transactions t ON u.id = t.user_id
-                GROUP BY u.id
-            """
-            try:
-                rows = db_utils.fetch_all(query, dictionary=True)
-                return {row['id']: row['saldo'] for row in rows} if rows else {}
-            except Error as err:
-                logger.error("Datenbankfehler beim Berechnen der Saldos: %s", err)
-                return {}
+        query = """
+            SELECT u.id, COALESCE(SUM(t.saldo_aenderung), 0) AS saldo
+            FROM users u
+            LEFT JOIN transactions t ON u.id = t.user_id
+            GROUP BY u.id
+        """
+        try:
+            rows = db_utils.fetch_all(query, dictionary=True)
+            return {row['id']: row['saldo'] for row in rows} if rows else {}
+        except Error as err:
+            logger.error("Datenbankfehler beim Berechnen der Saldos: %s", err)
+            return {}
 
 
 
@@ -1257,8 +1267,23 @@ def add_api_user_db(username):
     Returns:
         int or None: Die ID des neu erstellten API-Benutzers bei Erfolg, sonst None.
     """
-
-    # Implementation replaced by helper-based code above
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
+    if cnx:
+        cursor = cnx.cursor()
+        try:
+            query = "INSERT INTO api_users (username) VALUES (%s)"
+            cursor.execute(query, (username,))
+            cnx.commit()
+            new_id = cursor.lastrowid
+            return new_id
+        except db_utils.Error as err:
+            logger.error("Fehler beim Hinzufügen des API-Benutzers: %s", err)
+            flash("Datenbankfehler beim Hinzufügen des API-Benutzers.", 'error')
+            cnx.rollback()
+            return None
+        finally:
+            cursor.close()
+            db_utils.DatabaseConnectionPool.close_connection(cnx)
     return None
 
 
@@ -1268,13 +1293,28 @@ def add_api_key_for_user_db(api_user_id, api_key_name_string, api_key_string):
 
     Args:
         api_user_id (int): Die ID des API-Benutzers.
+        api_key_name_string (str): Name des API-Keys.
         api_key_string (str): Der zu speichernde API-Key.
 
     Returns:
         bool: True bei Erfolg, False bei Fehler.
     """
-
-    # Implementation replaced by helper-based code above
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
+    if cnx:
+        cursor = cnx.cursor()
+        try:
+            query = "INSERT INTO api_keys (user_id, api_key_name, api_key) VALUES (%s, %s, %s)"
+            cursor.execute(query, (api_user_id, api_key_name_string, api_key_string))
+            cnx.commit()
+            return True
+        except db_utils.Error as err:
+            logger.error("Fehler beim Hinzufügen des API-Keys: %s", err)
+            flash("Datenbankfehler beim Hinzufügen des API-Keys.", 'error')
+            cnx.rollback()
+            return False
+        finally:
+            cursor.close()
+            db_utils.DatabaseConnectionPool.close_connection(cnx)
     return False
 
 
@@ -1288,8 +1328,22 @@ def delete_api_key_db(api_key_id):
     Returns:
         bool: True bei Erfolg, False bei Fehler.
     """
-
-    # Implementation replaced by helper-based code above
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
+    if cnx:
+        cursor = cnx.cursor()
+        try:
+            query = "DELETE FROM api_keys WHERE id = %s"
+            cursor.execute(query, (api_key_id,))
+            cnx.commit()
+            return True
+        except db_utils.Error as err:
+            logger.error("Fehler beim Löschen des API-Keys: %s", err)
+            flash("Datenbankfehler beim Löschen des API-Keys.", 'error')
+            cnx.rollback()
+            return False
+        finally:
+            cursor.close()
+            db_utils.DatabaseConnectionPool.close_connection(cnx)
     return False
 
 
@@ -1303,14 +1357,32 @@ def delete_api_user_and_keys_db(api_user_id):
     Returns:
         bool: True bei Erfolg, False bei Fehler.
     """
-
-    # Implementation replaced by helper-based code above
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
+    if cnx:
+        cursor = cnx.cursor()
+        try:
+            # Zuerst alle API-Keys löschen (korrekte Spalte: user_id)
+            query_keys = "DELETE FROM api_keys WHERE user_id = %s"
+            cursor.execute(query_keys, (api_user_id,))
+            # Dann den API-Benutzer löschen
+            query_user = "DELETE FROM api_users WHERE id = %s"
+            cursor.execute(query_user, (api_user_id,))
+            cnx.commit()
+            return True
+        except db_utils.Error as err:
+            logger.error("Fehler beim Löschen des API-Benutzers und seiner Keys: %s", err)
+            flash("Datenbankfehler beim Löschen des API-Benutzers.", 'error')
+            cnx.rollback()
+            return False
+        finally:
+            cursor.close()
+            db_utils.DatabaseConnectionPool.close_connection(cnx)
     return False
 
 
 def _handle_delete_all_user_transactions(target_user_id):
     """
-    Verarbeitet die Löschanfrage für alle Transaktionen eines Benutzers.
+    Verarbeitet die Löschanfrage für alle Transaktionen eines Benutzers
 
         query = "INSERT INTO transactions (user_id, beschreibung, saldo_aenderung, timestamp) VALUES (%s, %s, %s, NOW())"
         success, _ = db_utils.execute_commit(query, (user_id, beschreibung, saldo_aenderung))
@@ -1328,6 +1400,8 @@ def _handle_delete_all_user_transactions(target_user_id):
     if not success:
         logger.error("Fehler beim Löschen der Transaktionen für Benutzer %s", target_user_id)
     return success
+
+
 def _handle_toggle_user_lock_state(target_user_id, target_user, lock_state):
     """
     Verarbeitet das Sperren oder Entsperren eines Benutzers.
@@ -1351,21 +1425,80 @@ def _handle_toggle_user_lock_state(target_user_id, target_user, lock_state):
     else:
         flash(f'Fehler beim {"Sperren" if lock_state else "Entsperren"} des Benutzers.', 'error')
 
-# --- Stubs für fehlende Hilfsfunktionen (korrigiert) ---
+
 def _validate_bulk_change_form(form_data):
     """
-    Dummy-Validator für Bulk-Änderungsformular. Muss an die echte Logik angepasst werden.
+    Validiert das Bulk-Änderungsformular für Sammelbuchungen.
     Gibt (is_valid, saldo_aenderung, selected_user_ids) zurück.
     """
-    # TODO: Implementiere echte Validierung
-    return True, 0, []
+
+    errors = False
+
+    saldo_aenderung_str = form_data.get('saldo_aenderung')
+    beschreibung = form_data.get('beschreibung')
+    # Korrigiere das Feld: Im HTML heißt es 'selected_users'
+    if hasattr(form_data, 'getlist'):
+        selected_user_ids = form_data.getlist('selected_users')
+    else:
+        selected_user_ids = form_data.get('selected_users', [])
+
+    # Prüfe, ob mindestens ein Benutzer ausgewählt wurde
+    if not selected_user_ids or len(selected_user_ids) == 0:
+        flash('Bitte mindestens einen Benutzer für die Sammelbuchung auswählen.', 'error')
+        errors = True
+
+    # Prüfe, ob eine Beschreibung vorhanden ist
+    if not beschreibung or beschreibung.strip() == '':
+        flash('Bitte eine Beschreibung für die Sammelbuchung angeben.', 'error')
+        errors = True
+
+    # Prüfe, ob die Saldoänderung eine gültige Zahl ist
+    try:
+        saldo_aenderung = int(saldo_aenderung_str)
+    except (TypeError, ValueError):
+        flash('Die Saldoänderung muss eine ganze Zahl sein.', 'error')
+        errors = True
+        saldo_aenderung = 0
+
+    return (not errors), saldo_aenderung, selected_user_ids
 
 def _handle_add_user_transaction(form_data, target_user):
     """
-    Dummy-Handler für das Hinzufügen einer Transaktion. Muss an die echte Logik angepasst werden.
+    Fügt eine Transaktion für den Zielbenutzer hinzu und versendet ggf. eine Benachrichtigung.
+    Args:
+        form_data: Die Formulardaten (enthält 'beschreibung', 'saldo_aenderung').
+        target_user: Das Benutzerobjekt des Zielbenutzers.
+    Returns:
+        bool: True bei Erfolg, False bei Fehler.
     """
-    # TODO: Implementiere echte Logik
-    return True
+
+    beschreibung = form_data.get('beschreibung')
+    saldo_aenderung_str = form_data.get('saldo_aenderung')
+    try:
+        saldo_aenderung = int(saldo_aenderung_str)
+    except (TypeError, ValueError):
+        flash('Die Saldoänderung muss eine ganze Zahl sein.', 'error')
+        return False
+
+    user_id = target_user.get('id')
+    if not user_id:
+        flash('Benutzer-ID fehlt für die Transaktion.', 'error')
+        return False
+
+    success = add_transaction(user_id, beschreibung, saldo_aenderung)
+    if success:
+        # E-Mail-Benachrichtigung, falls aktiviert und E-Mail vorhanden
+        if target_user.get('email') and get_user_notification_preference(user_id, 'NEUE_TRANSAKTION'):
+            new_saldo = get_saldo_for_user(user_id)
+            saldo_aenderung_str_fmt = f"{saldo_aenderung:+d} €"
+            new_saldo_fmt = f"{new_saldo} €"
+            logo_pfad = config.gui_config.get('email_logo_path', '')
+            _send_manual_transaction_email(target_user, beschreibung, saldo_aenderung_str_fmt, new_saldo_fmt, logo_pfad)
+        flash('Transaktion erfolgreich hinzugefügt.', 'success')
+        return True
+    else:
+        flash('Fehler beim Hinzufügen der Transaktion.', 'error')
+        return False
 
 
 def _handle_delete_target_user(target_user_id, target_user):
@@ -1540,47 +1673,25 @@ def _process_system_setting_update(key, new_value_str):
     if not update_system_setting(key, new_value_str):
         # Fehler wird bereits in update_system_setting geflasht
         return False
-        hashed_password = generate_password_hash(user_data['password'])
-        query = """
-            INSERT INTO users (code, nachname, vorname, password, email, kommentar, acc_duties, acc_privacy_policy, is_locked, is_admin)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """
-        params = (
-            user_data['code'],
-            user_data['nachname'],
-            user_data['vorname'],
-            hashed_password,
-            user_data.get('email'),
-            user_data.get('kommentar'),
-            user_data['acc_duties'],
-            user_data['acc_privacy_policy'],
-            user_data.get('is_locked', False),
-            user_data.get('is_admin', False)
-        )
-        try:
-            success, _ = db_utils.execute_commit(query, params)
-            if not success:
-                flash('Benutzer mit diesem Code existiert bereits oder ein Fehler ist aufgetreten.', 'error')
-            return success
-        except IntegrityError:
-            flash('Benutzer mit diesem Code existiert bereits.', 'error')
-            return False
-        except Error as err:
-            logger.error("Fehler beim Hinzufügen des Benutzers: %s", err)
-            return False
-            flash("Die Saldoänderung muss eine ganze Zahl sein.", "error")
-            errors = True
-
-    # TODO: Implementiere echte Logik für Bulk-Transaktionen
     return True
+
 
 # --- Stub für _handle_toggle_user_admin_state ---
 def _handle_toggle_user_admin_state(target_user_id, target_user, admin_state):
     """
-    Dummy-Handler für das Befördern/Degradieren eines Benutzers/Admins. Muss an die echte Logik angepasst werden.
+    Verarbeitet das Befördern oder Degradieren eines Benutzers zum/vom Admin.
+
+    Args:
+        target_user_id (int): Die ID des Zielbenutzers.
+        target_user (dict): Das Benutzerobjekt des Zielbenutzers.
+        admin_state (bool): True zum Befördern, False zum Degradieren.
     """
-    # TODO: Implementiere echte Logik
-    return True
+    if toggle_user_admin(target_user_id, admin_state):
+        flash(f'Benutzer "{target_user.get("nachname", "")}, {target_user.get("vorname", "")}" (ID {target_user_id}) wurde {"zum Admin befördert" if admin_state else "zum normalen Benutzer degradiert"}.', 'success')
+        return True
+    else:
+        flash(f'Fehler beim {"Befördern zum Admin" if admin_state else "Degradieren zum normalen Benutzer"} des Benutzers.', 'error')
+        return False
 
 
 def _process_bulk_transactions(user_ids, beschreibung, saldo_aenderung):
@@ -1963,7 +2074,7 @@ def user_info():
     all_notification_types_data = get_all_notification_types()
     user_notification_settings_data = get_user_notification_settings(user_id)
 
-    logger.debug(f"[user_info] Rendering Template mit user={user_data}, saldo={saldo}, nfc_tokens={nfc_tokens}, transactions={transactions}")
+    logger.debug(f"[user_info] Rendering Template mit user={user_data}, saldo={saldo}, nfc_tokens={nfc_tokens}, transactions={transactions}, all_notification_types={all_notification_types_data}, user_notification_settings={user_notification_settings_data}")
     return render_template('web_user_info.html',
                            user=user_data,
                            nfc_tokens=nfc_tokens,
@@ -2254,16 +2365,6 @@ def admin_generate_api_key_for_user(_admin_user, api_user_id_route):
               "Bitte sofort sicher kopieren, er kann nicht wieder angezeigt werden!", "success")
     # Fehler wurde bereits in add_api_key_for_user_db geflasht
     return redirect(BASE_URL + url_for('admin_api_user_detail', api_user_id_route=api_user_id_route))
-
-    if api_user_id_for_redirect:
-        try:
-            # Sicherstellen, dass es eine gültige ID ist, bevor umgeleitet wird
-            api_user_id_int = int(api_user_id_for_redirect)
-            return redirect(BASE_URL + url_for('admin_api_user_detail', api_user_id_route=api_user_id_int))
-        except ValueError:
-            flash("Ungültige API User ID für Weiterleitung.", "error")
-    # Fallback, falls die api_user_id nicht ermittelt werden konnte oder ungültig war
-    return redirect(BASE_URL + url_for('admin_api_user_manage'))
 
 
 @app.route('/admin/api_user/<int:api_user_id_route>/delete', methods=['POST'])
