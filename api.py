@@ -58,9 +58,6 @@ except Error as e:
     logger.info("Kritischer Fehler beim Starten der Datenbankverbindung: %s", e)
     sys.exit(1)
 
-# Starte den Health-Check-Thread, nachdem der Pool initialisiert wurde
-#db_utils.DatabaseConnectionPool.start_health_check_thread()
-
 # Lade das Manifest mit Author- und Versionsinfos
 try:
     with open('manifest.json', 'r', encoding='utf-8') as manifest:
@@ -156,28 +153,17 @@ def get_user_notification_preference(user_id_int: int, event_schluessel: str) ->
         bool: True, wenn die Benachrichtigung für den Benutzer aktiviert ist, sonst False.
     """
 
-    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
-    if not cnx:
-        logger.error("DB-Verbindungsfehler in get_user_notification_preference für User %s", user_id_int)
-        return False
-    # Verwendung eines try-finally Blocks, um sicherzustellen, dass die Verbindung geschlossen wird
+    query = """
+        SELECT bba.email_aktiviert
+        FROM benutzer_benachrichtigungseinstellungen bba
+        JOIN benachrichtigungstypen bt ON bba.typ_id = bt.id
+        WHERE bba.benutzer_id = %s AND bt.event_schluessel = %s
+    """
+    row = db_utils.fetch_one(query, (user_id_int, event_schluessel), dictionary=True)
     try:
-        with cnx.cursor(dictionary=True) as cursor:
-            query = """
-                SELECT bba.email_aktiviert
-                FROM benutzer_benachrichtigungseinstellungen bba
-                JOIN benachrichtigungstypen bt ON bba.typ_id = bt.id
-                WHERE bba.benutzer_id = %s AND bt.event_schluessel = %s
-            """
-            cursor.execute(query, (user_id_int, event_schluessel))
-            result = cursor.fetchone()
-            return bool(result['email_aktiviert']) if result and result['email_aktiviert'] is not None else False
-    except Error as err:
-        logger.error("DB-Fehler in get_user_notification_preference für User %s, Event %s: %s", user_id_int, event_schluessel, err)
+        return bool(row['email_aktiviert']) if row and row.get('email_aktiviert') is not None else False
+    except (KeyError, TypeError):
         return False
-    finally:
-        if cnx:
-            db_utils.DatabaseConnectionPool.close_connection(cnx)
 
 
 def get_system_setting(einstellung_schluessel: str) -> Optional[str]:
@@ -191,22 +177,9 @@ def get_system_setting(einstellung_schluessel: str) -> Optional[str]:
         Optional[str]: Der Wert der Einstellung als String, oder None wenn nicht gefunden oder bei Fehler.
     """
 
-    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
-    if not cnx:
-        logger.error("DB-Verbindungsfehler in get_system_setting für Schlüssel %s", einstellung_schluessel)
-        return None
-    try:
-        with cnx.cursor(dictionary=True) as cursor:
-            query = "SELECT einstellung_wert FROM system_einstellungen WHERE einstellung_schluessel = %s"
-            cursor.execute(query, (einstellung_schluessel,))
-            result = cursor.fetchone()
-            return result['einstellung_wert'] if result else None
-    except Error as err:
-        logger.error("DB-Fehler in get_system_setting für Schlüssel %s: %s", einstellung_schluessel, err)
-        return None
-    finally:
-        if cnx:
-            db_utils.DatabaseConnectionPool.close_connection(cnx)
+    query = "SELECT einstellung_wert FROM system_einstellungen WHERE einstellung_schluessel = %s"
+    row = db_utils.fetch_one(query, (einstellung_schluessel,), dictionary=True)
+    return row['einstellung_wert'] if row else None
 
 
 def get_user_details_for_notification(user_id_int: int) -> Optional[dict]:
@@ -220,20 +193,8 @@ def get_user_details_for_notification(user_id_int: int) -> Optional[dict]:
         Optional[dict]: Ein Dictionary mit {'id': int, 'vorname': str, 'email': str} oder None bei Fehler/Nichtgefunden.
     """
 
-    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
-    if not cnx:
-        logger.error("DB-Verbindungsfehler in get_user_details_for_notification für User %s", user_id_int)
-        return None
-    try:
-        with cnx.cursor(dictionary=True) as cursor:
-            cursor.execute("SELECT id, vorname, nachname, email, infomail_user_threshold, infomail_responsible_threshold FROM users WHERE id = %s", (user_id_int,))
-            return cursor.fetchone()
-    except Error as err:
-        logger.error("DB-Fehler in get_user_details_for_notification für User %s: %s", user_id_int, err)
-        return None
-    finally:
-        if cnx:
-            db_utils.DatabaseConnectionPool.close_connection(cnx)
+    query = "SELECT id, vorname, nachname, email, infomail_user_threshold, infomail_responsible_threshold FROM users WHERE id = %s"
+    return db_utils.fetch_one(query, (user_id_int,), dictionary=True)
 
 
 def _send_saldo_null_benachrichtigung(user_details: dict, aktueller_saldo: float, logo_pfad: str):
@@ -304,50 +265,36 @@ def _send_responsible_threshold_benachrichtigung(user_details: dict, aktueller_s
         logger.error("Fehler beim Senden der Verantwortliche-Saldowarnung (%s %s) an Verantwortliche (%s).", user_details['vorname'], user_details['nachname'], config.api_config['responsible_email'])
 
 
-def _aktuellen_saldo_pruefen(target_user_id: int) -> Union[Literal[True], Tuple[Literal[False], float, int], Literal[False]]:
+def _aktuellen_saldo_pruefen(target_user_id: int, saldo_aenderung: float = 0) -> Union[Literal[True], Tuple[Literal[False], float, int], Literal[False]]:
     """
     Prüft den aktuellen Saldo eines Benutzers vor einer Transaktion.
 
     Args:
         target_user_id (int): Die ID des Benutzers, dessen Saldo geprüft werden soll.
+        saldo_aenderung (float, optional): Die geplante Änderung des Saldos (z.B. -1 für Abbuchung). Default: 0
 
     Returns:
-        True: Wenn der Saldo ausreichend ist.
-        tuple[Literal[False], float, int]: Ein Tupel (False, aktueller_saldo),
+        True: Wenn der Saldo nach der Änderung ausreichend ist.
+        tuple[Literal[False], float, int]: Ein Tupel (False, aktueller_saldo, max_negativ_saldo),
                                             wenn der Saldo das Limit unterschreitet.
-                                            aktueller_saldo ist der tatsächliche Saldo.
+                                            aktueller_saldo ist der tatsächliche Saldo vor Änderung.
         False: Im Falle eines Datenbank- oder Konfigurationsfehlers.
     """
 
     max_negativ_saldo = 0
 
-    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
-    if not cnx:
-        logger.error("DB-Verbindungsfehler in _aktuellen_saldo_pruefen für User %s", target_user_id)
-        return False  # Rückgabe False bei Verbindungsfehler
-
+    query = "SELECT SUM(saldo_aenderung) AS saldo FROM transactions WHERE user_id = %s"
+    row = db_utils.fetch_one(query, (target_user_id,), dictionary=True)
     try:
-        with cnx.cursor(dictionary=True) as cursor:
-            cursor.execute("SELECT SUM(saldo_aenderung) AS saldo FROM transactions WHERE user_id = %s", (target_user_id,))
-            saldo_data = cursor.fetchone()
-
-            aktueller_saldo = float(saldo_data['saldo']) if saldo_data and saldo_data['saldo'] is not None else 0
-
-        if aktueller_saldo <= max_negativ_saldo:
-            # Saldo ist zu niedrig
-            return (False, aktueller_saldo, max_negativ_saldo)
-        # Saldo ist ausreichend
-        return True
-
-    except Error as err:
-        logger.error("DB-Fehler in _aktuellen_saldo_pruefen für User %s: %s", target_user_id, err)
+        aktueller_saldo = float(row['saldo']) if row and row.get('saldo') is not None else 0
+    except (TypeError, ValueError) as e:
+        logger.error("Fehler beim Parsen des Saldo für User %s: %s", target_user_id, e)
         return False
-    except Exception as e:  # pylint: disable=W0718
-        logger.error("Allgemeiner Fehler in _aktuellen_saldo_pruefen für User %s: %s", target_user_id, e)
-        return False
-    finally:
-        if cnx:
-            db_utils.DatabaseConnectionPool.close_connection(cnx)
+
+    neuer_saldo = aktueller_saldo + saldo_aenderung
+    if neuer_saldo < max_negativ_saldo:
+        return (False, aktueller_saldo, max_negativ_saldo)
+    return True
 
 
 def aktuellen_saldo_pruefen_und_benachrichtigen(target_user_id: int):
@@ -369,34 +316,18 @@ def aktuellen_saldo_pruefen_und_benachrichtigen(target_user_id: int):
         logger.info("Benutzer %s hat keine E-Mail-Adresse hinterlegt. Keine Saldo-Benachrichtigungen möglich.", target_user_id)
         return
 
-    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
-    if not cnx:
-        logger.error("DB-Verbindungsfehler in aktuellen_saldo_pruefen_und_benachrichtigen für User %s", target_user_id)
-        return
+    query = "SELECT SUM(saldo_aenderung) AS saldo FROM transactions WHERE user_id = %s"
+    row = db_utils.fetch_one(query, (target_user_id,), dictionary=True)
+    aktueller_saldo = row['saldo'] if row and row.get('saldo') is not None else 0
 
-    try:
-        with cnx.cursor(dictionary=True) as cursor:
-            cursor.execute("SELECT SUM(saldo_aenderung) AS saldo FROM transactions WHERE user_id = %s", (target_user_id,))
-            saldo_data = cursor.fetchone()
-            aktueller_saldo = saldo_data['saldo'] if saldo_data and saldo_data['saldo'] is not None else 0  # Sicherstellen, dass es ein Float ist
+    logo_pfad_str = str(Path("static/logo/logo-80x109.png"))
 
-        logo_pfad_str = str(Path("static/logo/logo-80x109.png"))
+    if aktueller_saldo == 0:
+        _send_saldo_null_benachrichtigung(user_details, aktueller_saldo, logo_pfad_str)
 
-        # Saldo ist 0 Benachrichtigung
-        if aktueller_saldo == 0:
-            _send_saldo_null_benachrichtigung(user_details, aktueller_saldo, logo_pfad_str)
+    _send_user_threshold_benachrichtigung(user_details, aktueller_saldo, logo_pfad_str)
 
-        # Benachrichtige Benutzer wenn Saldo unter Infomail-Schwelle
-        _send_user_threshold_benachrichtigung(user_details, aktueller_saldo, logo_pfad_str)
-
-        # Benachrichtige Verantwortliche wenn Saldo unter Infomail-Schwelle
-        _send_responsible_threshold_benachrichtigung(user_details, aktueller_saldo, logo_pfad_str)
-
-    except Error as err:
-        logger.error("DB-Fehler in aktuellen_saldo_pruefen_und_benachrichtigen für User %s: %s", target_user_id, err)
-    finally:
-        if cnx:
-            db_utils.DatabaseConnectionPool.close_connection(cnx)
+    _send_responsible_threshold_benachrichtigung(user_details, aktueller_saldo, logo_pfad_str)
 
 
 def get_user_by_api_key(api_key_value: str) -> Optional[tuple[int, str]]:
@@ -631,7 +562,6 @@ def nfc_transaction(api_user_id_auth: int, api_username_auth: str):
     Returns: flask.Response
     """
 
-    # logger.info("NFC-Transaktion Anfrage von API-Benutzer: ID %s - %s.", api_user_id_auth, api_username_auth)
     daten = request.get_json()
     logger.info("NFC-Transaktion Anfrage zu Token '%s' von API-Benutzer: ID %s - %s.", daten['token'], api_user_id_auth, api_username_auth)
     if not daten or 'token' not in daten or 'beschreibung' not in daten:
@@ -653,16 +583,6 @@ def nfc_transaction(api_user_id_auth: int, api_username_auth: str):
         with cnx.cursor(dictionary=True) as cursor:
             cursor.execute("UPDATE nfc_token SET last_used = NOW() WHERE token_id = %s", (int(benutzer_info['token_id']),))
 
-            saldo_pruefung = _aktuellen_saldo_pruefen(benutzer_info['id'])
-            if isinstance(saldo_pruefung, tuple):
-                logger.warning("Transaktion für User %s blockiert, da das Guthaben von %s nicht ausreichend ist", benutzer_info['id'], saldo_pruefung[1])
-                return jsonify({'message': f"Hey {benutzer_info['vorname']}, dein Guthaben beträgt {saldo_pruefung[2]} € und "
-                                "unterschreitet das Limit. Bitte lade dein Konto wieder auf.",
-                                'action': "block"}), 200
-            if saldo_pruefung is False:
-                logger.error("Fehler bei der Saldoprüfung für Benutzer %s. Aktion blockiert.", benutzer_info['id'])
-                return jsonify({'message': f"Hey {benutzer_info['vorname']}, es gab ein technisches Problem bei der Überprüfung deines Saldos. "
-                                "Bitte versuche es später erneut oder kontaktiere einen Verantwortlichen.", 'action': "error"}), 200
 
             trans_saldo_aenderung_str = get_system_setting('TRANSACTION_SALDO_CHANGE')
             if trans_saldo_aenderung_str is None:
@@ -674,6 +594,17 @@ def nfc_transaction(api_user_id_auth: int, api_username_auth: str):
             except ValueError:
                 logger.error("Ungültiger Wert für TRANSACTION_SALDO_CHANGE ('%s') in system_einstellungen.", trans_saldo_aenderung_str)
                 return jsonify({'error': f"Ungültiger Wert für TRANSACTION_SALDO_CHANGE ('{trans_saldo_aenderung_str}') in system_einstellungen."}), 400
+
+            saldo_pruefung = _aktuellen_saldo_pruefen(benutzer_info['id'], trans_saldo_aenderung)
+            if isinstance(saldo_pruefung, tuple):
+                logger.warning("Transaktion für User %s blockiert, da das Guthaben von %s nicht ausreichend ist", benutzer_info['id'], saldo_pruefung[1])
+                return jsonify({'message': f"Hey {benutzer_info['vorname']}, dein Guthaben beträgt {saldo_pruefung[1]} € und "
+                                "unterschreitet das Limit. Bitte lade dein Konto wieder auf.",
+                                'action': "block"}), 200
+            if saldo_pruefung is False:
+                logger.error("Fehler bei der Saldoprüfung für Benutzer %s. Aktion blockiert.", benutzer_info['id'])
+                return jsonify({'message': f"Hey {benutzer_info['vorname']}, es gab ein technisches Problem bei der Überprüfung deines Saldos. "
+                                "Bitte versuche es später erneut oder kontaktiere einen Verantwortlichen.", 'action': "error"}), 200
 
             cursor.execute("INSERT INTO transactions (user_id, beschreibung, saldo_aenderung) VALUES (%s, %s, %s)",
                            (benutzer_info['id'], daten['beschreibung'], trans_saldo_aenderung))
@@ -760,7 +691,7 @@ def person_transaktion_erstellen(api_user_id_auth: int, api_username_auth: str, 
     if not cnx:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
 
-    saldo_pruefung = _aktuellen_saldo_pruefen(user_info['id'])
+    saldo_pruefung = _aktuellen_saldo_pruefen(user_info['id'], trans_saldo_aenderung)
     if isinstance(saldo_pruefung, tuple):
         logger.warning("Transaktion für User %s blockiert, da das Guthaben von %s nicht ausreichend ist (Limit %s)", user_info['id'], saldo_pruefung[1], saldo_pruefung[2])
         return jsonify({'message': f"Hey {user_info['vorname']}, dein Guthaben beträgt {saldo_pruefung[2]} € und "
@@ -973,25 +904,14 @@ def create_person(api_user_id: int, api_username: str):
        not isinstance(vorname_val, str) or not vorname_val.strip():
         return jsonify({'error': 'Vorname und Nachname dürfen nicht leer sein.'}), 400
 
-    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
-    if not cnx:
-        return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
-    try:
-        with cnx.cursor() as cursor:
-            sql = "INSERT IGNORE INTO users (code, nachname, vorname, password) VALUES (%s, %s, %s, %s)"
-            werte = (code_val, nachname_val, vorname_val, password_val)
-            cursor.execute(sql, werte)
-            cnx.commit()
+    sql = "INSERT IGNORE INTO users (code, nachname, vorname, password) VALUES (%s, %s, %s, %s)"
+    werte = (code_val, nachname_val, vorname_val, password_val)
+    success, _ = db_utils.execute_commit(sql, werte)
+    if success:
         logger.info("Person mit Code %s erfolgreich hinzugefügt.", code_val)
         return jsonify({'message': f"Person mit Code {code_val} erfolgreich hinzugefügt."}), 200
-    except Error as err:
-        if cnx.is_connected():
-            cnx.rollback()
-        logger.error("Fehler beim Hinzufügen der Person mit Code %s: %s", code_val, err)
-        return jsonify({'error': 'Fehler beim Hinzufügen der Person.'}), 500
-    finally:
-        if cnx:
-            db_utils.DatabaseConnectionPool.close_connection(cnx)
+    logger.error("Fehler beim Hinzufügen der Person mit Code %s.", code_val)
+    return jsonify({'error': 'Fehler beim Hinzufügen der Person.'}), 500
 
 
 @app.route('/person/<string:code>', methods=['DELETE'])
@@ -1010,27 +930,13 @@ def delete_person(api_user_id: int, api_username: str, code: str):
     """
 
     logger.info("API-Benutzer authentifiziert: ID %s - %s. Lösche Person mit Code %s.", api_user_id, api_username, code)
-    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
-    if not cnx:
-        return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
-    try:
-        with cnx.cursor() as cursor:
-            sql = "DELETE FROM users WHERE code = %s"
-            cursor.execute(sql, (code,))
-            cnx.commit()
-            if cursor.rowcount > 0:
-                logger.info("Person mit Code %s erfolgreich gelöscht.", code)
-                return jsonify({'message': f"Person mit Code {code} erfolgreich gelöscht."}), 200
-            logger.warning("Keine Person mit dem Code %s zum Löschen gefunden.", code)
-            return jsonify({'error': f"Keine Person mit dem Code {code} gefunden."}), 404
-    except Error as err:
-        if cnx.is_connected():
-            cnx.rollback()
-        logger.error("Fehler beim Löschen der Person mit Code %s: %s", code, err)
-        return jsonify({'error': 'Fehler beim Löschen der Person.'}), 500
-    finally:
-        if cnx:
-            db_utils.DatabaseConnectionPool.close_connection(cnx)
+    sql = "DELETE FROM users WHERE code = %s"
+    success, _ = db_utils.execute_commit(sql, (code,))
+    if success:
+        logger.info("Person mit Code %s erfolgreich gelöscht.", code)
+        return jsonify({'message': f"Person mit Code {code} erfolgreich gelöscht."}), 200
+    logger.warning("Keine Person mit dem Code %s zum Löschen gefunden oder Fehler.", code)
+    return jsonify({'error': f"Keine Person mit dem Code {code} gefunden oder Fehler."}), 404
 
 
 @app.route('/person/existent/<string:code>', methods=['GET'])
@@ -1049,24 +955,13 @@ def person_exists_by_code(api_user_id: int, api_username: str, code: str):
     """
 
     logger.info("API-Benutzer authentifiziert: ID %s - %s. Prüfe Existenz von Person mit Code %s.", api_user_id, api_username, code)
-    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
-    if not cnx:
-        return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
-    try:
-        with cnx.cursor(dictionary=True) as cursor:
-            cursor.execute("SELECT nachname, vorname FROM users WHERE code = %s", (code,))
-            person = cursor.fetchone()
-        if person:
-            logger.info("Person mit Code %s gefunden: %s, %s", code, person['nachname'], person['vorname'])
-            return jsonify(person)
-        logger.info("Person mit Code %s nicht gefunden.", code)
-        return jsonify({'error': 'Person nicht gefunden.'}), 404
-    except Error as err:
-        logger.error("Fehler beim Lesen der Daten für Code %s: %s", code, err)
-        return jsonify({'error': 'Fehler beim Lesen der Daten.'}), 500
-    finally:
-        if cnx:
-            db_utils.DatabaseConnectionPool.close_connection(cnx)
+    query = "SELECT nachname, vorname FROM users WHERE code = %s"
+    person = db_utils.fetch_one(query, (code,), dictionary=True)
+    if person:
+        logger.info("Person mit Code %s gefunden: %s, %s", code, person['nachname'], person['vorname'])
+        return jsonify(person)
+    logger.info("Person mit Code %s nicht gefunden.", code)
+    return jsonify({'error': 'Person nicht gefunden.'}), 404
 
 
 @app.route('/person/<string:code>', methods=['GET'])
@@ -1086,39 +981,21 @@ def get_person_by_code(api_user_id: int, api_username: str, code: str):
     """
 
     logger.info("Abfrage für Person mit Code %s von API-Benutzer: ID %s - %s.", code, api_user_id, api_username)
-    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
-    if not cnx:
-        return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
+    person_info = db_utils.fetch_one("SELECT id, nachname, vorname FROM users WHERE code = %s", (code,), dictionary=True)
+    if not person_info:
+        logger.info("Person mit Code %s nicht gefunden.", code)
+        return jsonify({'error': 'Person nicht gefunden.'}), 404
 
-    try:
-        with cnx.cursor(dictionary=True) as cursor:
-            cursor.execute("SELECT id, nachname, vorname FROM users WHERE code = %s", (code,))
-            person_info = cursor.fetchone()
+    saldo_data = db_utils.fetch_one("SELECT SUM(saldo_aenderung) AS saldo FROM transactions WHERE user_id = %s", (person_info['id'],), dictionary=True)
+    aktueller_saldo = saldo_data['saldo'] if saldo_data and saldo_data['saldo'] is not None else 0
 
-            if not person_info:
-                logger.info("Person mit Code %s nicht gefunden.", code)
-                return jsonify({'error': 'Person nicht gefunden.'}), 404
-
-            cursor.execute(
-                "SELECT SUM(saldo_aenderung) AS saldo FROM transactions WHERE user_id = %s", (person_info['id'],)
-            )
-            saldo_data = cursor.fetchone()
-            aktueller_saldo = saldo_data['saldo'] if saldo_data and saldo_data['saldo'] is not None else 0
-
-        response_data = {
-            "nachname": person_info['nachname'],
-            "vorname": person_info['vorname'],
-            "saldo": aktueller_saldo
-        }
-        logger.info("Person mit Code %s gefunden: %s, %s - Saldo %s", code, response_data['nachname'], response_data['vorname'], response_data['saldo'])
-        return jsonify(response_data)
-
-    except Error as err:
-        logger.error("DB-Fehler bei Abfrage von Person mit Code %s: %s", code, err)
-        return jsonify({'error': 'Fehler beim Lesen der Daten.'}), 500
-    finally:
-        if cnx:
-            db_utils.DatabaseConnectionPool.close_connection(cnx)
+    response_data = {
+        "nachname": person_info['nachname'],
+        "vorname": person_info['vorname'],
+        "saldo": aktueller_saldo
+    }
+    logger.info("Person mit Code %s gefunden: %s, %s - Saldo %s", code, response_data['nachname'], response_data['vorname'], response_data['saldo'])
+    return jsonify(response_data)
 
 
 @app.route('/person/transaktionen/<string:code>', methods=['DELETE'])
@@ -1137,34 +1014,18 @@ def person_transaktionen_loeschen(api_user_id: int, api_username: str, code: str
     """
 
     logger.info("API-Benutzer authentifiziert: ID %s - %s. Lösche Transaktionen für Code %s.", api_user_id, api_username, code)
-    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
-    if not cnx:
-        return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
+    user_data_row = db_utils.fetch_one("SELECT id FROM users WHERE code = %s", (code,), dictionary=False)
+    if not user_data_row:
+        logger.warning("Person mit Code %s nicht gefunden, keine Transaktionen zum Löschen.", code)
+        return jsonify({'error': 'Person mit diesem Code nicht gefunden.'}), 404
 
-    target_user_id_for_delete = None  # Initialisieren für den Fall, dass der Benutzer nicht gefunden wird
-    try:
-        with cnx.cursor() as cursor:  # Kein dictionary=True nötig für ID-Abfrage
-            cursor.execute("SELECT id FROM users WHERE code = %s", (code,))
-            user_data_row = cursor.fetchone()
-            if not user_data_row:
-                logger.warning("Person mit Code %s nicht gefunden, keine Transaktionen zum Löschen.", code)
-                return jsonify({'error': 'Person mit diesem Code nicht gefunden.'}), 404
-
-            target_user_id_for_delete = user_data_row[0]
-            cursor.execute("DELETE FROM transactions WHERE user_id = %s", (target_user_id_for_delete,))
-            cnx.commit()
-
+    target_user_id_for_delete = user_data_row[0]
+    success, _ = db_utils.execute_commit("DELETE FROM transactions WHERE user_id = %s", (target_user_id_for_delete,))
+    if success:
         logger.info("Transaktionen für Benutzer mit Code %s (ID: %s) erfolgreich gelöscht.", code, target_user_id_for_delete)
         return jsonify({'message': 'Transaktionen erfolgreich gelöscht.'}), 200
-    except Error as err:
-        if cnx.is_connected():
-            cnx.rollback()
-        user_id_log = target_user_id_for_delete if target_user_id_for_delete is not None else "Unbekannt (Benutzer nicht gefunden)"
-        logger.error("Fehler beim Löschen der Transaktionen für Code %s (User ID: %s): %s", code, user_id_log, err)
-        return jsonify({'error': 'Fehler beim Löschen der Transaktion.'}), 500
-    finally:
-        if cnx:
-            db_utils.DatabaseConnectionPool.close_connection(cnx)
+    logger.error("Fehler beim Löschen der Transaktionen für Code %s (User ID: %s)", code, target_user_id_for_delete)
+    return jsonify({'error': 'Fehler beim Löschen der Transaktion.'}), 500
 
 
 if __name__ == '__main__':
