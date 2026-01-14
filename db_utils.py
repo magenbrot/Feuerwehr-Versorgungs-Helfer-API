@@ -262,6 +262,10 @@ class DatabaseConnectionPool:
                     cnx.rollback()
                 except Error as rb_err:
                     logger.debug("Rollback fehlgeschlagen: %s", rb_err)
+            return False, None
+        except Exception as e:
+            logger.error("execute_commit Unerwarteter Fehler: %s | Query: %s | Params: %s", e, query, params)
+            return False, None
 
 # Exportiere die wichtigsten Methoden als Modulattribute
 fetch_one = DatabaseConnectionPool.fetch_one

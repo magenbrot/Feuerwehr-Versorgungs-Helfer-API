@@ -157,3 +157,11 @@ ALTER TABLE transactions
 
 INSERT INTO users (id, code, nachname, vorname, password, email, kommentar, infomail_user_threshold, infomail_responsible_threshold, acc_duties, acc_privacy_policy, is_locked, is_admin) VALUES
 (1, '9876543210', 'Admin', 'Admin', 'scrypt:32768:8:1$IYudZaaf6cnGNisf$eb1afcc60e85d6b3b88741544c2c19ca7588794313022c5323db740b83213a65740290ada3aa31ea28132323b7a269dd278d26286b958ef3911a5deb6815c620', '', 'Default-Admin', 5, 5, 1, 1, 0, 1);
+
+INSERT INTO `benachrichtigungstypen` (`id`, `event_schluessel`, `beschreibung`) VALUES
+(1, 'NEUE_TRANSAKTION', 'bei jeder neuen Transaktion'),
+(2, 'SALDO_NULL', 'wenn dein Kontostand 0 € erreicht'),
+(3, 'THRESHOLD_REMINDER', 'wenn dein Guthaben unter den unten eingestellten Betrag fällt');
+
+INSERT INTO `system_einstellungen` (`einstellung_schluessel`, `einstellung_wert`, `beschreibung`) VALUES
+('TRANSACTION_SALDO_CHANGE', '-2', 'Dieser Betrag wird beim Scan eines NFC-Token oder QR-Codes vom Saldo abgezogen');
