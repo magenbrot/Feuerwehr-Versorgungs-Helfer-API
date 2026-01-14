@@ -1,14 +1,14 @@
 """Verwaltet den Datenbankverbindungspool für die Anwendung."""
+
 import logging
 import sys
 import contextlib
 import time
 import threading
 import mysql.connector
-from mysql.connector import pooling, Error  # Error hier importiert
+from mysql.connector import pooling, Error
 
 logger = logging.getLogger(__name__)
-
 
 class DatabaseConnectionPool:
     """
@@ -72,11 +72,11 @@ class DatabaseConnectionPool:
 
             cnx = None
             try:
-                # 1. Get connection from pool
+                # Get connection from pool
                 cnx = cls.get_connection()
 
                 if cnx:
-                    # 2. Perform a simple query
+                    # Perform a simple query
                     with cnx.cursor() as cursor:
                         cursor.execute("SELECT 1")
                         cursor.fetchone()
@@ -97,11 +97,11 @@ class DatabaseConnectionPool:
                 logger.error("Unerwarteter Fehler beim Datenbank Health-Check: %s", e)
 
             finally:
-                # 3. Always release the connection back to the pool
+                # Always release the connection back to the pool
                 if cnx:
                     cls.close_connection(cnx)
 
-            # 4. Wait for 30 seconds
+            # wait for 30 seconds
             time.sleep(30)
 
     @classmethod
