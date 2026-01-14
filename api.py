@@ -907,9 +907,8 @@ def create_person(api_user_id: int, api_username: str):
     if success:
         logger.info("Person mit Code %s erfolgreich hinzugefügt.", code_val)
         return jsonify({'message': f"Person mit Code {code_val} erfolgreich hinzugefügt."}), 200
-    else:
-        logger.error("Fehler beim Hinzufügen der Person mit Code %s.", code_val)
-        return jsonify({'error': 'Fehler beim Hinzufügen der Person.'}), 500
+    logger.error("Fehler beim Hinzufügen der Person mit Code %s.", code_val)
+    return jsonify({'error': 'Fehler beim Hinzufügen der Person.'}), 500
 
 
 @app.route('/person/<string:code>', methods=['DELETE'])
