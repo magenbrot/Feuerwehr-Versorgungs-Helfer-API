@@ -58,9 +58,6 @@ except Error as e:
     logger.info("Kritischer Fehler beim Starten der Datenbankverbindung: %s", e)
     sys.exit(1)
 
-# Starte den Health-Check-Thread, nachdem der Pool initialisiert wurde
-#db_utils.DatabaseConnectionPool.start_health_check_thread()
-
 # Lade das Manifest mit Author- und Versionsinfos
 try:
     with open('manifest.json', 'r', encoding='utf-8') as manifest:
@@ -165,7 +162,7 @@ def get_user_notification_preference(user_id_int: int, event_schluessel: str) ->
     row = db_utils.fetch_one(query, (user_id_int, event_schluessel), dictionary=True)
     try:
         return bool(row['email_aktiviert']) if row and row.get('email_aktiviert') is not None else False
-    except Exception:
+    except (KeyError, TypeError):
         return False
 
 
@@ -289,7 +286,7 @@ def _aktuellen_saldo_pruefen(target_user_id: int) -> Union[Literal[True], Tuple[
     row = db_utils.fetch_one(query, (target_user_id,), dictionary=True)
     try:
         aktueller_saldo = float(row['saldo']) if row and row.get('saldo') is not None else 0
-    except Exception as e:
+    except (TypeError, ValueError) as e:
         logger.error("Fehler beim Parsen des Saldo für User %s: %s", target_user_id, e)
         return False
 
@@ -430,22 +427,6 @@ def finde_benutzer_zu_nfc_token(token_base64: str) -> Optional[dict]:
     finally:
         if cnx:
             db_utils.DatabaseConnectionPool.close_connection(cnx)
-        try:
-            token_bytes = base64.b64decode(token_base64)
-        except binascii.Error:
-            logger.error("Ungültiger Base64-String in finde_benutzer_zu_nfc_token: %s", token_base64)
-            return None
-        query = """
-            SELECT u.id AS id, u.nachname AS nachname, u.vorname AS vorname, u.email AS email, u.is_locked AS is_locked, t.token_id as token_id
-            FROM nfc_token AS t
-            INNER JOIN users AS u ON t.user_id = u.id
-            WHERE t.token_daten = %s
-        """
-        user = db_utils.fetch_one(query, (token_bytes,), dictionary=True)
-        if user:
-            logger.info("Benutzer via NFC gefunden: ID %s - %s %s (TokenID: %s, Email: %s)",
-                        user['id'], user['vorname'], user['nachname'], user['token_id'], user.get('email'))
-        return user
 
 
 def _send_new_transaction_email(user_details: Dict[str, Any], transaction_details: Dict[str, Any]):
@@ -526,13 +507,6 @@ def health_protected_route(api_user_id: int, api_username: str):
     finally:
         if cnx:
             db_utils.DatabaseConnectionPool.close_connection(cnx)
-        row = db_utils.fetch_one("SELECT 1", dictionary=False)
-        if row is not None:
-            logger.debug("Datenbankverbindung erfolgreich für Healthcheck. Authentifizierter API-Benutzer: ID %s - %s", api_user_id, api_username)
-            return jsonify({'message': f"Healthcheck OK! Authentifizierter API-Benutzer ID {api_user_id} ({api_username})."})
-        else:
-            logger.error("Datenbankverbindung fehlgeschlagen im Healthcheck.")
-            return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
 
 
 @app.route('/users', methods=['GET'])
@@ -570,14 +544,6 @@ def get_all_users(api_user_id: int, api_username: str):
     finally:
         if cnx:
             db_utils.DatabaseConnectionPool.close_connection(cnx)
-        logger.info("API-Benutzer authentifiziert: ID %s - %s. Rufe alle Benutzer ab.", api_user_id, api_username)
-        users_list = db_utils.fetch_all("SELECT code, nachname, vorname FROM users ORDER BY nachname, vorname;", dictionary=True)
-        if users_list is not None:
-            logger.info("%s Benutzer erfolgreich aus der Datenbank abgerufen.", len(users_list))
-            return jsonify(users_list), 200
-        else:
-            logger.error("Fehler beim Abrufen aller Benutzer aus der Datenbank.")
-            return jsonify({'error': "Ein interner Fehler ist aufgetreten."}), 500
 
 
 @app.route('/nfc-transaktion', methods=['PUT'])
@@ -594,7 +560,6 @@ def nfc_transaction(api_user_id_auth: int, api_username_auth: str):
     Returns: flask.Response
     """
 
-    # logger.info("NFC-Transaktion Anfrage von API-Benutzer: ID %s - %s.", api_user_id_auth, api_username_auth)
     daten = request.get_json()
     logger.info("NFC-Transaktion Anfrage zu Token '%s' von API-Benutzer: ID %s - %s.", daten['token'], api_user_id_auth, api_username_auth)
     if not daten or 'token' not in daten or 'beschreibung' not in daten:
@@ -968,9 +933,8 @@ def delete_person(api_user_id: int, api_username: str, code: str):
     if success:
         logger.info("Person mit Code %s erfolgreich gelöscht.", code)
         return jsonify({'message': f"Person mit Code {code} erfolgreich gelöscht."}), 200
-    else:
-        logger.warning("Keine Person mit dem Code %s zum Löschen gefunden oder Fehler.", code)
-        return jsonify({'error': f"Keine Person mit dem Code {code} gefunden oder Fehler."}), 404
+    logger.warning("Keine Person mit dem Code %s zum Löschen gefunden oder Fehler.", code)
+    return jsonify({'error': f"Keine Person mit dem Code {code} gefunden oder Fehler."}), 404
 
 
 @app.route('/person/existent/<string:code>', methods=['GET'])
@@ -1058,9 +1022,8 @@ def person_transaktionen_loeschen(api_user_id: int, api_username: str, code: str
     if success:
         logger.info("Transaktionen für Benutzer mit Code %s (ID: %s) erfolgreich gelöscht.", code, target_user_id_for_delete)
         return jsonify({'message': 'Transaktionen erfolgreich gelöscht.'}), 200
-    else:
-        logger.error("Fehler beim Löschen der Transaktionen für Code %s (User ID: %s)", code, target_user_id_for_delete)
-        return jsonify({'error': 'Fehler beim Löschen der Transaktion.'}), 500
+    logger.error("Fehler beim Löschen der Transaktionen für Code %s (User ID: %s)", code, target_user_id_for_delete)
+    return jsonify({'error': 'Fehler beim Löschen der Transaktion.'}), 500
 
 
 if __name__ == '__main__':
