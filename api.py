@@ -265,18 +265,19 @@ def _send_responsible_threshold_benachrichtigung(user_details: dict, aktueller_s
         logger.error("Fehler beim Senden der Verantwortliche-Saldowarnung (%s %s) an Verantwortliche (%s).", user_details['vorname'], user_details['nachname'], config.api_config['responsible_email'])
 
 
-def _aktuellen_saldo_pruefen(target_user_id: int) -> Union[Literal[True], Tuple[Literal[False], float, int], Literal[False]]:
+def _aktuellen_saldo_pruefen(target_user_id: int, saldo_aenderung: float = 0) -> Union[Literal[True], Tuple[Literal[False], float, int], Literal[False]]:
     """
     Prüft den aktuellen Saldo eines Benutzers vor einer Transaktion.
 
     Args:
         target_user_id (int): Die ID des Benutzers, dessen Saldo geprüft werden soll.
+        saldo_aenderung (float, optional): Die geplante Änderung des Saldos (z.B. -1 für Abbuchung). Default: 0
 
     Returns:
-        True: Wenn der Saldo ausreichend ist.
-        tuple[Literal[False], float, int]: Ein Tupel (False, aktueller_saldo),
+        True: Wenn der Saldo nach der Änderung ausreichend ist.
+        tuple[Literal[False], float, int]: Ein Tupel (False, aktueller_saldo, max_negativ_saldo),
                                             wenn der Saldo das Limit unterschreitet.
-                                            aktueller_saldo ist der tatsächliche Saldo.
+                                            aktueller_saldo ist der tatsächliche Saldo vor Änderung.
         False: Im Falle eines Datenbank- oder Konfigurationsfehlers.
     """
 
@@ -290,7 +291,8 @@ def _aktuellen_saldo_pruefen(target_user_id: int) -> Union[Literal[True], Tuple[
         logger.error("Fehler beim Parsen des Saldo für User %s: %s", target_user_id, e)
         return False
 
-    if aktueller_saldo <= max_negativ_saldo:
+    neuer_saldo = aktueller_saldo + saldo_aenderung
+    if neuer_saldo < max_negativ_saldo:
         return (False, aktueller_saldo, max_negativ_saldo)
     return True
 
@@ -581,16 +583,6 @@ def nfc_transaction(api_user_id_auth: int, api_username_auth: str):
         with cnx.cursor(dictionary=True) as cursor:
             cursor.execute("UPDATE nfc_token SET last_used = NOW() WHERE token_id = %s", (int(benutzer_info['token_id']),))
 
-            saldo_pruefung = _aktuellen_saldo_pruefen(benutzer_info['id'])
-            if isinstance(saldo_pruefung, tuple):
-                logger.warning("Transaktion für User %s blockiert, da das Guthaben von %s nicht ausreichend ist", benutzer_info['id'], saldo_pruefung[1])
-                return jsonify({'message': f"Hey {benutzer_info['vorname']}, dein Guthaben beträgt {saldo_pruefung[2]} € und "
-                                "unterschreitet das Limit. Bitte lade dein Konto wieder auf.",
-                                'action': "block"}), 200
-            if saldo_pruefung is False:
-                logger.error("Fehler bei der Saldoprüfung für Benutzer %s. Aktion blockiert.", benutzer_info['id'])
-                return jsonify({'message': f"Hey {benutzer_info['vorname']}, es gab ein technisches Problem bei der Überprüfung deines Saldos. "
-                                "Bitte versuche es später erneut oder kontaktiere einen Verantwortlichen.", 'action': "error"}), 200
 
             trans_saldo_aenderung_str = get_system_setting('TRANSACTION_SALDO_CHANGE')
             if trans_saldo_aenderung_str is None:
@@ -602,6 +594,17 @@ def nfc_transaction(api_user_id_auth: int, api_username_auth: str):
             except ValueError:
                 logger.error("Ungültiger Wert für TRANSACTION_SALDO_CHANGE ('%s') in system_einstellungen.", trans_saldo_aenderung_str)
                 return jsonify({'error': f"Ungültiger Wert für TRANSACTION_SALDO_CHANGE ('{trans_saldo_aenderung_str}') in system_einstellungen."}), 400
+
+            saldo_pruefung = _aktuellen_saldo_pruefen(benutzer_info['id'], trans_saldo_aenderung)
+            if isinstance(saldo_pruefung, tuple):
+                logger.warning("Transaktion für User %s blockiert, da das Guthaben von %s nicht ausreichend ist", benutzer_info['id'], saldo_pruefung[1])
+                return jsonify({'message': f"Hey {benutzer_info['vorname']}, dein Guthaben beträgt {saldo_pruefung[1]} € und "
+                                "unterschreitet das Limit. Bitte lade dein Konto wieder auf.",
+                                'action': "block"}), 200
+            if saldo_pruefung is False:
+                logger.error("Fehler bei der Saldoprüfung für Benutzer %s. Aktion blockiert.", benutzer_info['id'])
+                return jsonify({'message': f"Hey {benutzer_info['vorname']}, es gab ein technisches Problem bei der Überprüfung deines Saldos. "
+                                "Bitte versuche es später erneut oder kontaktiere einen Verantwortlichen.", 'action': "error"}), 200
 
             cursor.execute("INSERT INTO transactions (user_id, beschreibung, saldo_aenderung) VALUES (%s, %s, %s)",
                            (benutzer_info['id'], daten['beschreibung'], trans_saldo_aenderung))
@@ -688,7 +691,7 @@ def person_transaktion_erstellen(api_user_id_auth: int, api_username_auth: str, 
     if not cnx:
         return jsonify({'error': 'Datenbankverbindung fehlgeschlagen.'}), 500
 
-    saldo_pruefung = _aktuellen_saldo_pruefen(user_info['id'])
+    saldo_pruefung = _aktuellen_saldo_pruefen(user_info['id'], trans_saldo_aenderung)
     if isinstance(saldo_pruefung, tuple):
         logger.warning("Transaktion für User %s blockiert, da das Guthaben von %s nicht ausreichend ist (Limit %s)", user_info['id'], saldo_pruefung[1], saldo_pruefung[2])
         return jsonify({'message': f"Hey {user_info['vorname']}, dein Guthaben beträgt {saldo_pruefung[2]} € und "
