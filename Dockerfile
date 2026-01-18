@@ -1,6 +1,8 @@
 # --- BASE STAGE ---
 FROM python:3.11-slim AS base
 
+RUN groupadd --system fvh && useradd --system --gid fvh fvh
+
 WORKDIR /app
 
 # System-Abhängigkeiten (Pillow benötigt libjpeg/zlib)
@@ -13,10 +15,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Abhängigkeiten installieren + gunicorn hinzufügen
-COPY requirements.txt .
+COPY --chown=fvh:fvh requirements.txt requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+COPY --chown=fvh:fvh . .
+USER fvh
 
 # --- STAGE API ---
 FROM base AS api
