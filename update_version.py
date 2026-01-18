@@ -1,151 +1,109 @@
-"""Erhöht die Versionsnummer in der manifest.json nach dem Schema YYYY.MM.PATCH."""
+"""
+Increments the version number in manifest.json and performs Git/GitHub actions.
+"""
+
 import json
 import datetime
 import os
 import subprocess
 import sys
 
-# --- Konfiguration ---
+# --- Configuration ---
 FILE_PATH = 'manifest.json'
 REPO_NAME = 'magenbrot/Feuerwehr-Versorgungs-Helfer-API'
 MAIN_BRANCH = 'main'
 
-def main():
-    """main function"""
 
-    # --- Versionslogik ---
+def get_new_version(old_version):
+    """
+    Calculates the new version based on YYYY.MM.PATCH logic.
+    """
     current_year_month = datetime.date.today().strftime('%Y.%m')
-    # Der PATCH-Zähler startet standardmäßig bei 0
-    new_patch = 0
-    old_version = None # Variable für die alte Version
+    parts = old_version.split('.')
+
+    if len(parts) == 3:
+        old_year_month = f"{parts[0]}.{parts[1]}"
+        try:
+            old_patch = int(parts[2])
+            if old_year_month == current_year_month:
+                return f"{current_year_month}.{old_patch + 1:02d}"
+        except ValueError:
+            pass
+
+    return f"{current_year_month}.00"
 
 
-    print("Starte Prozess zur Aktualisierung der Version und Git/GitHub-Aktionen...")
+def run_command(command, description):
+    """
+    Executes a shell command using subprocess.
+    """
+    print(f"\n-> {description}")
+    print(f"   Command: {' '.join(command)}")
+
+    result = subprocess.run(
+        command,
+        check=True,
+        capture_output=True,
+        text=True,
+        cwd='.'
+    )
+    print("   [OK]")
+    if result.stdout:
+        print(f"   Stdout:\n{result.stdout.strip()}")
 
 
-    # --- Datei prüfen ---
+def update_manifest():
+    """
+    Reads the manifest, calculates the new version, and writes it back.
+    """
     if not os.path.exists(FILE_PATH):
-        print(f"Fehler: Datei '{FILE_PATH}' nicht gefunden.")
-        sys.exit(1) # Skript beenden, wenn Datei nicht existiert
+        print(f"Error: {FILE_PATH} not found.")
+        sys.exit(1)
 
-    # --- JSON lesen und Version berechnen ---
+    with open(FILE_PATH, 'r', encoding='utf-8') as file:
+        data = json.load(file)
+
+    old_version = data.get('version', '0.0.0')
+    new_version = get_new_version(old_version)
+
+    print(f"Old version: {old_version} -> New version: {new_version}")
+
+    data['version'] = new_version
+    with open(FILE_PATH, 'w', encoding='utf-8') as file:
+        json.dump(data, file, indent=2)
+
+    return new_version
+
+
+def main():
+    """
+    Main orchestration of the version update process.
+    """
     try:
-        print(f"\nLese '{FILE_PATH}' zur Versionsermittlung...")
-        # JSON-Datei lesen
-        with open(FILE_PATH, 'r', encoding='utf-8') as f:
-            data = json.load(f)
+        new_version = update_manifest()
+        tag_name = new_version
 
-        # Alte Version auslesen (Standardwert '0.0.0', falls 'version' nicht existiert)
-        old_version = data.get('version', '0.0.0')
-        print(f"Aktuelle Version in Datei: {old_version}")
+        commands = [
+            (['git', 'add', FILE_PATH], f"Staging {FILE_PATH}"),
+            (['git', 'commit', '-m', f'Update version to {new_version}'], "Creating commit"),
+            (['git', 'tag', tag_name], f"Creating tag {tag_name}"),
+            (['git', 'push', '--atomic', 'origin', MAIN_BRANCH, tag_name], "Pushing to origin"),
+            (['gh', 'release', 'create', tag_name, f'--repo={REPO_NAME}',
+              f'--title=API {tag_name}', '--generate-notes'], "Creating GitHub release")
+        ]
 
-        # Versuche, die alte Version zu parsen und den Patch zu erhöhen
-        parts = old_version.split('.')
+        for cmd, desc in commands:
+            run_command(cmd, desc)
 
-        # Prüfen, ob die alte Version das Format YYYY.MM.PATCH hat
-        if len(parts) == 3:
-            old_year_month = f"{parts[0]}.{parts[1]}"
-            try:
-                old_patch = int(parts[2])
+        print("\n" + "="*50 + "\nProcess finished successfully!\n" + "="*50)
 
-                # Prüfen, ob Jahr und Monat der alten Version mit dem aktuellen übereinstimmen
-                if old_year_month == current_year_month:
-                    new_patch = old_patch + 1
-                    print(f"Aktueller Monat/Jahr ({current_year_month}) stimmt überein. Erhöhe Patch von {old_patch} auf {new_patch}.")
-                else:
-                    print(f"Aktueller Monat/Jahr ({current_year_month}) unterscheidet sich von alter Version ({old_year_month}). Setze Patch auf 0.")
-                    new_patch = 0 # Neuen Monat/Jahr -> Patch bei 0 starten
-            except ValueError:
-                print(f"Patch-Teil der alten Version '{parts[2]}' ist keine Zahl. Setze Patch auf 0.")
-                new_patch = 0 # Patch ist keine Zahl -> Patch bei 0 starten
-        else:
-            print(f"Alte Version '{old_version}' hat nicht das Format YYYY.MM.PATCH. Setze Patch auf 0.")
-            new_patch = 0 # Altes Format oder ungültiges Format -> Patch bei 0 starten
-
-
-        # Neue Version im Format YYYY.MM.PATCH (Patch zweistellig formatiert) erstellen
-        new_version = f"{current_year_month}.{new_patch:02d}"
-        tag_name = new_version # Der Tag-Name ist die neue Version
-
-        print(f"Berechnete neue Version: {new_version}")
-
-        # Version im Daten-Dictionary aktualisieren
-        data['version'] = new_version
-
-        # Modifiziertes JSON zurück in die Datei schreiben
-        # 'indent=2' sorgt für eine lesbare Formatierung
-        print(f"\nSchreibe neue Version '{new_version}' in '{FILE_PATH}'...")
-        with open(FILE_PATH, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=2)
-
-        print("Datei erfolgreich geschrieben.")
-        print("-" * 30)
-
-    except FileNotFoundError:
-        # Dies sollte hier eigentlich nicht passieren, da wir oben prüfen
-        print(f"\nSchwerwiegender Fehler: Datei '{FILE_PATH}' nicht gefunden während des Lesens.")
+    except subprocess.CalledProcessError as err:
+        print(f"\nCommand failed: {err.stderr}")
         sys.exit(1)
-    except json.JSONDecodeError:
-        print(f"\nFehler: Konnte '{FILE_PATH}' nicht parsen. Ungültiges JSON-Format.")
-        sys.exit(1)
-    except Exception as e:  # pylint: disable=W0718
-        print(f"\nEin unerwarteter Fehler beim Lesen/Schreiben der Datei ist aufgetreten: {e}")
+    except Exception as err:  # pylint: disable=broad-except
+        print(f"\nAn error occurred: {err}")
         sys.exit(1)
 
-
-    # --- Git/Github Kommandos ausführen ---
-    print("Führe nun Git/Github Kommandos aus:")
-
-    commands_to_run = [
-        (['git', 'add', FILE_PATH], f"Änderungen in {FILE_PATH} stagen"),
-        (['git', 'commit', '-m', f'Update version to {new_version}'], f"Commit erstellen mit Nachricht 'Update version to {new_version}'"),
-        (['git', 'tag', tag_name], f"Tag '{tag_name}' erstellen"),
-        (['git', 'push', '--atomic', 'origin', MAIN_BRANCH, tag_name], f"Commit und Tag zu 'origin {MAIN_BRANCH}' pushen"),
-        (['gh', 'release', 'create', tag_name, f'--repo={REPO_NAME}', f'--title=Feuerwehr-Versorgungs-Helfer-API {tag_name}', '--generate-notes'],
-         f"GitHub Release '{tag_name}' auf '{REPO_NAME}' erstellen")
-    ]
-
-    try:
-        for command, description in commands_to_run:
-            print(f"\n-> {description}")
-            print(f"   Befehl: {' '.join(command)}")
-
-            result = subprocess.run(
-                command,
-                check=True,
-                capture_output=True,
-                text=True,
-                cwd='.'
-            )
-
-            print("   [OK]")
-            if result.stdout:
-                print("   Stdout:\n" + result.stdout.strip())
-            if result.stderr:
-                print("   Stderr:\n" + result.stderr.strip())
-
-
-        print("\n" + "="*50)
-        print("Alle Schritte erfolgreich abgeschlossen!")
-        print("="*50)
-        sys.exit(0)
-
-    except FileNotFoundError:
-        # Diese Exception wird geworfen, wenn z.B. 'git' oder 'gh' nicht gefunden werden
-        print("\nFehler: Ein benötigter Befehl wurde nicht gefunden.")
-        print("Stelle sicher, dass Git und gh (Github CLI) installiert sind und im PATH liegen.")
-        sys.exit(1)
-    except subprocess.CalledProcessError as e:
-        # Diese Exception wird geworfen, wenn ein Kommando mit einem Fehlercode zurückkehrt
-        print("\nFehler beim Ausführen eines Befehls:")
-        print(f"Befehl: {' '.join(e.cmd)}")
-        print(f"Rückgabecode: {e.returncode}")
-        if e.stdout:
-            print("Stdout des Fehlers:\n" + e.stdout.strip())
-        if e.stderr:
-            print("Stderr des Fehlers:\n" + e.stderr.strip())
-        print("\nAbbruch: Ein Git/Github Befehl ist fehlgeschlagen.")
-        sys.exit(1)
 
 if __name__ == '__main__':
     main()
