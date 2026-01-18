@@ -177,3 +177,6 @@ pyrightconfig.json
 
 # UNIX sockets
 *.sock
+
+# Temporary files
+*.tmp

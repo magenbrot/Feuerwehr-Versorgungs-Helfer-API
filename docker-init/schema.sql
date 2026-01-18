@@ -164,4 +164,4 @@ INSERT INTO `benachrichtigungstypen` (`id`, `event_schluessel`, `beschreibung`) 
 (3, 'THRESHOLD_REMINDER', 'wenn dein Guthaben unter den unten eingestellten Betrag fällt');
 
 INSERT INTO `system_einstellungen` (`einstellung_schluessel`, `einstellung_wert`, `beschreibung`) VALUES
-('TRANSACTION_SALDO_CHANGE', '-2', 'Dieser Betrag wird beim Scan eines NFC-Token oder QR-Codes vom Saldo abgezogen');
+('TRANSACTION_SALDO_CHANGE', '-1', 'Dieser Betrag wird beim Scan eines NFC-Token oder QR-Codes vom Saldo abgezogen');
