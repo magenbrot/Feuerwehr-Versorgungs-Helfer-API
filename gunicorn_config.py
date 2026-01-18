@@ -2,6 +2,8 @@
 Gunicorn configuration file for Feuerwehr-Versorgungs-Helfer.
 """
 
+# pylint: disable=invalid-name
+
 import multiprocessing
 
 # Bind to all interfaces on the container's port
