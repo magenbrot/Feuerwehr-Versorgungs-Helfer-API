@@ -1,0 +1,63 @@
+services:
+  fvh-db:
+    # Access via docker compose exec db mysql -u fvh -p fvh
+    image: percona/percona-server:8.4
+    container_name: fvh-db
+    ports:
+      - "3306:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DB}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+    volumes:
+      - ./docker-init:/docker-entrypoint-initdb.d
+      - percona-data:/var/lib/mysql              # Database data
+      - percona-logs:/var/log/mysql              # MySQL logs
+      - percona-backups:/backups                 # XtraBackup output (optional, for future use)
+    restart: unless-stopped
+
+# Der API Service
+  fvh-api:
+    build:
+      context: .
+      target: api  # Nutzt die 'api' Stage aus dem Dockerfile
+    container_name: fvh-api
+    depends_on:
+      - fvh-db
+    ports:
+      - "5000:5000"
+    env_file: .env
+    restart: unless-stopped
+
+  # Der GUI Service
+  fvh-gui:
+    build:
+      context: .
+      target: gui  # Nutzt die 'gui' Stage aus dem Dockerfile
+    container_name: fvh-gui
+    depends_on:
+      - fvh-db
+    ports:
+      - "5001:5001"
+    env_file: .env
+    restart: unless-stopped
+
+  fvh-phpmyadmin:
+    # Access via http://localhost:8080
+    image: phpmyadmin/phpmyadmin
+    container_name: fvh-phpmyadmin
+    depends_on:
+      - fvh-db
+    ports:
+      - 8080:80
+    environment:
+      - PMA_HOST="fvh-db"
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - PMA_ARBITRARY=1
+    restart: unless-stopped
+
+volumes:
+  percona-data:
+  percona-logs:
+  percona-backups:
