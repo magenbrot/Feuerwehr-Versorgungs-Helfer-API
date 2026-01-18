@@ -15,6 +15,11 @@ services:
       - percona-data:/var/lib/mysql              # Database data
       - percona-logs:/var/log/mysql              # MySQL logs
       - percona-backups:/backups                 # XtraBackup output (optional, for future use)
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "${MYSQL_USER}", "-p${MYSQL_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
 
 # Der API Service
@@ -24,7 +29,8 @@ services:
       target: api  # Nutzt die 'api' Stage aus dem Dockerfile
     container_name: fvh-api
     depends_on:
-      - fvh-db
+      fvh-db:
+        condition: service_healthy
     ports:
       - "5000:5000"
     env_file: .env
@@ -37,7 +43,8 @@ services:
       target: gui  # Nutzt die 'gui' Stage aus dem Dockerfile
     container_name: fvh-gui
     depends_on:
-      - fvh-db
+      fvh-db:
+        condition: service_healthy
     ports:
       - "5001:5001"
     env_file: .env
@@ -45,15 +52,15 @@ services:
 
   fvh-phpmyadmin:
     # Access via http://localhost:8080
-    image: phpmyadmin/phpmyadmin
+    image: phpmyadmin/phpmyadmin:5.2.3
     container_name: fvh-phpmyadmin
     depends_on:
-      - fvh-db
+      fvh-db:
+        condition: service_healthy
     ports:
       - 8080:80
     environment:
       - PMA_HOST="fvh-db"
-      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
       - PMA_ARBITRARY=1
     restart: unless-stopped
 

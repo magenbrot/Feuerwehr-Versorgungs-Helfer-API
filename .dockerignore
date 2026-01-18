@@ -1,0 +1,16 @@
+*.md
+*.pyc
+*.pyd
+*.pyo
+.dockerignore
+.git
+.github
+.gitignore
+.idea/
+.vscode/
+Dockerfile
+__pycache__/
+docker-compose.*
+docker-init/
+installation/
+venv/

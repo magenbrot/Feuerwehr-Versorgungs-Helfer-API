@@ -4,7 +4,7 @@ FROM python:3.11-slim AS base
 WORKDIR /app
 
 # System-Abhängigkeiten (Pillow benötigt libjpeg/zlib)
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     libjpeg-dev \
     zlib1g-dev \
     fonts-hack-ttf \
@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y \
 
 # Abhängigkeiten installieren + gunicorn hinzufügen
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt gunicorn
+RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
