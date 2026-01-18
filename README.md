@@ -1,3 +1,5 @@
+[![Pylint](https://github.com/magenbrot/Feuerwehr-Versorgungs-Helfer-API/actions/workflows/pylint.yml/badge.svg)](https://github.com/magenbrot/Feuerwehr-Versorgungs-Helfer-API/actions/workflows/pylint.yml)
+
 # Feuerwehr-Versorgungs-Helfer-API (Backend) 🚒📊
 
 ## Übersicht ℹ️
