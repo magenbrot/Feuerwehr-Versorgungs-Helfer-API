@@ -180,3 +180,6 @@ pyrightconfig.json
 
 # Temporary files
 *.tmp
+
+# Docker
+docker-compose.yml
