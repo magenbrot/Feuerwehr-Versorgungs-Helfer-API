@@ -89,7 +89,7 @@ def main():
             (['git', 'tag', tag_name], f"Creating tag {tag_name}"),
             (['git', 'push', '--atomic', 'origin', MAIN_BRANCH, tag_name], "Pushing to origin"),
             (['gh', 'release', 'create', tag_name, f'--repo={REPO_NAME}',
-              f'--title=API {tag_name}', '--generate-notes'], "Creating GitHub release")
+              f'--title=Feuerwehr-Versorgungs-Helfer-API {tag_name}', '--generate-notes'], "Creating GitHub release")
         ]
 
         for cmd, desc in commands:
