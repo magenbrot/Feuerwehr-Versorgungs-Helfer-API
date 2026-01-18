@@ -1,3 +1,4 @@
+*.env
 *.md
 *.pyc
 *.pyd
