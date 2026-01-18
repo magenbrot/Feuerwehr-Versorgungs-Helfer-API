@@ -148,7 +148,7 @@ def erzeuge_qr_code(daten, text):
     text_farbe = "black"
     hintergrund_farbe = "white"
     text_abstand_unten = 40
-    schriftgroesse = 20
+    schriftgroesse = 22
     font_names = ["Hack-Bold.ttf", "DejaVuSans-Bold.ttf", "NotoSans-Bold.ttf"]
     schriftart = None
 

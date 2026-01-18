@@ -7,6 +7,9 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     libjpeg-dev \
     zlib1g-dev \
+    fonts-hack-ttf \
+    fonts-dejavu-core \
+    fonts-noto-core \
     && rm -rf /var/lib/apt/lists/*
 
 # Abhängigkeiten installieren + gunicorn hinzufügen
@@ -21,10 +24,10 @@ EXPOSE 5000
 # Gunicorn startet die api.py (Variable 'app')
 # --bind: Port im Container
 # --workers: Faustregel (2 x CPU-Kerne) + 1
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "1", "api:app"]
+CMD ["gunicorn", "--config", "gunicorn_config.py", "api:app"]
 
 # --- STAGE GUI ---
 FROM base AS gui
 EXPOSE 5001
 # Gunicorn startet die gui.py (Variable 'app')
-CMD ["gunicorn", "--bind", "0.0.0.0:5001", "--workers", "1", "gui:app"]
+CMD ["gunicorn", "--config", "gunicorn_config.py", "--bind", "0.0.0.0:5001", "gui:app"]
