@@ -36,10 +36,24 @@ jobs:
             magenbrot/feuerwehr-versorgungs-helfer-api
             ghcr.io/${{ github.repository }}
 
-      - name: Build and push Docker images
+      - name: Build and push API Image
         uses: docker/build-push-action@v6
         with:
           context: .
+          target: api
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: |
+            magenbrot/feuerwehr-versorgungs-helfer-api:latest
+            magenbrot/feuerwehr-versorgungs-helfer-api:${{ github.event.release.tag_name }}
+            ghcr.io/${{ github.repository }}-api:latest
+
+      - name: Build and push GUI Image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: gui
+          push: true
+          tags: |
+            magenbrot/feuerwehr-versorgungs-helfer-gui:latest
+            magenbrot/feuerwehr-versorgungs-helfer-gui:${{ github.event.release.tag_name }}
+            ghcr.io/${{ github.repository }}-gui:latest

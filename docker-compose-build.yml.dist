@@ -24,7 +24,9 @@ services:
 
 # Der API Service
   fvh-api:
-    image: magenbrot/feuerwehr-versorgungs-helfer-api:latest
+    build:
+      context: .
+      target: api  # Nutzt die 'api' Stage aus dem Dockerfile
     container_name: fvh-api
     depends_on:
       fvh-db:
@@ -36,7 +38,9 @@ services:
 
   # Der GUI Service
   fvh-gui:
-    image: magenbrot/feuerwehr-versorgungs-helfer-gui:latest
+    build:
+      context: .
+      target: gui  # Nutzt die 'gui' Stage aus dem Dockerfile
     container_name: fvh-gui
     depends_on:
       fvh-db:
