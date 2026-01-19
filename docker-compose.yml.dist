@@ -24,7 +24,7 @@ services:
 
 # Der API Service
   fvh-api:
-    image: magenbrot/feuerwehr-versorgungs-helfer-api:latest
+    image: magenbrot/fvh-api:latest
     container_name: fvh-api
     depends_on:
       fvh-db:
@@ -36,7 +36,7 @@ services:
 
   # Der GUI Service
   fvh-gui:
-    image: magenbrot/feuerwehr-versorgungs-helfer-gui:latest
+    image: magenbrot/fvh-gui:latest
     container_name: fvh-gui
     depends_on:
       fvh-db:

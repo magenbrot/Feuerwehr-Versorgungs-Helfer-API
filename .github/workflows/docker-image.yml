@@ -1,4 +1,4 @@
-name: Publish Docker image
+name: Publish Docker images
 
 on:
   release:
@@ -6,14 +6,14 @@ on:
 
 jobs:
   push_to_registries:
-    name: Push Docker image to multiple registries
+    name: Build and Push API and GUI
     runs-on: ubuntu-latest
     permissions:
       packages: write
       contents: read
     steps:
       - name: Check out the repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
@@ -28,32 +28,40 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata (tags, labels) for Docker
-        id: meta
+      # --- Metadata for API ---
+      - name: Extract metadata for API
+        id: meta_api
         uses: docker/metadata-action@v5
         with:
           images: |
-            magenbrot/feuerwehr-versorgungs-helfer-api
-            ghcr.io/${{ github.repository }}
+            magenbrot/fvh-api
+            ghcr.io/${{ github.repository }}-api
 
-      - name: Build and push API Image
+      # --- Metadata for GUI ---
+      - name: Extract metadata for GUI
+        id: meta_gui
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            magenbrot/fvh-gui
+            ghcr.io/${{ github.repository }}-gui
+
+      # --- Build and Push API ---
+      - name: Build and push API image
         uses: docker/build-push-action@v6
         with:
           context: .
           target: api
           push: true
-          tags: |
-            magenbrot/feuerwehr-versorgungs-helfer-api:latest
-            magenbrot/feuerwehr-versorgungs-helfer-api:${{ github.event.release.tag_name }}
-            ghcr.io/${{ github.repository }}-api:latest
+          tags: ${{ steps.meta_api.outputs.tags }}
+          labels: ${{ steps.meta_api.outputs.labels }}
 
-      - name: Build and push GUI Image
+      # --- Build and Push GUI ---
+      - name: Build and push GUI image
         uses: docker/build-push-action@v6
         with:
           context: .
           target: gui
           push: true
-          tags: |
-            magenbrot/feuerwehr-versorgungs-helfer-gui:latest
-            magenbrot/feuerwehr-versorgungs-helfer-gui:${{ github.event.release.tag_name }}
-            ghcr.io/${{ github.repository }}-gui:latest
+          tags: ${{ steps.meta_gui.outputs.tags }}
+          labels: ${{ steps.meta_gui.outputs.labels }}

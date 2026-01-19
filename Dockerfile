@@ -15,7 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Abhängigkeiten installieren + gunicorn hinzufügen
-COPY --chown=fvh:fvh requirements.txt requirements.txt .
+COPY --chown=fvh:fvh requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY --chown=fvh:fvh . .
