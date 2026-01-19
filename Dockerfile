@@ -1,5 +1,5 @@
 # --- BASE STAGE ---
-FROM python:3.11-slim AS base
+FROM python:3.13-slim AS base
 
 RUN groupadd --system fvh && useradd --system --gid fvh fvh
 

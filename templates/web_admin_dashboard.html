@@ -28,7 +28,8 @@
                 <a href="{{ url_for('add_user') }}">Neuen regulären Benutzer hinzufügen</a> |
                 <a href="{{ url_for('admin_api_user_manage') }}">API-Benutzer verwalten</a>
             </div>
-            <h3>Übersicht der {{ app_name }}-Benutzer:</h3>
+
+            <h3>Übersicht der {{ app_name }}-Benutzer</h3>
             {% if users %}
             <table class="zebra-table">
                 <thead>
@@ -62,6 +63,42 @@
             {% else %}
             <p>Keine Benutzer vorhanden.</p>
             {% endif %}
+
+            <h4>Neueste Transaktionen (letzte 10)</h4>
+            {% if recent_transactions %}
+            <table class="zebra-table recent-transactions">
+                <thead>
+                    <tr>
+                        <th class="timestamp">Zeitpunkt</th>
+                        <th>Benutzer</th>
+                        <th>Beschreibung</th>
+                        <th>Betrag</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for t in recent_transactions[:10] %}
+                    <tr>
+                        <td class="timestamp">{{ t.timestamp_display if t.timestamp_display is defined else (t.timestamp if t.timestamp is defined else '') }}</td>
+                        <td>
+                            {% if t.nachname or t.vorname %}
+                                {{ t.nachname }}{% if t.vorname %}, {{ t.vorname }}{% endif %}
+                            {% elif t.user is defined and (t.user.nachname or t.user.vorname) %}
+                                {{ t.user.nachname }}{% if t.user.vorname %}, {{ t.user.vorname }}{% endif %}
+                            {% elif t.user_name is defined %}
+                                {{ t.user_name }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>{{ t.beschreibung if t.beschreibung is not none else '' }}</td>
+                        <td>{% if t.saldo_aenderung is defined %}{{ t.saldo_aenderung }} €{% elif t.amount is defined %}{{ t.amount }} €{% else %}{% endif %}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p>Keine Transaktionen vorhanden oder sie konnten nicht geladen werden.</p>
+            {% endif %}
         </div>
 
         <div class="column right-column">
@@ -86,6 +123,7 @@
                     {% endif %}
                 </form>
             </div>
+
             {% include 'web_include_info_block.html' %}
         </div>
     </div>

@@ -867,6 +867,52 @@ def delete_all_transactions(user_id):
     return False
 
 
+def get_recent_transactions(limit=10):
+    """
+    Ruft die neuesten Transaktionen mit optionalen Benutzerinformationen ab.
+
+    Args:
+        limit (int): Maximale Anzahl der zurückzugebenden Transaktionen.
+
+    Returns:
+        list: Liste von Dictionaries mit Feldern wie id, user_id, nachname, vorname, beschreibung, saldo_aenderung, timestamp.
+    """
+
+    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
+    if cnx:
+        cursor = cnx.cursor(dictionary=True)
+        try:
+            query = (
+                "SELECT t.id, t.user_id, u.nachname AS nachname, u.vorname AS vorname, "
+                "t.beschreibung, t.saldo_aenderung, t.timestamp "
+                "FROM transactions t LEFT JOIN users u ON t.user_id = u.id "
+                "ORDER BY t.timestamp DESC LIMIT %s"
+            )
+            cursor.execute(query, (limit,))
+            rows = cursor.fetchall()
+
+            # Format timestamps for display
+            for row in rows or []:
+                ts = row.get('timestamp')
+                try:
+                    if ts:
+                        row['timestamp_display'] = ts.strftime('%d.%m.%Y %H:%M')
+                    else:
+                        row['timestamp_display'] = ''
+                except (AttributeError, ValueError):
+                    # Fallback: use str()
+                    row['timestamp_display'] = str(ts) if ts is not None else ''
+            return rows if rows else []
+        except Error as err:
+            logger.error("Datenbankfehler beim Abrufen der neuesten Transaktionen: %s", err)
+            return []
+        finally:
+            if cursor:
+                cursor.close()
+            db_utils.DatabaseConnectionPool.close_connection(cnx)
+    return []
+
+
 def update_password(user_id, new_password_hash):
     """
     Aktualisiert das Passwort eines Benutzers in der Datenbank.
@@ -2184,12 +2230,14 @@ def admin_dashboard(admin_user):
     saldo_by_user_data = get_saldo_by_user()
     system_settings_data = get_all_system_settings()
     user_saldo_all = sum(saldo_by_user_data.values())
+    recent_transactions = get_recent_transactions(limit=10)
 
     return render_template('web_admin_dashboard.html',
                            user=admin_user,
                            users=users_data,
                            saldo_by_user=saldo_by_user_data,
                            user_saldo_all=user_saldo_all,
+                           recent_transactions=recent_transactions,
                            system_settings=system_settings_data,
                            version=app.config.get('version', 'unbekannt'))
 
