@@ -63,80 +63,101 @@ Die zugehörige Client-Anwendung, mit der die Endbenutzer dann tatsächlich ihre
 * Die Anwendung ist in Python mit Flask geschrieben.
 * Für die Datenbankverbindung wird `mysql.connector` verwendet, wobei ein Verbindungspool genutzt wird.
 * Passwörter werden mittels `werkzeug.security` gehasht.
-* API-Keys werden sicher generiert.
-* Das `pigar`-Tool wird erwähnt im Zusammenhang mit der Erstellung der `requirements.txt`, insbesondere um `uWSGI` als Abhängigkeit zu inkludieren, auch wenn es in lokalen Entwicklungsumgebungen nicht zwingend läuft.
+* **Produktivbetrieb**: Die Anwendung wird in Docker-Umgebungen über **Gunicorn** als WSGI-Server betrieben.
+* Die API und GUI sind als separate Docker-Images verfügbar, können aber über eine einzige `docker-compose.yml` orchestriert werden.
 
-## requirements.txt korrekt aktualisieren
+---
 
-Ich verwende pigar, um die requirements.txt zu erstellen. Da für den Betrieb in einer lokalen Entwicklungsumgebung kein uWSGI-Dienst erforderlich ist, fügt pigar dieses nicht zur Liste der benötigten Pakete hinzu. Pigar kann jedoch Kommentare in den .py-Dateien lesen, in denen ich vermerkt habe, dass wir das uWSGI-Paket benötigen.
+## Installation und Setup 🔧
 
-Um diese Funktion zu aktivieren, verwende den folgenden Befehl:
+### 1. Installation via Docker (Empfohlen) 🐳
+
+Dies ist der einfachste Weg, um das komplette System inklusive Datenbank in Betrieb zu nehmen.
+
+1. **Repository clonen**:
+
+    ```bash
+    git clone [https://github.com/magenbrot/Feuerwehr-Versorgungs-Helfer-API.git](https://github.com/magenbrot/Feuerwehr-Versorgungs-Helfer-API.git)
+    cd Feuerwehr-Versorgungs-Helfer-API
+    ```
+
+2. **Docker-Konfiguration**:
+    * Kopiere die Vorlage: `cp docker-compose.yml.dist docker-compose.yml`.
+    * *Hinweis*: Falls du eine **externe Datenbank** nutzt, kommentiere den Service `fvh-db` aus. Das Schema (`schema.sql`) muss dann manuell in die externe Instanz geladen werden.
+
+3. **Umgebungsvariablen**:
+    * Kopiere die Vorlage: `cp .env.dist .env`.
+    * Passe die Zugangsdaten an. Achte darauf, dass `DB_HOST=fvh-db` gesetzt ist, wenn du die interne Docker-DB nutzt.
+
+4. **Container starten**:
+
+    ```bash
+    docker compose up -d
+    ```
+
+    Die Images für API und GUI werden automatisch von Docker Hub bezogen.
+
+---
+
+### 2. Manuelle Installation (lokale Entwicklung) 🐍
+
+1. **Venv und Requirements**:
+
+    ```bash
+    python3 -m venv venv
+    source venv/bin/activate
+    pip install -r requirements.txt
+    ```
+
+2. **Datenbank-Setup**:
+    * Erstelle manuell eine MySQL-Datenbank.
+    * Schema importieren: `mysql -u <user> -p <database> < schema.sql`
+
+3. **Starten**:
+    * GUI: `python3 gui.py`
+    * API: `python3 api.py`
+
+---
+
+### 3. Installation als systemd-Dienst (Legacy) ⚙️
+
+Für Umgebungen ohne Docker können die Dienste via systemd verwaltet werden:
+
+1. Kopiere die Dateien aus `installation/systemd/` nach `/etc/systemd/system/` und passe die Pfade an.
+2. Dienste aktivieren:
+
+    ```bash
+    systemctl daemon-reload
+    systemctl enable --now fvh-api.service fvh-gui.service
+    ```
+
+---
+
+## Erste Schritte & Login 🌐
+
+Nach dem Start ist die GUI unter **<http://localhost:5001>** erreichbar.
+
+* **Default-User**: `9876543210`
+* **Default-Passwort**: `changeme`
+
+**WICHTIG**: Erstelle nach dem ersten Login sofort einen eigenen Administrator-Account und lösche den Default-User!
+
+## API-Endpunkte 🔌
+
+Die API erfordert einen `X-API-Key` im Header. Wichtige Endpunkte:
+
+* `PUT /nfc-transaktion`: Verarbeitet Abbuchungen via NFC-Token.
+* `GET /saldo-alle`: Übersicht über alle Kontostände.
+* `GET /person/<code>`: Einzelabfrage eines Benutzers.
+
+---
+
+## Entwicklung 🛠️
+
+### Anforderungen aktualisieren
+
+Es wird `pigar` für die `requirements.txt` verwendet. Um uWSGI-Annotationen beizubehalten:
 
 ```bash
 pigar generate --question-answer yes --enable-feature requirement-annotations
 ```
-
-## Installation und Update 🔧
-
-### Checkout, venv und requirements installieren
-
-```bash
-git clone https://github.com/magenbrot/Feuerwehr-Versorgungs-Helfer-API.git
-cd Feuerwehr-Versorgungs-Helfer-API
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-```
-
-### MySQL-Datenbank erstellen und Schema anlegen
-
-1. Datenbank und Benutzer anlegen, passende Rechte vergeben
-2. Schema anlegen mit ```mysql -h <host> -u <user> -p <database> < schema.sql```
-
-### Konfiguration
-
-```bash
-cp .env.dist .env
-vi .env
-# Variablen setzen und Datei speichern
-```
-
-### Erstmalig manuell starten
-
-In einer Shell die API starten:
-
-```bash
-# venv aktivieren, falls nocht nicht gemacht
-source venv/bin/activate
-python3 api.py
-```
-
-In einer anderen Shell die GUI starten:
-
-```bash
-# venv aktivieren, falls nocht nicht gemacht
-source venv/bin/activate
-python3 gui.py
-```
-
-### GUI im Browser öffnen
-
-Bei lokalem Debugging ist die GUI unter [http://127.0.0.1:5000/](http://127.0.0.1:5000/) erreichbar. Die Listen-IP und der Port können in der .env Datei konfiguriert werden. Für den Produktivbetrieb sollte die Applikation über uWSGI gestartet und hinter einen Webserver wie nginx gelegt werden.
-
-Für den ersten Login ist der Benutzer "9876543210" mit dem Passwort "changeme" angelegt. Bitte nach dem Login gleich einen eigenen Benutzer registrieren oder anlegen und den Default-User löschen.
-
-### Installation API+GUI als nginx uWSGI Dienst mittels systemd
-
-1. Die Applikationen sollten bereits lauffähig sein (also ein Python3 venv existieren und die benötigten Module installiert sein).
-2. Die Dateien aus installation/systemd nach /etc/systemd/system/ kopieren und anpassen.
-3. Systemd reloaden ```systemd daemon-reload```
-4. Die beiden Services aktivieren: ```systemd enable --now fvh-api.service; systemd enable --now fvh-gui.service```
-5. Logfiles prüfen:
-   * ```journalctl -u fvh-api.service```
-   * ```journalctl -u fvh-gui.service```
-
-### Aktuelle Version installieren
-
-Ich lasse den Code durch eine deploy-Action mit einem Github-Runner auf dem Server aktualisieren. Die Action startet, sobald es Änderungen am main-Branch gibt. Der Runner pullt dann den neuen Code, installiert ggf. neu benötigte Module und startet dann die systemd-Services neu.
-
-Ohne den Runner lässt sich das natürlich auch einfach manuell erledigen (git pull + Restart der Services).
