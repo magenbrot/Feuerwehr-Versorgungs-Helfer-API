@@ -1,3 +1,4 @@
+[![Publish Docker images](https://github.com/magenbrot/Feuerwehr-Versorgungs-Helfer-API/actions/workflows/docker-image.yml/badge.svg)](https://github.com/magenbrot/Feuerwehr-Versorgungs-Helfer-API/actions/workflows/docker-image.yml)
 [![Pylint](https://github.com/magenbrot/Feuerwehr-Versorgungs-Helfer-API/actions/workflows/pylint.yml/badge.svg)](https://github.com/magenbrot/Feuerwehr-Versorgungs-Helfer-API/actions/workflows/pylint.yml)
 [![CodeQL Advanced](https://github.com/magenbrot/Feuerwehr-Versorgungs-Helfer-API/actions/workflows/codeql.yml/badge.svg)](https://github.com/magenbrot/Feuerwehr-Versorgungs-Helfer-API/actions/workflows/codeql.yml)
 
