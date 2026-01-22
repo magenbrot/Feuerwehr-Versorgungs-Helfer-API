@@ -477,6 +477,19 @@ def get_version_route(api_user_id: int, api_username: str):
     return jsonify({'version': app.config.get('version')})
 
 
+@app.route('/health', methods=['GET'])
+def health_unprotected_route():
+    """
+    Healthcheck liefert nur ein OK zurück.
+
+    Returns:
+        flask.Response: Eine JSON-Antwort mit OK.
+    """
+
+    logger.debug("Anonymer Healthcheck-Aufruf.")
+    return jsonify({'message': "Healthcheck OK!"})
+
+
 @app.route('/health-protected', methods=['GET'])
 @api_key_required
 def health_protected_route(api_user_id: int, api_username: str):
