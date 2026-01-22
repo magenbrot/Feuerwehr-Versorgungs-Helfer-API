@@ -1932,6 +1932,16 @@ def login():
     return render_template('web_login.html')
 
 
+@app.route('/health', methods=['GET'])
+def health_unprotected_route():
+    """
+    Rendert einen einfach Health-Check-Endpunkt.
+
+    """
+
+    return render_template('web_healthcheck.html')
+
+
 @app.route('/datenschutz')
 def datenschutz():
     """
