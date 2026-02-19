@@ -55,7 +55,7 @@ Die API dient als Schnittstelle für die Client-Anwendung und bietet unter ander
 
 ## Client-Anwendung 📱🔗
 
-Die zugehörige Client-Anwendung, mit der die Endbenutzer dann tatsächlich ihre "Striche machen" (also Guthaben abbuchen), indem sie z.B. einen QR-Code scannen oder ihr Handy bzw. einen anderen NFC-Token an ein Lesegerät halten, finden Sie im folgenden Repository:
+Die zugehörige Client-Anwendung, mit der die Endbenutzer dann tatsächlich ihre "Striche machen" (also Guthaben abbuchen), indem sie z.B. einen QR-Code scannen oder ihr Handy bzw. einen anderen NFC-Token an ein Lesegerät halten, findest du im folgenden Repository:
 [https://github.com/magenbrot/Feuerwehr-Versorgungs-Helfer](https://github.com/magenbrot/Feuerwehr-Versorgungs-Helfer)
 
 ## Technische Hinweise 💡
@@ -117,6 +117,18 @@ Dies ist der einfachste Weg, um das komplette System inklusive Datenbank in Betr
     * GUI: `python3 gui.py`
     * API: `python3 api.py`
 
+### 2.1 Lokalen Docker-Build verwenden 🐳🔨
+
+Alternativ zur manuellen Python-Installation kannst du die Container auch lokal bauen und starten, ohne die Images von Docker Hub zu ziehen. Dies ist nützlich, wenn du Änderungen am Code vorgenommen hast und diese sofort im Container testen möchtest.
+
+1.  **Konfiguration**:
+    *   Stelle sicher, dass `.env` und `docker-compose-build.yml` (ggf. von `.dist` kopieren) vorhanden sind.
+
+2.  **Container bauen und starten**:
+    ```bash
+    docker compose -f docker-compose-build.yml up -d --build
+    ```
+
 ---
 
 ### 3. Installation als systemd-Dienst (Legacy) ⚙️
@@ -161,3 +173,23 @@ Es wird `pigar` für die `requirements.txt` verwendet. Um uWSGI-Annotationen bei
 ```bash
 pigar generate --question-answer yes --enable-feature requirement-annotations
 ```
+
+### Tests & Code-Qualität 🧪
+
+Das Projekt verwendet `pytest` für Tests und `ruff` für Linting.
+
+1.  **Entwicklungsumgebung einrichten**:
+    ```bash
+    pip install -r requirements.txt
+    pip install -r requirements-dev.txt
+    ```
+
+2.  **Tests ausführen**:
+    ```bash
+    pytest
+    ```
+
+3.  **Linting prüfen**:
+    ```bash
+    ruff check .
+    ```

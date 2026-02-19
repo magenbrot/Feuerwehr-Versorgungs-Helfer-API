@@ -24,6 +24,8 @@ from mysql.connector import Error, IntegrityError
 import config
 import email_sender
 import db_utils
+import utils
+
 
 logging.basicConfig(
     level=config.gui_config['log_level'],
@@ -87,38 +89,9 @@ except FileNotFoundError:
 logger.info("Feuerwehr-Versorgungs-Helfer GUI (Version %s) wurde gestartet", app.config.get('version'))
 
 
-def generate_api_key_string(length=32):
-    """
-    Generiert einen sicheren, zufälligen API-Key-String.
-    """
-
-    return secrets.token_hex(length)
 
 
-def hex_to_binary(hex_string):
-    """
-    Konvertiert einen Hexadezimalstring in Binärdaten.
-
-    Diese Funktion nimmt einen Hexadezimalstring entgegen und wandelt ihn in die entsprechende
-    Binärdarstellung um. Sie wird typischerweise verwendet, um NFC-Token Daten zu verarbeiten,
-    die oft als Hexadezimalstrings dargestellt werden.
-
-    Args:
-        hex_string (str): Der Hexadezimalstring, der konvertiert werden soll.
-
-    Returns:
-        bytes: Die Binärdaten, die dem Hexadezimalstring entsprechen. Gibt None zurück,
-               wenn die Konvertierung aufgrund eines ungültigen Hexadezimalstrings oder Typs fehlschlägt.
-    """
-
-    try:
-        return binascii.unhexlify(hex_string)
-    except binascii.Error:
-        logger.error("Fehler bei der Hexadezimal-Konvertierung: Ungültiger Hexadezimalstring '%s'", hex_string)
-        return None
-    except TypeError:
-        logger.error("Fehler bei der Hexadezimal-Konvertierung: Ungültiger Typ für Hexadezimalstring: %s", type(hex_string))
-        return None
+# Benachrichtigungseinstellungen
 
 
 def erzeuge_qr_code(daten, text):
@@ -139,6 +112,7 @@ def erzeuge_qr_code(daten, text):
         box_size=10,
         border=4,
     )
+
     qr.add_data(daten)
     qr.make(fit=True)
 
@@ -368,7 +342,7 @@ def add_user_nfc_token(user_id, token_name, token_hex):
         bool: True bei Erfolg, False bei Fehler (z.B. ungültige Daten, Datenbankfehler).
     """
 
-    token_binary = hex_to_binary(token_hex)
+    token_binary = utils.hex_to_binary(token_hex)
     if not token_binary:
         flash('Ungültige NFC-Token Daten. Bitte überprüfe die Eingabe.', 'error')
         return False
@@ -2416,7 +2390,7 @@ def admin_generate_api_key_for_user(_admin_user, api_user_id_route):
         return redirect(BASE_URL + url_for('admin_api_user_manage'))
 
     new_key_name_string = request.form['api_key_name']
-    new_key_string = generate_api_key_string()
+    new_key_string = utils.generate_api_key_string()
     if add_api_key_for_user_db(api_user_id_route, new_key_name_string, new_key_string):
         flash(f"Neuer API-Key für '{target_api_user['username']}' generiert: {new_key_string} - "
               "Bitte sofort sicher kopieren, er kann nicht wieder angezeigt werden!", "success")

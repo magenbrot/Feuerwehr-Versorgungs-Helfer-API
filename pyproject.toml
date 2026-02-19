@@ -1,0 +1,32 @@
+[project]
+name = "feuerwehr-versorgungs-helfer-api"
+version = "0.1.0"
+description = "Backend API for Feuerwehr Versorgungs Helfer"
+authors = [
+    {name = "OVTEC", email = "info@ovtec.de"},
+]
+dependencies = [
+    "flask",
+    "gunicorn",
+    "mysql-connector-python",
+    "pillow",
+    "python-dotenv",
+    "qrcode",
+    "werkzeug",
+]
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "B", "I", "N", "UP", "PL", "RUF"]
+ignore = []
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q"
+testpaths = [
+    "tests",
+]
