@@ -1,14 +1,16 @@
 """Verwaltet den Datenbankverbindungspool für die Anwendung."""
 
+import contextlib
 import logging
 import sys
-import contextlib
-import time
 import threading
+import time
+
 import mysql.connector
-from mysql.connector import pooling, Error
+from mysql.connector import Error, pooling
 
 logger = logging.getLogger(__name__)
+
 
 class DatabaseConnectionPool:
     """
@@ -41,14 +43,10 @@ class DatabaseConnectionPool:
 
         if cls._connection_pool is None:
             try:
-                cls._connection_pool = pooling.MySQLConnectionPool(
-                    pool_name="dbpool", **database_config
-                )
+                cls._connection_pool = pooling.MySQLConnectionPool(pool_name="dbpool", **database_config)
                 logger.info("Datenbankverbindungspool erfolgreich initialisiert.")
             except mysql.connector.Error as e:
-                logger.error(
-                    "Fehler beim Initialisieren des Datenbankverbindungspools: %s", e
-                )
+                logger.error("Fehler beim Initialisieren des Datenbankverbindungspools: %s", e)
                 raise  # Wirf den Fehler weiter, damit die Anwendung reagieren kann
 
     @classmethod
@@ -64,9 +62,7 @@ class DatabaseConnectionPool:
         logger.info("Datenbank Health-Check gestartet (Interval: 30s).")
         while True:
             if cls._connection_pool is None:
-                logger.warning(
-                    "Health-Check: Pool wurde noch nicht initialisiert. Warte 30 Sekunden."
-                )
+                logger.warning("Health-Check: Pool wurde noch nicht initialisiert. Warte 30 Sekunden.")
                 time.sleep(30)
                 continue
 
@@ -115,14 +111,10 @@ class DatabaseConnectionPool:
             return
 
         try:
-            health_thread = threading.Thread(
-                target=cls._health_check_loop, daemon=True
-            )
+            health_thread = threading.Thread(target=cls._health_check_loop, daemon=True)
             health_thread.start()
         except Exception as e:  # pylint: disable=W0718
-            logger.critical(
-                "Unbekannter Fehler beim Starten des Datenbank Health-Check Threads: %s", e
-            )
+            logger.critical("Unbekannter Fehler beim Starten des Datenbank Health-Check Threads: %s", e)
 
     @classmethod
     def get_connection(cls, database_config=None):
@@ -250,7 +242,7 @@ class DatabaseConnectionPool:
                 with cnx.cursor() as cursor:
                     cursor.execute(query, params or ())
                     cnx.commit()
-                    return True, getattr(cursor, 'lastrowid', None)
+                    return True, getattr(cursor, "lastrowid", None)
         except Error as e:
             logger.error("execute_commit Fehler: %s | Query: %s | Params: %s", e, query, params)
             if cnx:
@@ -262,6 +254,7 @@ class DatabaseConnectionPool:
         except Exception as e:  # pylint: disable=W0718
             logger.error("execute_commit Unerwarteter Fehler: %s | Query: %s | Params: %s", e, query, params)
             return False, None
+
 
 # Exportiere die wichtigsten Methoden als Modulattribute
 fetch_one = DatabaseConnectionPool.fetch_one

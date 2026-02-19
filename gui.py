@@ -1,76 +1,85 @@
 """WebGUI für den Feuerwehr-Versorgungs-Helfer"""
 
 # Logging zuerst aktivieren
-import sys
-import logging
-import binascii
 import functools
-import json
-import os
 import io
+import json
+import logging
+import os
 import random
 import secrets
 import string
-from datetime import datetime, timedelta, timezone
+import sys
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+
 import qrcode
 import qrcode.constants
-from qrcode.image.pil import PilImage
-from PIL import Image, ImageDraw, ImageFont
-from flask import Flask, render_template, request, redirect, url_for, session, flash, send_file  # pigar: required-packages=uWSGI
+from flask import (  # pigar: required-packages=uWSGI
+    Flask,
+    flash,
+    redirect,
+    render_template,
+    request,
+    send_file,
+    session,
+    url_for,
+)
 from jinja2 import TemplateError
-from werkzeug.security import check_password_hash, generate_password_hash
 from mysql.connector import Error, IntegrityError
+from PIL import Image, ImageDraw, ImageFont
+from qrcode.image.pil import PilImage
+from werkzeug.security import check_password_hash, generate_password_hash
+
 import config
-import email_sender
 import db_utils
+import email_sender
 import utils
 
-
 logging.basicConfig(
-    level=config.gui_config['log_level'],
-    format='%(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stderr)
-    ]
+    level=config.gui_config["log_level"],
+    format="%(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler(sys.stderr)],
 )
 logger = logging.getLogger(__name__)
 
-if config.gui_config['static_url_prefix']:
-    app = Flask(__name__, static_url_path=config.gui_config['static_url_prefix'] + '/static')
+if config.gui_config["static_url_prefix"]:
+    app = Flask(__name__, static_url_path=config.gui_config["static_url_prefix"] + "/static")
 else:
     app = Flask(__name__)
 
-app.debug = config.gui_config['flask_debug_mode']
+app.debug = config.gui_config["flask_debug_mode"]
 
-app.config['SECRET_KEY'] = config.gui_config.get('secret_key')
-if not app.config['SECRET_KEY']:
+app.config["SECRET_KEY"] = config.gui_config.get("secret_key")
+if not app.config["SECRET_KEY"]:
     logger.critical("Fehler: APP_SECRET ist in der Konfiguration (.env) nicht gesetzt!")
     sys.exit(1)
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)
-app.config['DEBUG'] = config.api_config['flask_debug_mode']
-app.config['JSON_AS_ASCII'] = False
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=7)
+app.config["DEBUG"] = config.api_config["flask_debug_mode"]
+app.config["JSON_AS_ASCII"] = False
 
 if "BASE_URL" in os.environ:
-    BASE_URL = os.environ.get('BASE_URL', '/')
+    BASE_URL = os.environ.get("BASE_URL", "/")
     logger.info("BASE_URL: %s", BASE_URL)
 else:
     BASE_URL = ""  # pylint: disable=C0103
 
 # Konfigurationsprüfungen
-required_db_keys = ['host', 'port', 'user', 'password', 'database']
+required_db_keys = ["host", "port", "user", "password", "database"]
 if not all(key in config.db_config and config.db_config[key] is not None for key in required_db_keys):
-    logger.critical("Fehler: Nicht alle Datenbank-Konfigurationsvariablen sind gesetzt. Benötigt: %s", ", ".join(required_db_keys))
+    logger.critical(
+        "Fehler: Nicht alle Datenbank-Konfigurationsvariablen sind gesetzt. Benötigt: %s", ", ".join(required_db_keys)
+    )
     sys.exit(1)
 
 try:
-    config.db_config['port'] = int(config.db_config['port'])
+    config.db_config["port"] = int(config.db_config["port"])
 except ValueError:
-    logger.critical("Fehler: Datenbank-Port '%s' ist keine gültige Zahl.", config.db_config.get('port'))
+    logger.critical("Fehler: Datenbank-Port '%s' ist keine gültige Zahl.", config.db_config.get("port"))
     sys.exit(1)
 
 # Initialisiere den Datenbank-Pool einmal beim Start der Anwendung # pylint: disable=R0801
-if os.environ.get('TESTING') != 'True':
+if os.environ.get("TESTING") != "True":
     try:
         db_utils.DatabaseConnectionPool.initialize_pool(config.db_config)
     except Error:
@@ -78,18 +87,16 @@ if os.environ.get('TESTING') != 'True':
         sys.exit(1)
 
 # Starte den Health-Check-Thread, nachdem der Pool initialisiert wurde
-#db_utils.DatabaseConnectionPool.start_health_check_thread()
+# db_utils.DatabaseConnectionPool.start_health_check_thread()
 
 # Lade das Manifest mit Author- und Versionsinfos
 try:
-    with open('manifest.json', 'r', encoding='utf-8') as manifest:
+    with open("manifest.json", encoding="utf-8") as manifest:
         app.config.update(json.load(manifest))
 except FileNotFoundError:
     app.config.update(version="N/A", author="N/A")
 
-logger.info("Feuerwehr-Versorgungs-Helfer GUI (Version %s) wurde gestartet", app.config.get('version'))
-
-
+logger.info("Feuerwehr-Versorgungs-Helfer GUI (Version %s) wurde gestartet", app.config.get("version"))
 
 
 # Benachrichtigungseinstellungen
@@ -132,7 +139,7 @@ def erzeuge_qr_code(daten, text):
             schriftart = ImageFont.truetype(font_name, schriftgroesse)
             logger.info("Schriftart '%s' geladen.", font_name)
             break
-        except IOError:
+        except OSError:
             logger.error("Schriftart '%s' nicht gefunden.", font_name)
 
     if schriftart is None:
@@ -211,7 +218,7 @@ def get_user_notification_preference(user_id_int: int, event_schluessel: str) ->
     """
     row = db_utils.fetch_one(query, (user_id_int, event_schluessel), dictionary=True)
     try:
-        return bool(row['email_aktiviert']) if row and row.get('email_aktiviert') is not None else False
+        return bool(row["email_aktiviert"]) if row and row.get("email_aktiviert") is not None else False
     except (KeyError, TypeError):
         return False
 
@@ -233,12 +240,12 @@ def get_user_notification_settings(user_id):
 
     # Hole alle Typen
     all_types = db_utils.fetch_all("SELECT id FROM benachrichtigungstypen", dictionary=True)
-    type_ids = [int(row['id']) for row in all_types] if all_types else []
+    type_ids = [int(row["id"]) for row in all_types] if all_types else []
 
     # Hole die Einstellungen des Benutzers
     query = "SELECT typ_id, email_aktiviert FROM benutzer_benachrichtigungseinstellungen WHERE benutzer_id = %s"
     rows = db_utils.fetch_all(query, (user_id,), dictionary=True)
-    settings = {int(row['typ_id']): bool(row['email_aktiviert']) for row in rows} if rows else {}
+    settings = {int(row["typ_id"]): bool(row["email_aktiviert"]) for row in rows} if rows else {}
 
     # Setze Default False für nicht gesetzte Typen
     for tid in type_ids:
@@ -304,7 +311,14 @@ def get_all_system_settings():
 
     query = "SELECT einstellung_schluessel, einstellung_wert, beschreibung FROM system_einstellungen"
     rows = db_utils.fetch_all(query, dictionary=True)
-    settings = {row['einstellung_schluessel']: {'wert': row['einstellung_wert'], 'beschreibung': row['beschreibung']} for row in rows} if rows else {}
+    settings = (
+        {
+            row["einstellung_schluessel"]: {"wert": row["einstellung_wert"], "beschreibung": row["beschreibung"]}
+            for row in rows
+        }
+        if rows
+        else {}
+    )
     return settings
 
 
@@ -345,7 +359,7 @@ def add_user_nfc_token(user_id, token_name, token_hex):
 
     token_binary = utils.hex_to_binary(token_hex)
     if not token_binary:
-        flash('Ungültige NFC-Token Daten. Bitte überprüfe die Eingabe.', 'error')
+        flash("Ungültige NFC-Token Daten. Bitte überprüfe die Eingabe.", "error")
         return False
     query = "INSERT INTO nfc_token SET user_id = %s, token_name = %s, token_daten = %s, last_used = NOW()"
     try:
@@ -353,12 +367,12 @@ def add_user_nfc_token(user_id, token_name, token_hex):
         success = result[0] if result else False
         if success:
             return True
-        flash('Fehler beim Hinzufügen des NFC-Tokens.', 'error')
+        flash("Fehler beim Hinzufügen des NFC-Tokens.", "error")
         return False
     except IntegrityError as err:
         if err.errno == 1062:
             logger.warning("Versuch, einen doppelten NFC-Token hinzuzufügen: %s", token_hex)
-            flash('Dieser NFC-Token ist bereits vorhanden und kann nicht erneut hinzugefügt werden.', 'error')
+            flash("Dieser NFC-Token ist bereits vorhanden und kann nicht erneut hinzugefügt werden.", "error")
         else:
             logger.error("Datenbank-Integritätsfehler beim Hinzufügen des NFC-Tokens: %s", err)
             flash(f"Ein Datenbank-Integritätsfehler ist aufgetreten: {err}", "error")
@@ -382,14 +396,14 @@ def delete_user_nfc_token(user_id, token_id):
     """
 
     if not token_id:
-        flash('Ungültige NFC-Token Daten. Bitte überprüfe die Eingabe.', 'error')
+        flash("Ungültige NFC-Token Daten. Bitte überprüfe die Eingabe.", "error")
         return False
     query = "DELETE FROM nfc_token WHERE token_id = %s AND user_id = %s"
     result = db_utils.execute_commit(query, (token_id, user_id))
     success = result[0] if result else False
     if success:
         return True
-    flash('Fehler beim Entfernen des NFC-Tokens.', 'error')
+    flash("Fehler beim Entfernen des NFC-Tokens.", "error")
     return False
 
 
@@ -426,13 +440,13 @@ def _handle_add_user_nfc_token_admin(form_data, target_user_id):
         target_user_id (int): Die ID des Benutzers, für den der Token hinzugefügt wird.
     """
 
-    nfc_token_name = form_data.get('nfc_token_name')
-    nfc_token_daten = form_data.get('nfc_token_daten')  # HEX Format erwartet
+    nfc_token_name = form_data.get("nfc_token_name")
+    nfc_token_daten = form_data.get("nfc_token_daten")  # HEX Format erwartet
     if not nfc_token_name or not nfc_token_daten:
-        flash('Token Name und Token Daten (HEX) dürfen nicht leer sein.', 'error')
+        flash("Token Name und Token Daten (HEX) dürfen nicht leer sein.", "error")
     # Die Funktion add_user_nfc_token flasht bereits Fehlermeldungen bei ungültigen Daten
     elif add_user_nfc_token(target_user_id, nfc_token_name, nfc_token_daten):
-        flash('NFC-Token erfolgreich hinzugefügt.', 'success')
+        flash("NFC-Token erfolgreich hinzugefügt.", "success")
 
 
 def _handle_delete_user_nfc_token_admin(form_data, target_user_id):
@@ -445,12 +459,12 @@ def _handle_delete_user_nfc_token_admin(form_data, target_user_id):
                                (Wird in delete_user_nfc_token zur Sicherheit mitgeprüft)
     """
 
-    nfc_token_id = form_data.get('nfc_token_id')
+    nfc_token_id = form_data.get("nfc_token_id")
     if not nfc_token_id:
-        flash('Keine Token ID zum Löschen übergeben.', 'error')
+        flash("Keine Token ID zum Löschen übergeben.", "error")
     # Die Funktion delete_user_nfc_token flasht bereits Fehlermeldungen
     elif delete_user_nfc_token(target_user_id, nfc_token_id):
-        flash('NFC-Token erfolgreich entfernt.', 'success')
+        flash("NFC-Token erfolgreich entfernt.", "success")
 
 
 # Benutzerfunktionen
@@ -618,7 +632,7 @@ def get_saldo_by_user():
                 GROUP BY u.id
             """
             cursor.execute(query)
-            saldo_by_user = {row['id']: row['saldo'] or 0 for row in cursor.fetchall()}
+            saldo_by_user = {row["id"]: row["saldo"] or 0 for row in cursor.fetchall()}
             return saldo_by_user
         except Error as err:
             logger.error("Datenbankfehler beim Abrufen des Saldos pro Benutzer: %s", err)
@@ -868,15 +882,15 @@ def get_recent_transactions(limit=10):
 
             # Format timestamps for display
             for row in rows or []:
-                ts = row.get('timestamp')
+                ts = row.get("timestamp")
                 try:
                     if ts:
-                        row['timestamp_display'] = ts.strftime('%d.%m.%Y %H:%M')
+                        row["timestamp_display"] = ts.strftime("%d.%m.%Y %H:%M")
                     else:
-                        row['timestamp_display'] = ''
+                        row["timestamp_display"] = ""
                 except (AttributeError, ValueError):
                     # Fallback: use str()
-                    row['timestamp_display'] = str(ts) if ts is not None else ''
+                    row["timestamp_display"] = str(ts) if ts is not None else ""
             return rows if rows else []
         except Error as err:
             logger.error("Datenbankfehler beim Abrufen der neuesten Transaktionen: %s", err)
@@ -943,33 +957,39 @@ def add_regular_user_db(user_data):
     cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
     if cnx:
         cursor = cnx.cursor()
-        hashed_password = generate_password_hash(user_data['password'])
+        hashed_password = generate_password_hash(user_data["password"])
         try:
             query = """
                 INSERT INTO users (code, nachname, vorname, password, email, kommentar, acc_duties, acc_privacy_policy, is_locked, is_admin)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
-            cursor.execute(query, (
-                user_data['code'],
-                user_data['nachname'],
-                user_data['vorname'],
-                hashed_password,
-                user_data.get('email') or None,
-                user_data.get('kommentar') or None,
-                1 if user_data.get('acc_duties') else 0,
-                1 if user_data.get('acc_privacy_policy') else 0,
-                1 if user_data.get('is_locked') else 0,
-                1 if user_data.get('is_admin') else 0
-            ))
+            cursor.execute(
+                query,
+                (
+                    user_data["code"],
+                    user_data["nachname"],
+                    user_data["vorname"],
+                    hashed_password,
+                    user_data.get("email") or None,
+                    user_data.get("kommentar") or None,
+                    1 if user_data.get("acc_duties") else 0,
+                    1 if user_data.get("acc_privacy_policy") else 0,
+                    1 if user_data.get("is_locked") else 0,
+                    1 if user_data.get("is_admin") else 0,
+                ),
+            )
             cnx.commit()
             return True
         except IntegrityError:
-            flash(f"Die Emailadresse '{user_data['email']}' existiert bereits oder ein anderes eindeutiges Feld ist doppelt.", 'error')
+            flash(
+                f"Die Emailadresse '{user_data['email']}' existiert bereits oder ein anderes eindeutiges Feld ist doppelt.",
+                "error",
+            )
             cnx.rollback()
             return False
         except Error as err:
             logger.error("Fehler beim Hinzufügen des regulären Benutzers: %s", err)
-            flash("Datenbankfehler beim Hinzufügen des Benutzers.", 'error')
+            flash("Datenbankfehler beim Hinzufügen des Benutzers.", "error")
             cnx.rollback()
             return False
         finally:
@@ -1026,7 +1046,7 @@ def store_reset_token(user_id, token):
         # Alte Tokens für diesen Benutzer löschen, um Missbrauch zu vermeiden
         cursor.execute("DELETE FROM password_reset_tokens WHERE user_id = %s", (user_id,))
         # Neuen Token mit 1 Stunde Gültigkeit einfügen
-        expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
+        expires_at = datetime.now(UTC) + timedelta(hours=1)
         query = "INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES (%s, %s, %s)"
         cursor.execute(query, (user_id, token, expires_at))
         cnx.commit()
@@ -1061,7 +1081,7 @@ def get_user_by_reset_token(token):
             JOIN password_reset_tokens prt ON u.id = prt.user_id
             WHERE prt.token = %s AND prt.expires_at > %s
         """
-        cursor.execute(query, (token, datetime.now(timezone.utc)))
+        cursor.execute(query, (token, datetime.now(UTC)))
         return cursor.fetchone()
     except Error as err:
         logger.error("Fehler beim Validieren des Reset-Tokens: %s", err)
@@ -1116,12 +1136,12 @@ def prepare_and_send_email(email_params: dict, smtp_cfg: dict) -> bool:
     Returns:
         bool: True bei Erfolg, sonst False
     """
-    empfaenger_email = email_params.get('empfaenger_email')
-    betreff = email_params.get('betreff')
-    template_name_html = email_params.get('template_name_html')
-    template_name_text = email_params.get('template_name_text')
-    template_context = email_params.get('template_context', {})
-    logo_dateipfad_str = email_params.get('logo_dateipfad')
+    empfaenger_email = email_params.get("empfaenger_email")
+    betreff = email_params.get("betreff")
+    template_name_html = email_params.get("template_name_html")
+    template_name_text = email_params.get("template_name_text")
+    template_context = email_params.get("template_context", {})
+    logo_dateipfad_str = email_params.get("logo_dateipfad")
 
     # Defensive: Fallback auf leere Strings falls None
     if not isinstance(empfaenger_email, str):
@@ -1154,16 +1174,13 @@ def prepare_and_send_email(email_params: dict, smtp_cfg: dict) -> bool:
             logger.warning("Logo-Datei nicht gefunden unter: %s", logo_dateipfad_str)
 
     email_content_dict = {
-        'html': final_html_body,
-        'text': final_text_body,
-        'logo_pfad': logo_dateipfad_str if logo_exists else None
+        "html": final_html_body,
+        "text": final_text_body,
+        "logo_pfad": logo_dateipfad_str if logo_exists else None,
     }
 
     return email_sender.sende_formatierte_email(
-        empfaenger_email=empfaenger_email,
-        betreff=betreff,
-        content=email_content_dict,
-        smtp_cfg=smtp_cfg
+        empfaenger_email=empfaenger_email, betreff=betreff, content=email_content_dict, smtp_cfg=smtp_cfg
     )
 
 
@@ -1181,12 +1198,12 @@ def _send_user_register_email(vorname: str, email: str, code: str, logo_pfad: st
     """
 
     email_params = {
-        'empfaenger_email': email,
-        'betreff': "Dein neuer Account auf Feuerwehr-Versorgungs-Helfer",
-        'template_name_html': "email_user_register.html",
-        'template_name_text': "email_user_register.txt",
-        'template_context': {"vorname": vorname, "code": code},
-        'logo_dateipfad': logo_pfad
+        "empfaenger_email": email,
+        "betreff": "Dein neuer Account auf Feuerwehr-Versorgungs-Helfer",
+        "template_name_html": "email_user_register.html",
+        "template_name_text": "email_user_register.txt",
+        "template_context": {"vorname": vorname, "code": code},
+        "logo_dateipfad": logo_pfad,
     }
     if prepare_and_send_email(email_params, config.smtp_config):
         logger.info("Neuer Benutzer Benachrichtigung an %s gesendet.", email)
@@ -1206,14 +1223,14 @@ def _send_password_reset_email(email: str, token: str, logo_pfad: str):
         logo_pfad (str): Der Dateipfad zum E-Mail-Logo.
     """
 
-    reset_url = url_for('reset_with_token', token=token, _external=True)
+    reset_url = url_for("reset_with_token", token=token, _external=True)
     email_params = {
-        'empfaenger_email': email,
-        'betreff': "Passwort zurücksetzen für Feuerwehr-Versorgungs-Helfer",
-        'template_name_html': "email_reset_password.html",
-        'template_name_text': "email_reset_password.txt",
-        'template_context': {"reset_url": reset_url},
-        'logo_dateipfad': logo_pfad
+        "empfaenger_email": email,
+        "betreff": "Passwort zurücksetzen für Feuerwehr-Versorgungs-Helfer",
+        "template_name_html": "email_reset_password.html",
+        "template_name_text": "email_reset_password.txt",
+        "template_context": {"reset_url": reset_url},
+        "logo_dateipfad": logo_pfad,
     }
     if prepare_and_send_email(email_params, config.smtp_config):
         logger.info("Passwort Reset Benachrichtigung an %s gesendet.", email)
@@ -1221,7 +1238,9 @@ def _send_password_reset_email(email: str, token: str, logo_pfad: str):
         logger.error("Fehler beim Senden der Passwort Reset Benachrichtigung an %s.", email)
 
 
-def _send_manual_transaction_email(target_user: dict, beschreibung: str, saldo_aenderung_str: str, new_saldo: str, logo_pfad: str):
+def _send_manual_transaction_email(
+    target_user: dict, beschreibung: str, saldo_aenderung_str: str, new_saldo: str, logo_pfad: str
+):
     """Informiert einen Benutzer per E-Mail über eine manuelle Transaktion.
 
     Die E-Mail enthält Details zur Buchung. Das Ergebnis des Versands
@@ -1237,47 +1256,55 @@ def _send_manual_transaction_email(target_user: dict, beschreibung: str, saldo_a
 
     jetzt = datetime.now()
     email_params = {
-        'empfaenger_email': target_user['email'],
-        'betreff': "Neue Transaktion auf deinem Konto",
-        'template_name_html': "email_neue_transaktion.html",
-        'template_name_text': "email_neue_transaktion.txt",
-        'template_context': {
-            "vorname": target_user['vorname'],
+        "empfaenger_email": target_user["email"],
+        "betreff": "Neue Transaktion auf deinem Konto",
+        "template_name_html": "email_neue_transaktion.html",
+        "template_name_text": "email_neue_transaktion.txt",
+        "template_context": {
+            "vorname": target_user["vorname"],
             "beschreibung_transaktion": beschreibung,
             "saldo_aenderung": saldo_aenderung_str,
             "neuer_saldo": new_saldo,
             "datum": jetzt.strftime("%d.%m.%Y"),
-            "uhrzeit": jetzt.strftime("%H:%M")
+            "uhrzeit": jetzt.strftime("%H:%M"),
         },
-        'logo_dateipfad': logo_pfad
+        "logo_dateipfad": logo_pfad,
     }
     if prepare_and_send_email(email_params, config.smtp_config):
-        logger.info("Manuelle Transaktion Benachrichtigung an %s gesendet.", target_user['email'])
+        logger.info("Manuelle Transaktion Benachrichtigung an %s gesendet.", target_user["email"])
     else:
-        logger.error("Fehler beim Senden der Manuelle Transaktion Benachrichtigung an %s.", target_user['email'])
+        logger.error("Fehler beim Senden der Manuelle Transaktion Benachrichtigung an %s.", target_user["email"])
 
 
 def _send_responsible_benachrichtigung(target_user: dict, aktueller_saldo: int, logo_pfad: str):
     """Hilfsfunktion zur Information der Verantwortlichen wenn ein Benutzer das Limit unterschreitet."""
 
     # Breche ab, wenn der aktuelle Saldo gleich dem gesetzten Limit ist und gleichzeitig größer als das Limit -5
-    if not (target_user['infomail_responsible_threshold'] - 5) < aktueller_saldo <= target_user['infomail_responsible_threshold']:
+    if (
+        not (target_user["infomail_responsible_threshold"] - 5)
+        < aktueller_saldo
+        <= target_user["infomail_responsible_threshold"]
+    ):
         return
 
     # Alle Prüfungen bestanden, E-Mail senden
     email_params = {
-        'empfaenger_email': config.api_config['responsible_email'],
-        'betreff': f"{target_user['vorname']} {target_user['nachname']} hat das Saldo-Info-Limit erreicht",
-        'template_name_html': "email_info_responsible_threshold.html",
-        'template_name_text': "email_info_responsible_threshold.txt",
-        'template_context': {"vorname": target_user['vorname'], "nachname": target_user['nachname'],
-                             "infomail_responsible_threshold": target_user['infomail_responsible_threshold'], 'app_name': config.app_name},
-        'logo_dateipfad': logo_pfad
+        "empfaenger_email": config.api_config["responsible_email"],
+        "betreff": f"{target_user['vorname']} {target_user['nachname']} hat das Saldo-Info-Limit erreicht",
+        "template_name_html": "email_info_responsible_threshold.html",
+        "template_name_text": "email_info_responsible_threshold.txt",
+        "template_context": {
+            "vorname": target_user["vorname"],
+            "nachname": target_user["nachname"],
+            "infomail_responsible_threshold": target_user["infomail_responsible_threshold"],
+            "app_name": config.app_name,
+        },
+        "logo_dateipfad": logo_pfad,
     }
     if prepare_and_send_email(email_params, config.smtp_config):
-        logger.info("Info über Saldo-Schwelle-erreicht (ID: %s) an Verantwortliche gesendet.", target_user['id'])
+        logger.info("Info über Saldo-Schwelle-erreicht (ID: %s) an Verantwortliche gesendet.", target_user["id"])
     else:
-        logger.error("Fehler beim Senden der Saldo-Schwelle-erreicht-Info an ID: %s.", target_user['id'])
+        logger.error("Fehler beim Senden der Saldo-Schwelle-erreicht-Info an ID: %s.", target_user["id"])
 
 
 def add_api_user_db(username):
@@ -1301,7 +1328,7 @@ def add_api_user_db(username):
             return new_id
         except db_utils.Error as err:
             logger.error("Fehler beim Hinzufügen des API-Benutzers: %s", err)
-            flash("Datenbankfehler beim Hinzufügen des API-Benutzers.", 'error')
+            flash("Datenbankfehler beim Hinzufügen des API-Benutzers.", "error")
             cnx.rollback()
             return None
         finally:
@@ -1332,7 +1359,7 @@ def add_api_key_for_user_db(api_user_id, api_key_name_string, api_key_string):
             return True
         except db_utils.Error as err:
             logger.error("Fehler beim Hinzufügen des API-Keys: %s", err)
-            flash("Datenbankfehler beim Hinzufügen des API-Keys.", 'error')
+            flash("Datenbankfehler beim Hinzufügen des API-Keys.", "error")
             cnx.rollback()
             return False
         finally:
@@ -1361,7 +1388,7 @@ def delete_api_key_db(api_key_id):
             return True
         except db_utils.Error as err:
             logger.error("Fehler beim Löschen des API-Keys: %s", err)
-            flash("Datenbankfehler beim Löschen des API-Keys.", 'error')
+            flash("Datenbankfehler beim Löschen des API-Keys.", "error")
             cnx.rollback()
             return False
         finally:
@@ -1394,7 +1421,7 @@ def delete_api_user_and_keys_db(api_user_id):
             return True
         except db_utils.Error as err:
             logger.error("Fehler beim Löschen des API-Benutzers und seiner Keys: %s", err)
-            flash("Datenbankfehler beim Löschen des API-Benutzers.", 'error')
+            flash("Datenbankfehler beim Löschen des API-Benutzers.", "error")
             cnx.rollback()
             return False
         finally:
@@ -1444,9 +1471,12 @@ def _handle_toggle_user_lock_state(target_user_id, target_user, lock_state):
 
     # Sperrt oder entsperrt einen Benutzer
     if toggle_user_lock(target_user_id, lock_state):
-        flash(f'Benutzer "{target_user.get("nachname", "")}, {target_user.get("vorname", "")}" (ID {target_user_id}) wurde {"gesperrt" if lock_state else "entsperrt"}.', 'success')
+        flash(
+            f'Benutzer "{target_user.get("nachname", "")}, {target_user.get("vorname", "")}" (ID {target_user_id}) wurde {"gesperrt" if lock_state else "entsperrt"}.',
+            "success",
+        )
     else:
-        flash(f'Fehler beim {"Sperren" if lock_state else "Entsperren"} des Benutzers.', 'error')
+        flash(f"Fehler beim {'Sperren' if lock_state else 'Entsperren'} des Benutzers.", "error")
 
 
 def _validate_bulk_change_form(form_data):
@@ -1457,33 +1487,34 @@ def _validate_bulk_change_form(form_data):
 
     errors = False
 
-    saldo_aenderung_str = form_data.get('saldo_aenderung')
-    beschreibung = form_data.get('beschreibung')
+    saldo_aenderung_str = form_data.get("saldo_aenderung")
+    beschreibung = form_data.get("beschreibung")
     # Korrigiere das Feld: Im HTML heißt es 'selected_users'
-    if hasattr(form_data, 'getlist'):
-        selected_user_ids = form_data.getlist('selected_users')
+    if hasattr(form_data, "getlist"):
+        selected_user_ids = form_data.getlist("selected_users")
     else:
-        selected_user_ids = form_data.get('selected_users', [])
+        selected_user_ids = form_data.get("selected_users", [])
 
     # Prüfe, ob mindestens ein Benutzer ausgewählt wurde
     if not selected_user_ids or len(selected_user_ids) == 0:
-        flash('Bitte mindestens einen Benutzer für die Sammelbuchung auswählen.', 'error')
+        flash("Bitte mindestens einen Benutzer für die Sammelbuchung auswählen.", "error")
         errors = True
 
     # Prüfe, ob eine Beschreibung vorhanden ist
-    if not beschreibung or beschreibung.strip() == '':
-        flash('Bitte eine Beschreibung für die Sammelbuchung angeben.', 'error')
+    if not beschreibung or beschreibung.strip() == "":
+        flash("Bitte eine Beschreibung für die Sammelbuchung angeben.", "error")
         errors = True
 
     # Prüfe, ob die Saldoänderung eine gültige Zahl ist
     try:
         saldo_aenderung = int(saldo_aenderung_str)
     except (TypeError, ValueError):
-        flash('Die Saldoänderung muss eine ganze Zahl sein.', 'error')
+        flash("Die Saldoänderung muss eine ganze Zahl sein.", "error")
         errors = True
         saldo_aenderung = 0
 
     return (not errors), saldo_aenderung, selected_user_ids
+
 
 def _handle_add_user_transaction(form_data, target_user):
     """
@@ -1495,31 +1526,31 @@ def _handle_add_user_transaction(form_data, target_user):
         bool: True bei Erfolg, False bei Fehler.
     """
 
-    beschreibung = form_data.get('beschreibung')
-    saldo_aenderung_str = form_data.get('saldo_aenderung')
+    beschreibung = form_data.get("beschreibung")
+    saldo_aenderung_str = form_data.get("saldo_aenderung")
     try:
         saldo_aenderung = int(saldo_aenderung_str)
     except (TypeError, ValueError):
-        flash('Die Saldoänderung muss eine ganze Zahl sein.', 'error')
+        flash("Die Saldoänderung muss eine ganze Zahl sein.", "error")
         return False
 
-    user_id = target_user.get('id')
+    user_id = target_user.get("id")
     if not user_id:
-        flash('Benutzer-ID fehlt für die Transaktion.', 'error')
+        flash("Benutzer-ID fehlt für die Transaktion.", "error")
         return False
 
     success = add_transaction(user_id, beschreibung, saldo_aenderung)
     if success:
         # E-Mail-Benachrichtigung, falls aktiviert und E-Mail vorhanden
-        if target_user.get('email') and get_user_notification_preference(user_id, 'NEUE_TRANSAKTION'):
+        if target_user.get("email") and get_user_notification_preference(user_id, "NEUE_TRANSAKTION"):
             new_saldo = get_saldo_for_user(user_id)
             saldo_aenderung_str_fmt = f"{saldo_aenderung:+d} €"
             new_saldo_fmt = f"{new_saldo} €"
-            logo_pfad = config.gui_config.get('email_logo_path', '')
+            logo_pfad = config.gui_config.get("email_logo_path", "")
             _send_manual_transaction_email(target_user, beschreibung, saldo_aenderung_str_fmt, new_saldo_fmt, logo_pfad)
-        flash('Transaktion erfolgreich hinzugefügt.', 'success')
+        flash("Transaktion erfolgreich hinzugefügt.", "success")
         return True
-    flash('Fehler beim Hinzufügen der Transaktion.', 'error')
+    flash("Fehler beim Hinzufügen der Transaktion.", "error")
     return False
 
 
@@ -1536,15 +1567,18 @@ def _handle_delete_target_user(target_user_id, target_user):
         bool: True, wenn der Benutzer gelöscht wurde und eine Weiterleitung zum Dashboard erfolgen soll, sonst False.
     """
 
-    logged_in_user_id = session.get('user_id')
+    logged_in_user_id = session.get("user_id")
     if target_user_id == logged_in_user_id:
         flash("Du kannst dich nicht selbst löschen.", "warning")
         return False  # Keine Weiterleitung zum Dashboard
 
     if delete_user(target_user_id):
-        flash(f'Benutzer "{target_user.get("nachname", "")}, {target_user.get("vorname", "")}" (ID {target_user_id}) wurde gelöscht.', 'success')
+        flash(
+            f'Benutzer "{target_user.get("nachname", "")}, {target_user.get("vorname", "")}" (ID {target_user_id}) wurde gelöscht.',
+            "success",
+        )
         return True  # Weiterleitung zum Dashboard
-    flash('Fehler beim Löschen des Benutzers.', 'error')
+    flash("Fehler beim Löschen des Benutzers.", "error")
     return False
 
 
@@ -1557,11 +1591,11 @@ def _handle_update_user_comment_admin(form_data, target_user_id):
         target_user_id (int): Die ID des Benutzers, dessen Kommentar aktualisiert wird.
     """
 
-    comment = form_data.get('kommentar')
+    comment = form_data.get("kommentar")
     if update_user_comment(target_user_id, comment if comment is not None else ""):
-        flash('Kommentar erfolgreich aktualisiert.', 'success')
+        flash("Kommentar erfolgreich aktualisiert.", "success")
     else:
-        flash('Fehler beim Aktualisieren des Kommentars.', 'error')  # Fallback, falls DB-Funktion nicht flasht
+        flash("Fehler beim Aktualisieren des Kommentars.", "error")  # Fallback, falls DB-Funktion nicht flasht
 
 
 def _handle_update_infomail_responsible_threshold_admin(form_data, target_user_id):
@@ -1573,11 +1607,13 @@ def _handle_update_infomail_responsible_threshold_admin(form_data, target_user_i
         target_user_id (int): Die ID des Benutzers, dessen Infomail-Schwelle aktualisiert wird.
     """
 
-    infomail_responsible_threshold = form_data.get('infomail_responsible_threshold')
-    if update_user_infomail_responsible_threshold(target_user_id, infomail_responsible_threshold if infomail_responsible_threshold is not None else ""):
-        flash('Infomail-Schwelle erfolgreich aktualisiert.', 'success')
+    infomail_responsible_threshold = form_data.get("infomail_responsible_threshold")
+    if update_user_infomail_responsible_threshold(
+        target_user_id, infomail_responsible_threshold if infomail_responsible_threshold is not None else ""
+    ):
+        flash("Infomail-Schwelle erfolgreich aktualisiert.", "success")
     else:
-        flash('Fehler beim Aktualisieren der Infomail-Schwelle.', 'error')  # Fallback, falls DB-Funktion nicht flasht
+        flash("Fehler beim Aktualisieren der Infomail-Schwelle.", "error")  # Fallback, falls DB-Funktion nicht flasht
 
 
 def _handle_update_user_email_admin(form_data, target_user_id):
@@ -1589,11 +1625,11 @@ def _handle_update_user_email_admin(form_data, target_user_id):
         target_user_id (int): Die ID des Benutzers, dessen E-Mail aktualisiert wird.
     """
 
-    email = form_data.get('email')
+    email = form_data.get("email")
     if update_user_email(target_user_id, email):
-        flash('Emailadresse erfolgreich aktualisiert.', 'success')
+        flash("Emailadresse erfolgreich aktualisiert.", "success")
     else:
-        flash('Fehler beim Aktualisieren der Emailadresse.', 'error')  # Fallback
+        flash("Fehler beim Aktualisieren der Emailadresse.", "error")  # Fallback
 
 
 def _validate_add_user_form(form_data):
@@ -1608,7 +1644,7 @@ def _validate_add_user_form(form_data):
     """
 
     errors = False
-    required_fields = ['code', 'nachname', 'vorname', 'password', 'confirm_password']
+    required_fields = ["code", "nachname", "vorname", "password", "confirm_password"]
     for field in required_fields:
         if not form_data.get(field):
             flash(f"Bitte fülle das Pflichtfeld '{field}' aus.", "error")
@@ -1616,18 +1652,20 @@ def _validate_add_user_form(form_data):
             # Nicht nach erstem Fehler abbrechen, um alle fehlenden Felder zu melden (optional)
 
     if errors:  # Wenn schon Pflichtfelder fehlen, sind die folgenden Prüfungen ggf. nicht sinnvoll
-        if not all(form_data.get(field) for field in ['password', 'confirm_password']):  # Sicherstellen, dass beide PW-Felder existieren
+        if not all(
+            form_data.get(field) for field in ["password", "confirm_password"]
+        ):  # Sicherstellen, dass beide PW-Felder existieren
             flash("Passwortfelder dürfen nicht leer sein.", "error")  # Redundant, aber zur Sicherheit
         return False  # Frühzeitiger Ausstieg bei fehlenden Pflichtfeldern
 
-    if form_data.get('password') != form_data.get('confirm_password'):
+    if form_data.get("password") != form_data.get("confirm_password"):
         flash("Die Passwörter stimmen nicht überein.", "error")
         errors = True
-    if form_data.get('password') and len(form_data.get('password')) < 8:  # type: ignore
-        flash('Das Passwort muss mindestens 8 Zeichen lang sein.', 'error')
+    if form_data.get("password") and len(form_data.get("password")) < 8:  # type: ignore
+        flash("Das Passwort muss mindestens 8 Zeichen lang sein.", "error")
         errors = True
     # fetch_user benötigt code, der oben schon als Pflichtfeld geprüft wurde
-    if form_data.get('code') and fetch_user(form_data.get('code')):
+    if form_data.get("code") and fetch_user(form_data.get("code")):
         flash(f"Der Code '{form_data.get('code')}' wird bereits verwendet. Bitte wähle einen anderen.", "error")
         errors = True
     return not errors
@@ -1645,7 +1683,7 @@ def _validate_register_form(form_data):
     """
 
     errors = False
-    required_fields = ['nachname', 'vorname', 'password', 'confirm_password']
+    required_fields = ["nachname", "vorname", "password", "confirm_password"]
     for field in required_fields:
         if not form_data.get(field):
             flash(f"Bitte fülle das Pflichtfeld '{field}' aus.", "error")
@@ -1654,15 +1692,15 @@ def _validate_register_form(form_data):
     if errors:
         return False  # Frühzeitiger Ausstieg
 
-    if form_data.get('password') != form_data.get('confirm_password'):
+    if form_data.get("password") != form_data.get("confirm_password"):
         flash("Die Passwörter stimmen nicht überein.", "error")
         errors = True
 
-    if form_data.get('password') and len(form_data.get('password')) < 8:
-        flash('Das Passwort muss mindestens 8 Zeichen lang sein.', 'error')
+    if form_data.get("password") and len(form_data.get("password")) < 8:
+        flash("Das Passwort muss mindestens 8 Zeichen lang sein.", "error")
         errors = True
 
-    if fetch_user(form_data.get('code')):
+    if fetch_user(form_data.get("code")):
         flash(f"Der Benutzercode '{form_data.get('code')}' ist bereits vergeben.", "error")
         errors = True
 
@@ -1682,7 +1720,7 @@ def _process_system_setting_update(key, new_value_str):
         bool: True, wenn die Aktualisierung für diese Einstellung erfolgreich war, sonst False.
     """
 
-    if key == 'TRANSACTION_SALDO_CHANGE':
+    if key == "TRANSACTION_SALDO_CHANGE":
         try:
             val_int = int(new_value_str)
             if val_int >= 0:
@@ -1709,9 +1747,15 @@ def _handle_toggle_user_admin_state(target_user_id, target_user, admin_state):
         admin_state (bool): True zum Befördern, False zum Degradieren.
     """
     if toggle_user_admin(target_user_id, admin_state):
-        flash(f'Benutzer "{target_user.get("nachname", "")}, {target_user.get("vorname", "")}" (ID {target_user_id}) wurde {"zum Admin befördert" if admin_state else "zum normalen Benutzer degradiert"}.', 'success')
+        flash(
+            f'Benutzer "{target_user.get("nachname", "")}, {target_user.get("vorname", "")}" (ID {target_user_id}) wurde {"zum Admin befördert" if admin_state else "zum normalen Benutzer degradiert"}.',
+            "success",
+        )
         return True
-    flash(f'Fehler beim {"Befördern zum Admin" if admin_state else "Degradieren zum normalen Benutzer"} des Benutzers.', 'error')
+    flash(
+        f"Fehler beim {'Befördern zum Admin' if admin_state else 'Degradieren zum normalen Benutzer'} des Benutzers.",
+        "error",
+    )
     return False
 
 
@@ -1735,10 +1779,16 @@ def _process_bulk_transactions(user_ids, beschreibung, saldo_aenderung):
         if add_transaction(user_id_int, beschreibung, saldo_aenderung):
             successful += 1
             target_user = get_user_by_id(user_id_int)
-            if target_user and target_user.get('email') and get_user_notification_preference(user_id_int, 'NEUE_TRANSAKTION'):
+            if (
+                target_user
+                and target_user.get("email")
+                and get_user_notification_preference(user_id_int, "NEUE_TRANSAKTION")
+            ):
                 new_saldo = get_saldo_for_user(user_id_int)
                 logo_pfad_str = str(Path("static/logo/logo-80x109.png"))
-                _send_manual_transaction_email(target_user, beschreibung, str(saldo_aenderung), str(new_saldo), logo_pfad_str)
+                _send_manual_transaction_email(
+                    target_user, beschreibung, str(saldo_aenderung), str(new_saldo), logo_pfad_str
+                )
         else:
             failed += 1
     return successful, failed
@@ -1756,52 +1806,51 @@ def _process_user_info_form(form, user):
         bool: True, wenn eine Aktion verarbeitet wurde, andernfalls False.
               Die Weiterleitung (Redirect) wird innerhalb der Funktion gehandhabt.
     """
-    user_id = user['id']
+    user_id = user["id"]
 
-    if 'change_password' in form:
-        current_password = form['current_password']
-        new_password = form['new_password']
-        confirm_new_password = form['confirm_new_password']
+    if "change_password" in form:
+        current_password = form["current_password"]
+        new_password = form["new_password"]
+        confirm_new_password = form["confirm_new_password"]
 
-        if not check_password_hash(user['password'], current_password):
-            flash('Falsches aktuelles Passwort.', 'error')
+        if not check_password_hash(user["password"], current_password):
+            flash("Falsches aktuelles Passwort.", "error")
         elif new_password != confirm_new_password:
-            flash('Die neuen Passwörter stimmen nicht überein.', 'error')
+            flash("Die neuen Passwörter stimmen nicht überein.", "error")
         elif len(new_password) < 8:
-            flash('Das neue Passwort muss mindestens 8 Zeichen lang sein.', 'error')
+            flash("Das neue Passwort muss mindestens 8 Zeichen lang sein.", "error")
         else:
             new_password_hash = generate_password_hash(new_password)
             if update_password(user_id, new_password_hash):
-                flash('Passwort erfolgreich geändert.', 'success')
+                flash("Passwort erfolgreich geändert.", "success")
             else:
-                flash('Fehler beim Ändern des Passworts.', 'error')
+                flash("Fehler beim Ändern des Passworts.", "error")
         return True
 
-    if 'change_email' in form:
-        new_email = form.get('new_email', '').strip()
+    if "change_email" in form:
+        new_email = form.get("new_email", "").strip()
         if update_user_email(user_id, new_email):
-            flash('Emailadresse erfolgreich geändert.', 'success')
+            flash("Emailadresse erfolgreich geändert.", "success")
         else:
-            flash('Fehler beim Ändern der Emailadresse.', 'error')
+            flash("Fehler beim Ändern der Emailadresse.", "error")
         return True
 
-    if 'update_notification_settings' in form:
+    if "update_notification_settings" in form:
         all_notification_types_db = get_all_notification_types()
         active_type_ids = [
-            n_type["id"] for n_type in all_notification_types_db
-            if form.get(f'notification_type_{n_type["id"]}')
+            n_type["id"] for n_type in all_notification_types_db if form.get(f"notification_type_{n_type['id']}")
         ]
         if update_user_notification_settings(user_id, active_type_ids):
-            flash('Benachrichtigungseinstellungen erfolgreich gespeichert.', 'success')
+            flash("Benachrichtigungseinstellungen erfolgreich gespeichert.", "success")
         # Fehler wird in der Funktion selbst geflasht
         return True
 
-    if 'update_infomail_user_threshold' in form:
-        new_user_threshold = form.get('infomail_user_threshold', '').strip()
+    if "update_infomail_user_threshold" in form:
+        new_user_threshold = form.get("infomail_user_threshold", "").strip()
         if update_user_infomail_user_threshold(user_id, new_user_threshold):
-            flash('Infomail-Guthaben-Grenze erfolgreich geändert.', 'success')
+            flash("Infomail-Guthaben-Grenze erfolgreich geändert.", "success")
         else:
-            flash('Fehler beim Ändern der Infomail-Guthaben-Grenze.', 'error')
+            flash("Fehler beim Ändern der Infomail-Guthaben-Grenze.", "error")
         return True
 
     return False
@@ -1816,23 +1865,24 @@ def admin_required(f):
 
     @functools.wraps(f)
     def decorated_function(*args, **kwargs):
-        user_id = session.get('user_id')
+        user_id = session.get("user_id")
         if not user_id:
             flash("Bitte zuerst einloggen.", "success")
-            return redirect(BASE_URL + url_for('login'))
+            return redirect(BASE_URL + url_for("login"))
 
         admin_user = get_user_by_id(user_id)
-        if not (admin_user and admin_user.get('is_admin')):
+        if not (admin_user and admin_user.get("is_admin")):
             flash("Zugriff verweigert. Admin-Rechte erforderlich.", "error")
-            return redirect(BASE_URL + url_for('user_info'))
+            return redirect(BASE_URL + url_for("user_info"))
 
-        if admin_user.get('is_locked'):
-            session.pop('user_id', None)
-            flash('Dein Administratorkonto wurde gesperrt.', 'error')
-            return redirect(BASE_URL + url_for('login'))
+        if admin_user.get("is_locked"):
+            session.pop("user_id", None)
+            flash("Dein Administratorkonto wurde gesperrt.", "error")
+            return redirect(BASE_URL + url_for("login"))
 
         # Übergibt den geprüften Admin-Benutzer an die eigentliche Routen-Funktion
         return f(admin_user, *args, **kwargs)
+
     return decorated_function
 
 
@@ -1842,7 +1892,7 @@ def make_session_permanent():
     Setzt die Session-Lebensdauer bei jeder Anfrage zurück.
     """
 
-    if 'user_id' in session:
+    if "user_id" in session:
         session.permanent = True
 
 
@@ -1860,11 +1910,15 @@ def inject_global_vars():
         dict: Ein Dictionary mit globalen Variablen.
     """
 
-    return {'app_name': config.app_name, 'app_slogan': config.app_slogan, 'version': app.config.get('version', 'unbekannt')}
+    return {
+        "app_name": config.app_name,
+        "app_slogan": config.app_slogan,
+        "version": app.config.get("version", "unbekannt"),
+    }
 
 
 # --- Flask Routen ---
-@app.route('/', methods=['GET', 'POST'])
+@app.route("/", methods=["GET", "POST"])
 def login():
     """
     Verarbeitet den Login eines Benutzers.
@@ -1878,46 +1932,46 @@ def login():
         mit optionaler Fehlermeldung oder eine Weiterleitung.
     """
 
-    if 'user_id' in session:
-        user = get_user_by_id(session['user_id'])
-        if user and user.get('is_locked'):
-            session.pop('user_id', None)
-            flash('Dein Konto wurde gesperrt. Bitte kontaktiere einen Administrator.', 'error')
-            return render_template('web_login.html')
-        return redirect(BASE_URL + url_for('user_info'))
+    if "user_id" in session:
+        user = get_user_by_id(session["user_id"])
+        if user and user.get("is_locked"):
+            session.pop("user_id", None)
+            flash("Dein Konto wurde gesperrt. Bitte kontaktiere einen Administrator.", "error")
+            return render_template("web_login.html")
+        return redirect(BASE_URL + url_for("user_info"))
 
-    if request.method == 'POST':
-        code_email = request.form['code_email']
-        password = request.form['password']
+    if request.method == "POST":
+        code_email = request.form["code_email"]
+        password = request.form["password"]
         user = fetch_user(code_email)
-        if user and not user['is_locked'] and check_password_hash(user['password'], password):
-            session['user_id'] = user['id']
+        if user and not user["is_locked"] and check_password_hash(user["password"], password):
+            session["user_id"] = user["id"]
             session.permanent = True
             session.modified = True
             logger.debug(f"[login] Nach Setzen: session['user_id'] = {session.get('user_id')}")
             # Logging für gesetzte Cookies
             logger.debug(f"[login] Request cookies vor Redirect: {request.cookies}")
-            response = redirect(BASE_URL + url_for('user_info'))
+            response = redirect(BASE_URL + url_for("user_info"))
             logger.debug(f"[login] Response-Objekt vor Rückgabe: {response}")
             return response
-        if user and user['is_locked']:
-            flash('Dein Konto ist gesperrt. Bitte kontaktiere einen Administrator.', 'error')
+        if user and user["is_locked"]:
+            flash("Dein Konto ist gesperrt. Bitte kontaktiere einen Administrator.", "error")
         else:
-            flash('Ungültiger Benutzername oder Passwort', 'error')
-    return render_template('web_login.html')
+            flash("Ungültiger Benutzername oder Passwort", "error")
+    return render_template("web_login.html")
 
 
-@app.route('/health', methods=['GET'])
+@app.route("/health", methods=["GET"])
 def health_unprotected_route():
     """
     Rendert einen einfach Health-Check-Endpunkt.
 
     """
 
-    return render_template('web_healthcheck.html')
+    return render_template("web_healthcheck.html")
 
 
-@app.route('/datenschutz')
+@app.route("/datenschutz")
 def datenschutz():
     """
     Rendert die Datenschutzerklärung-Seite.
@@ -1926,10 +1980,10 @@ def datenschutz():
     der Datenschutzerklärung zuständig.
     """
 
-    return render_template('web_privacy_policy.html')
+    return render_template("web_privacy_policy.html")
 
 
-@app.route('/register', methods=['GET', 'POST'])
+@app.route("/register", methods=["GET", "POST"])
 def register():
     """
     Verarbeitet die Registrierung eines neuen Benutzers.
@@ -1944,16 +1998,16 @@ def register():
         oder eine Weiterleitung zur Login-Seite.
     """
 
-    if 'user_id' in session:
-        return redirect(BASE_URL + url_for('user_info'))
+    if "user_id" in session:
+        return redirect(BASE_URL + url_for("user_info"))
 
-    if request.method == 'POST':
+    if request.method == "POST":
         form_data = request.form
         if _validate_register_form(form_data):
             # GET Request
             generated_code = None
             for _ in range(100):  # Max 100 attempts
-                potential_code = ''.join(random.choices(string.digits, k=10))
+                potential_code = "".join(random.choices(string.digits, k=10))
                 if not fetch_user(potential_code):
                     generated_code = potential_code
                     break
@@ -1961,97 +2015,103 @@ def register():
                 flash("Ich konnte keinen eindeutigen Code generieren. Bitte versuche es später erneut.", "warning")
                 generated_code = ""  # Fallback
             user_details = {
-                'code': generated_code,
-                'nachname': form_data.get('nachname', '').strip(),
-                'vorname': form_data.get('vorname', '').strip(),
-                'password': form_data.get('password'),
-                'email': form_data.get('email', '').strip(),  # Optional
-                'kommentar': form_data.get('kommentar', '').strip(),  # Optional
-                'acc_duties': form_data.get('pflichten'),
-                'acc_privacy_policy': form_data.get('datenschutz'),
-                'is_locked': False,
-                'is_admin': False  # Neue Benutzer sind niemals Admins
+                "code": generated_code,
+                "nachname": form_data.get("nachname", "").strip(),
+                "vorname": form_data.get("vorname", "").strip(),
+                "password": form_data.get("password"),
+                "email": form_data.get("email", "").strip(),  # Optional
+                "kommentar": form_data.get("kommentar", "").strip(),  # Optional
+                "acc_duties": form_data.get("pflichten"),
+                "acc_privacy_policy": form_data.get("datenschutz"),
+                "is_locked": False,
+                "is_admin": False,  # Neue Benutzer sind niemals Admins
             }
             if add_regular_user_db(user_details):
-                if user_details['email']:
+                if user_details["email"]:
                     logo_pfad_str = str(Path("static/logo/logo-80x109.png"))
-                    _send_user_register_email(user_details['vorname'], user_details['email'], generated_code, logo_pfad_str)
+                    _send_user_register_email(
+                        user_details["vorname"], user_details["email"], generated_code, logo_pfad_str
+                    )
 
-                flash(f"Registrierung erfolgreich! Du kannst dich nun anmelden mit dem Code '{generated_code}'. Bitte notiere dir "
-                      "diesen Code für künftige Logins!", "success")
-                return redirect(BASE_URL + url_for('login'))
+                flash(
+                    f"Registrierung erfolgreich! Du kannst dich nun anmelden mit dem Code '{generated_code}'. Bitte notiere dir "
+                    "diesen Code für künftige Logins!",
+                    "success",
+                )
+                return redirect(BASE_URL + url_for("login"))
         # Bei Validierungsfehler oder DB-Fehler, das Formular erneut mit den
         # eingegebenen Daten anzeigen.
-        return render_template('web_user_register.html',
-                               form_data=form_data,
-                               version=app.config.get('version', 'unbekannt'))
+        return render_template(
+            "web_user_register.html", form_data=form_data, version=app.config.get("version", "unbekannt")
+        )
 
     # GET Request
-    return render_template('web_user_register.html',
-                           form_data=None,
-                           version=app.config.get('version', 'unbekannt'))
+    return render_template("web_user_register.html", form_data=None, version=app.config.get("version", "unbekannt"))
 
 
-@app.route('/request-password-reset', methods=['GET', 'POST'])
+@app.route("/request-password-reset", methods=["GET", "POST"])
 def request_password_reset():
     """
     Verarbeitet die Anforderung eines Passwort-Reset-Links.
     """
 
-    if 'user_id' in session:
-        return redirect(url_for('user_info'))
-    if request.method == 'POST':
-        email = request.form.get('email')
+    if "user_id" in session:
+        return redirect(url_for("user_info"))
+    if request.method == "POST":
+        email = request.form.get("email")
         user = get_user_by_email(email)
 
         # Aus Sicherheitsgründen wird immer dieselbe Meldung angezeigt,
         # um nicht preiszugeben, ob eine E-Mail existiert.
-        if user and not user['is_locked']:
+        if user and not user["is_locked"]:
             token = secrets.token_urlsafe(32)
-            if store_reset_token(user['id'], token):
+            if store_reset_token(user["id"], token):
                 logo_pfad_str = str(Path("static/logo/logo-80x109.png"))
-                _send_password_reset_email(user['email'], token, logo_pfad_str)
+                _send_password_reset_email(user["email"], token, logo_pfad_str)
 
-        flash('Wenn ein Konto mit dieser E-Mail-Adresse existiert und nicht gesperrt ist, wurde ein Link zum Zurücksetzen des Passworts gesendet.', 'success')
-        return redirect(url_for('login'))
+        flash(
+            "Wenn ein Konto mit dieser E-Mail-Adresse existiert und nicht gesperrt ist, wurde ein Link zum Zurücksetzen des Passworts gesendet.",
+            "success",
+        )
+        return redirect(url_for("login"))
 
-    return render_template('web_request_reset.html')
+    return render_template("web_request_reset.html")
 
 
-@app.route('/reset-password/<token>', methods=['GET', 'POST'])
+@app.route("/reset-password/<token>", methods=["GET", "POST"])
 def reset_with_token(token):
     """
     Verarbeitet das tatsächliche Zurücksetzen des Passworts mit einem Token.
     """
 
-    if 'user_id' in session:
-        return redirect(url_for('user_info'))
+    if "user_id" in session:
+        return redirect(url_for("user_info"))
 
     user = get_user_by_reset_token(token)
     if not user:
-        flash('Der Link zum Zurücksetzen des Passworts ist ungültig oder abgelaufen.', 'error')
-        return redirect(url_for('login'))
+        flash("Der Link zum Zurücksetzen des Passworts ist ungültig oder abgelaufen.", "error")
+        return redirect(url_for("login"))
 
-    if request.method == 'POST':
-        password = request.form.get('password')
-        confirm_password = request.form.get('confirm_password')
+    if request.method == "POST":
+        password = request.form.get("password")
+        confirm_password = request.form.get("confirm_password")
 
         if not password or len(password) < 8:
-            flash('Das Passwort muss mindestens 8 Zeichen lang sein.', 'error')
+            flash("Das Passwort muss mindestens 8 Zeichen lang sein.", "error")
         elif password != confirm_password:
-            flash('Die Passwörter stimmen nicht überein.', 'error')
+            flash("Die Passwörter stimmen nicht überein.", "error")
         else:
             new_password_hash = generate_password_hash(password)
-            if update_password(user['id'], new_password_hash):
+            if update_password(user["id"], new_password_hash):
                 delete_reset_token(token)  # Wichtig: Token nach Nutzung entwerten
-                flash('Dein Passwort wurde erfolgreich zurückgesetzt. Du kannst dich nun anmelden.', 'success')
-                return redirect(url_for('login'))
-            flash('Beim Aktualisieren des Passworts ist ein Fehler aufgetreten.', 'error')
+                flash("Dein Passwort wurde erfolgreich zurückgesetzt. Du kannst dich nun anmelden.", "success")
+                return redirect(url_for("login"))
+            flash("Beim Aktualisieren des Passworts ist ein Fehler aufgetreten.", "error")
 
-    return render_template('web_reset_password.html', token=token)
+    return render_template("web_reset_password.html", token=token)
 
 
-@app.route('/user_info', methods=['GET', 'POST'])
+@app.route("/user_info", methods=["GET", "POST"])
 def user_info():
     """
     Zeigt Benutzerinformationen an und verarbeitet Änderungen (Passwort, E-Mail, Benachrichtigungen).
@@ -2061,31 +2121,31 @@ def user_info():
     Returns:
         str oder werkzeug.wrappers.response.Response: Die gerenderte Benutzerseite oder eine Weiterleitung.
     """
-    user_id = session.get('user_id')
+    user_id = session.get("user_id")
     logger.debug(f"[user_info] Session user_id: {user_id}")
     if not user_id:
         logger.debug("[user_info] Kein user_id in Session, redirect zu Login.")
-        return redirect(BASE_URL + url_for('login'))
+        return redirect(BASE_URL + url_for("login"))
 
     user = get_user_by_id(user_id)
     logger.debug(f"[user_info] get_user_by_id({user_id}) -> {user}")
     if not user:
         logger.debug("[user_info] Benutzer nicht gefunden, Session löschen und redirect zu Login.")
-        session.pop('user_id', None)
-        flash('Benutzer nicht gefunden oder Sitzung abgelaufen.', 'error')
-        return redirect(BASE_URL + url_for('login'))
+        session.pop("user_id", None)
+        flash("Benutzer nicht gefunden oder Sitzung abgelaufen.", "error")
+        return redirect(BASE_URL + url_for("login"))
 
-    if user.get('is_locked'):
+    if user.get("is_locked"):
         logger.debug("[user_info] Benutzer ist gesperrt, Session löschen und redirect zu Login.")
-        session.pop('user_id', None)
-        flash('Dein Konto wurde gesperrt. Bitte kontaktiere einen Administrator.', 'error')
-        return redirect(BASE_URL + url_for('login'))
+        session.pop("user_id", None)
+        flash("Dein Konto wurde gesperrt. Bitte kontaktiere einen Administrator.", "error")
+        return redirect(BASE_URL + url_for("login"))
 
-    if request.method == 'POST':
+    if request.method == "POST":
         logger.debug(f"[user_info] POST request: {request.form}")
         if _process_user_info_form(request.form, user):
             logger.debug("[user_info] POST Verarbeitung erfolgreich, redirect zu user_info.")
-            return redirect(BASE_URL + url_for('user_info'))
+            return redirect(BASE_URL + url_for("user_info"))
 
     # GET Request oder nach POST-Redirect
     # Benutzerdaten neu laden, um eventuelle Änderungen anzuzeigen
@@ -2093,29 +2153,33 @@ def user_info():
     logger.debug(f"[user_info] user_data nach Reload: {user_data}")
     if not user_data:  # Sicherheitscheck, falls der Benutzer zwischenzeitlich gelöscht wurde
         logger.debug("[user_info] Benutzer nach Reload nicht mehr vorhanden, Session löschen und redirect zu Login.")
-        session.pop('user_id', None)
-        flash('Benutzer nicht mehr vorhanden.', 'error')
-        return redirect(BASE_URL + url_for('login'))
+        session.pop("user_id", None)
+        flash("Benutzer nicht mehr vorhanden.", "error")
+        return redirect(BASE_URL + url_for("login"))
 
     nfc_tokens = get_user_nfc_tokens(user_id)
     transactions = get_user_transactions(user_id)
-    saldo = sum(t['saldo_aenderung'] for t in transactions) if transactions else 0
+    saldo = sum(t["saldo_aenderung"] for t in transactions) if transactions else 0
 
     all_notification_types_data = get_all_notification_types()
     user_notification_settings_data = get_user_notification_settings(user_id)
 
-    logger.debug(f"[user_info] Rendering Template mit user={user_data}, saldo={saldo}, nfc_tokens={nfc_tokens}, transactions={transactions}, all_notification_types={all_notification_types_data}, user_notification_settings={user_notification_settings_data}")
-    return render_template('web_user_info.html',
-                           user=user_data,
-                           nfc_tokens=nfc_tokens,
-                           transactions=transactions,
-                           saldo=saldo,
-                           all_notification_types=all_notification_types_data,
-                           user_notification_settings=user_notification_settings_data,
-                           version=app.config.get('version', 'unbekannt'))
+    logger.debug(
+        f"[user_info] Rendering Template mit user={user_data}, saldo={saldo}, nfc_tokens={nfc_tokens}, transactions={transactions}, all_notification_types={all_notification_types_data}, user_notification_settings={user_notification_settings_data}"
+    )
+    return render_template(
+        "web_user_info.html",
+        user=user_data,
+        nfc_tokens=nfc_tokens,
+        transactions=transactions,
+        saldo=saldo,
+        all_notification_types=all_notification_types_data,
+        user_notification_settings=user_notification_settings_data,
+        version=app.config.get("version", "unbekannt"),
+    )
 
 
-@app.route('/qr_code')
+@app.route("/qr_code")
 def generate_qr():
     """
     Generiert dynamisch einen QR-Code als PNG-Bild und sendet ihn an den Browser.
@@ -2144,18 +2208,18 @@ def generate_qr():
                         Fehlermeldung geflasht.
     """
 
-    user_id = session.get('user_id')
+    user_id = session.get("user_id")
     if not user_id:
         flash("Bitte zuerst einloggen.", "success")
-        return redirect(BASE_URL + url_for('login'))
+        return redirect(BASE_URL + url_for("login"))
 
     # Die Daten für den QR-Code werden als URL-Parameter erwartet (z.B. /qr_code?usercode=1234567890a&aktion=a)
-    usercode_to_encode = request.args.get('usercode')
-    text_to_add = request.args.get('aktion')
+    usercode_to_encode = request.args.get("usercode")
+    text_to_add = request.args.get("aktion")
 
     if not usercode_to_encode or not text_to_add:
         flash("Ungültige Aktion für QR-Code.", "error")
-        return redirect(BASE_URL + url_for('user_info'))
+        return redirect(BASE_URL + url_for("user_info"))
 
     if text_to_add == "a":
         text_to_add = "Transaktion buchen"
@@ -2167,18 +2231,18 @@ def generate_qr():
         text_to_add = "Hier stimmt was nicht!"
         img = None
         flash("Ungültige Aktion für QR-Code.", "error")
-        return redirect(BASE_URL + url_for('user_info'))
+        return redirect(BASE_URL + url_for("user_info"))
 
     # Bild in einem In-Memory Bytes-Puffer speichern
     byte_io = io.BytesIO()
-    img.save(byte_io, 'PNG')
+    img.save(byte_io, "PNG")
     byte_io.seek(0)  # Wichtig: Den Puffer an den Anfang zurücksetzen
 
     # Bild als Datei-Antwort senden
-    return send_file(byte_io, mimetype='image/png')
+    return send_file(byte_io, mimetype="image/png")
 
 
-@app.route('/admin', methods=['GET', 'POST'])
+@app.route("/admin", methods=["GET", "POST"])
 @admin_required
 def admin_dashboard(admin_user):
     """
@@ -2193,8 +2257,8 @@ def admin_dashboard(admin_user):
         oder eine Weiterleitung bei fehlenden Rechten, Fehlern oder wenn nicht eingeloggt.
     """
 
-    if request.method == 'POST':
-        if 'update_system_settings' in request.form:
+    if request.method == "POST":
+        if "update_system_settings" in request.form:
             settings_updated_successfully = True
 
             # Hole alle Schlüssel aus der DB, um sicherzustellen, dass nur existierende verarbeitet werden
@@ -2208,7 +2272,7 @@ def admin_dashboard(admin_user):
             if settings_updated_successfully:
                 flash("Systemeinstellungen erfolgreich aktualisiert.", "success")
             # Individuelle Fehler wurden bereits in _process_system_setting_update oder update_system_setting geflasht
-        return redirect(BASE_URL + url_for('admin_dashboard'))
+        return redirect(BASE_URL + url_for("admin_dashboard"))
 
     # GET Request - Daten holen
     users_data = get_all_users()
@@ -2217,17 +2281,19 @@ def admin_dashboard(admin_user):
     user_saldo_all = sum(saldo_by_user_data.values())
     recent_transactions = get_recent_transactions(limit=10)
 
-    return render_template('web_admin_dashboard.html',
-                           user=admin_user,
-                           users=users_data,
-                           saldo_by_user=saldo_by_user_data,
-                           user_saldo_all=user_saldo_all,
-                           recent_transactions=recent_transactions,
-                           system_settings=system_settings_data,
-                           version=app.config.get('version', 'unbekannt'))
+    return render_template(
+        "web_admin_dashboard.html",
+        user=admin_user,
+        users=users_data,
+        saldo_by_user=saldo_by_user_data,
+        user_saldo_all=user_saldo_all,
+        recent_transactions=recent_transactions,
+        system_settings=system_settings_data,
+        version=app.config.get("version", "unbekannt"),
+    )
 
 
-@app.route('/admin/add_user', methods=['GET', 'POST'])
+@app.route("/admin/add_user", methods=["GET", "POST"])
 @admin_required
 def add_user(admin_user):
     """
@@ -2238,33 +2304,44 @@ def add_user(admin_user):
         eines Benutzers oder eine Weiterleitung.
     """
 
-    if request.method == 'POST':
+    if request.method == "POST":
         form_data = request.form
         if _validate_add_user_form(form_data):
             user_details = {
-                'code': form_data.get('code'),
-                'nachname': form_data.get('nachname'),
-                'vorname': form_data.get('vorname'),
-                'password': form_data.get('password'),
-                'email': form_data.get('email'),
-                'kommentar': form_data.get('kommentar'),
-                'is_admin': 'is_admin' in form_data
+                "code": form_data.get("code"),
+                "nachname": form_data.get("nachname"),
+                "vorname": form_data.get("vorname"),
+                "password": form_data.get("password"),
+                "email": form_data.get("email"),
+                "kommentar": form_data.get("kommentar"),
+                "is_admin": "is_admin" in form_data,
             }
             if add_regular_user_db(user_details):
-                if user_details['email']:
+                if user_details["email"]:
                     logo_pfad_str = str(Path("static/logo/logo-80x109.png"))
-                    _send_user_register_email(user_details['vorname'], user_details['email'], user_details['code'], logo_pfad_str)
+                    _send_user_register_email(
+                        user_details["vorname"], user_details["email"], user_details["code"], logo_pfad_str
+                    )
 
-                flash(f"Benutzer '{user_details['vorname']} {user_details['nachname']}' erfolgreich hinzugefügt.", "success")
-                return redirect(BASE_URL + url_for('admin_dashboard'))
+                flash(
+                    f"Benutzer '{user_details['vorname']} {user_details['nachname']}' erfolgreich hinzugefügt.",
+                    "success",
+                )
+                return redirect(BASE_URL + url_for("admin_dashboard"))
         # Bei Validierungsfehler oder DB-Fehler (geflasht in add_regular_user_db oder _validate_add_user_form),
         # das Formular mit den eingegebenen Daten erneut anzeigen
-        return render_template('web_user_add.html', user=admin_user, current_code=form_data.get('code'), form_data=form_data, version=app.config.get('version', 'unbekannt'))
+        return render_template(
+            "web_user_add.html",
+            user=admin_user,
+            current_code=form_data.get("code"),
+            form_data=form_data,
+            version=app.config.get("version", "unbekannt"),
+        )
 
     # GET Request
     generated_code = None
     for _ in range(100):  # Max 100 attempts
-        potential_code = ''.join(random.choices(string.digits, k=10))
+        potential_code = "".join(random.choices(string.digits, k=10))
         if not fetch_user(potential_code):
             generated_code = potential_code
             break
@@ -2272,17 +2349,17 @@ def add_user(admin_user):
         flash("Konnte keinen eindeutigen Code generieren. Bitte versuche es später erneut.", "warning")
         generated_code = ""  # Fallback
 
-    return render_template('web_user_add.html', user=admin_user, current_code=generated_code, form_data=None)
+    return render_template("web_user_add.html", user=admin_user, current_code=generated_code, form_data=None)
 
 
 # --- Flask Route: API-Key löschen (muss nach app-Init und admin_required stehen) ---
-@app.route('/admin/api_key/<int:api_key_id_route>/delete', methods=['POST'])
+@app.route("/admin/api_key/<int:api_key_id_route>/delete", methods=["POST"])
 @admin_required
 def admin_delete_api_key(_admin_user, api_key_id_route):
     """
     Löscht einen spezifischen API-Key anhand seiner ID und leitet zur passenden API-User-Detailseite weiter.
     """
-    api_user_id_for_redirect = request.form.get('api_user_id_for_redirect')
+    api_user_id_for_redirect = request.form.get("api_user_id_for_redirect")
 
     if delete_api_key_db(api_key_id_route):
         flash(f"API-Key (ID: {api_key_id_route}) erfolgreich gelöscht.", "success")
@@ -2292,13 +2369,13 @@ def admin_delete_api_key(_admin_user, api_key_id_route):
     if api_user_id_for_redirect:
         try:
             api_user_id_int = int(api_user_id_for_redirect)
-            return redirect(BASE_URL + url_for('admin_api_user_detail', api_user_id_route=api_user_id_int))
+            return redirect(BASE_URL + url_for("admin_api_user_detail", api_user_id_route=api_user_id_int))
         except ValueError:
             flash("Ungültige API User ID für Weiterleitung.", "error")
-    return redirect(BASE_URL + url_for('admin_api_user_manage'))
+    return redirect(BASE_URL + url_for("admin_api_user_manage"))
 
 
-@app.route('/admin/api_users', methods=['GET', 'POST'])
+@app.route("/admin/api_users", methods=["GET", "POST"])
 @admin_required
 def admin_api_user_manage(admin_user):
     """
@@ -2317,9 +2394,9 @@ def admin_api_user_manage(admin_user):
         erfolgt eine Weiterleitung zur Login- bzw. Benutzerinformationsseite.
     """
 
-    if request.method == 'POST':
+    if request.method == "POST":
         # Hinzufügen eines neuen API-Benutzers
-        username = request.form.get('username')
+        username = request.form.get("username")
         if not username:
             flash("API-Benutzername darf nicht leer sein.", "error")
         else:
@@ -2327,13 +2404,13 @@ def admin_api_user_manage(admin_user):
             if new_api_user_id:
                 flash(f"API-Benutzer '{username}' erfolgreich hinzugefügt.", "success")
             # Fehler (z.B. doppelter Name) wird in add_api_user_db geflasht
-        return redirect(BASE_URL + url_for('admin_api_user_manage'))
+        return redirect(BASE_URL + url_for("admin_api_user_manage"))
 
     api_users_list = get_all_api_users()
-    return render_template('web_admin_api_user_manage.html', user=admin_user, api_users=api_users_list)
+    return render_template("web_admin_api_user_manage.html", user=admin_user, api_users=api_users_list)
 
 
-@app.route('/admin/api_user/<int:api_user_id_route>')
+@app.route("/admin/api_user/<int:api_user_id_route>")
 @admin_required
 def admin_api_user_detail(admin_user, api_user_id_route):
     """
@@ -2356,13 +2433,15 @@ def admin_api_user_detail(admin_user, api_user_id_route):
     target_api_user = get_api_user_by_id(api_user_id_route)
     if not target_api_user:
         flash("API-Benutzer nicht gefunden.", "error")
-        return redirect(BASE_URL + url_for('admin_api_user_manage'))
+        return redirect(BASE_URL + url_for("admin_api_user_manage"))
 
     api_keys_list = get_api_keys_for_api_user(api_user_id_route)
-    return render_template('web_admin_api_user_detail.html', user=admin_user, api_user=target_api_user, api_keys=api_keys_list)
+    return render_template(
+        "web_admin_api_user_detail.html", user=admin_user, api_user=target_api_user, api_keys=api_keys_list
+    )
 
 
-@app.route('/admin/api_user/<int:api_user_id_route>/generate_key', methods=['POST'])
+@app.route("/admin/api_user/<int:api_user_id_route>/generate_key", methods=["POST"])
 @admin_required
 def admin_generate_api_key_for_user(_admin_user, api_user_id_route):
     """
@@ -2388,18 +2467,21 @@ def admin_generate_api_key_for_user(_admin_user, api_user_id_route):
     target_api_user = get_api_user_by_id(api_user_id_route)
     if not target_api_user:
         flash("API-Benutzer nicht gefunden, für den ein Key generiert werden soll.", "error")
-        return redirect(BASE_URL + url_for('admin_api_user_manage'))
+        return redirect(BASE_URL + url_for("admin_api_user_manage"))
 
-    new_key_name_string = request.form['api_key_name']
+    new_key_name_string = request.form["api_key_name"]
     new_key_string = utils.generate_api_key_string()
     if add_api_key_for_user_db(api_user_id_route, new_key_name_string, new_key_string):
-        flash(f"Neuer API-Key für '{target_api_user['username']}' generiert: {new_key_string} - "
-              "Bitte sofort sicher kopieren, er kann nicht wieder angezeigt werden!", "success")
+        flash(
+            f"Neuer API-Key für '{target_api_user['username']}' generiert: {new_key_string} - "
+            "Bitte sofort sicher kopieren, er kann nicht wieder angezeigt werden!",
+            "success",
+        )
     # Fehler wurde bereits in add_api_key_for_user_db geflasht
-    return redirect(BASE_URL + url_for('admin_api_user_detail', api_user_id_route=api_user_id_route))
+    return redirect(BASE_URL + url_for("admin_api_user_detail", api_user_id_route=api_user_id_route))
 
 
-@app.route('/admin/api_user/<int:api_user_id_route>/delete', methods=['POST'])
+@app.route("/admin/api_user/<int:api_user_id_route>/delete", methods=["POST"])
 @admin_required
 def admin_delete_api_user(_admin_user, api_user_id_route):
     """
@@ -2423,17 +2505,17 @@ def admin_delete_api_user(_admin_user, api_user_id_route):
     api_user_to_delete = get_api_user_by_id(api_user_id_route)
     if not api_user_to_delete:
         flash("Zu löschender API-Benutzer nicht gefunden.", "error")
-        return redirect(BASE_URL + url_for('admin_api_user_manage'))
+        return redirect(BASE_URL + url_for("admin_api_user_manage"))
 
     if delete_api_user_and_keys_db(api_user_id_route):
         flash(f"API-Benutzer '{api_user_to_delete['username']}' und zugehörige API-Keys wurden gelöscht.", "success")
     else:
         pass
 
-    return redirect(BASE_URL + url_for('admin_api_user_manage'))
+    return redirect(BASE_URL + url_for("admin_api_user_manage"))
 
 
-@app.route('/admin/bulk_change', methods=['GET', 'POST'])
+@app.route("/admin/bulk_change", methods=["GET", "POST"])
 @admin_required
 def admin_bulk_change(admin_user):
     """
@@ -2441,45 +2523,36 @@ def admin_bulk_change(admin_user):
     Die Authentifizierung wird durch den @admin_required Decorator gehandhabt.
     """
 
-    if request.method == 'POST':
+    if request.method == "POST":
         is_valid, saldo_aenderung, selected_user_ids = _validate_bulk_change_form(request.form)
 
         if not is_valid:
             # Bei Fehlern zum Formular zurückkehren und eingegebene Daten beibehalten
             users_data = get_all_users()
-            return render_template('web_admin_bulk_change.html',
-                                   user=admin_user,
-                                   users=users_data,
-                                   form_data=request.form)
+            return render_template(
+                "web_admin_bulk_change.html", user=admin_user, users=users_data, form_data=request.form
+            )
 
         # Verarbeitung der Sammelbuchung
         successful, failed = _process_bulk_transactions(
-            selected_user_ids,
-            request.form.get('beschreibung'),
-            saldo_aenderung
+            selected_user_ids, request.form.get("beschreibung"), saldo_aenderung
         )
 
         flash(f"{successful} Transaktionen erfolgreich erstellt.", "success")
         if failed > 0:
             flash(f"{failed} Transaktionen konnten nicht erstellt werden.", "error")
 
-        return redirect(BASE_URL + url_for('admin_dashboard'))
+        return redirect(BASE_URL + url_for("admin_dashboard"))
 
     # GET-Logik zum Anzeigen der Seite
     users_data = get_all_users()
-    today_str = datetime.now().strftime('%d.%m.%Y')
-    default_form_data = {
-        'beschreibung': f'Essen zum Dienst am {today_str}',
-        'saldo_aenderung': -3
-    }
+    today_str = datetime.now().strftime("%d.%m.%Y")
+    default_form_data = {"beschreibung": f"Essen zum Dienst am {today_str}", "saldo_aenderung": -3}
 
-    return render_template('web_admin_bulk_change.html',
-                           user=admin_user,
-                           users=users_data,
-                           form_data=default_form_data)
+    return render_template("web_admin_bulk_change.html", user=admin_user, users=users_data, form_data=default_form_data)
 
 
-@app.route('/admin/user/<int:target_user_id>/transactions', methods=['GET', 'POST'])
+@app.route("/admin/user/<int:target_user_id>/transactions", methods=["GET", "POST"])
 @admin_required
 def admin_user_modification(admin_user, target_user_id):
     """
@@ -2496,26 +2569,28 @@ def admin_user_modification(admin_user, target_user_id):
     target_user = get_user_by_id(target_user_id)
     if not target_user:
         flash("Zielbenutzer nicht gefunden.", "error")
-        return redirect(BASE_URL + url_for('admin_dashboard'))
+        return redirect(BASE_URL + url_for("admin_dashboard"))
 
-    if request.method == 'POST':
+    if request.method == "POST":
         form_data = request.form
         action_handled = False
         # Standard-Weiterleitung nach einer Aktion (außer Benutzerlöschung)
-        redirect_url = BASE_URL + url_for('admin_user_modification', target_user_id=target_user_id)
+        redirect_url = BASE_URL + url_for("admin_user_modification", target_user_id=target_user_id)
 
         action_handlers = {
-            'delete_transactions': lambda: _handle_delete_all_user_transactions(target_user_id),
-            'add_transaction': lambda: _handle_add_user_transaction(form_data, target_user),
-            'lock_user': lambda: _handle_toggle_user_lock_state(target_user_id, target_user, True),
-            'unlock_user': lambda: _handle_toggle_user_lock_state(target_user_id, target_user, False),
-            'promote_user': lambda: _handle_toggle_user_admin_state(target_user_id, target_user, True),
-            'demote_user': lambda: _handle_toggle_user_admin_state(target_user_id, target_user, False),
-            'add_user_nfc_token': lambda: _handle_add_user_nfc_token_admin(form_data, target_user_id),
-            'update_user_comment': lambda: _handle_update_user_comment_admin(form_data, target_user_id),
-            'update_infomail_responsible_threshold': lambda: _handle_update_infomail_responsible_threshold_admin(form_data, target_user_id),
-            'update_user_email': lambda: _handle_update_user_email_admin(form_data, target_user_id),
-            'delete_user_nfc_token': lambda: _handle_delete_user_nfc_token_admin(form_data, target_user_id),
+            "delete_transactions": lambda: _handle_delete_all_user_transactions(target_user_id),
+            "add_transaction": lambda: _handle_add_user_transaction(form_data, target_user),
+            "lock_user": lambda: _handle_toggle_user_lock_state(target_user_id, target_user, True),
+            "unlock_user": lambda: _handle_toggle_user_lock_state(target_user_id, target_user, False),
+            "promote_user": lambda: _handle_toggle_user_admin_state(target_user_id, target_user, True),
+            "demote_user": lambda: _handle_toggle_user_admin_state(target_user_id, target_user, False),
+            "add_user_nfc_token": lambda: _handle_add_user_nfc_token_admin(form_data, target_user_id),
+            "update_user_comment": lambda: _handle_update_user_comment_admin(form_data, target_user_id),
+            "update_infomail_responsible_threshold": lambda: _handle_update_infomail_responsible_threshold_admin(
+                form_data, target_user_id
+            ),
+            "update_user_email": lambda: _handle_update_user_email_admin(form_data, target_user_id),
+            "delete_user_nfc_token": lambda: _handle_delete_user_nfc_token_admin(form_data, target_user_id),
         }
 
         for action_key, handler_func in action_handlers.items():
@@ -2525,13 +2600,13 @@ def admin_user_modification(admin_user, target_user_id):
                 break  # Nur eine Aktion pro POST-Request annehmen
 
         # Spezielle Behandlung für 'delete_user', da es die Weiterleitungs-URL ändern kann
-        if 'delete_user' in form_data and not action_handled:  # 'not action_handled' zur Sicherheit
+        if "delete_user" in form_data and not action_handled:  # 'not action_handled' zur Sicherheit
             if _handle_delete_target_user(target_user_id, target_user):
-                redirect_url = BASE_URL + url_for('admin_dashboard')
+                redirect_url = BASE_URL + url_for("admin_dashboard")
             action_handled = True
 
         if not action_handled:
-            flash('Ungültige oder fehlende Aktion.', 'error')
+            flash("Ungültige oder fehlende Aktion.", "error")
 
         return redirect(redirect_url)
 
@@ -2543,18 +2618,20 @@ def admin_user_modification(admin_user, target_user_id):
     refreshed_target_user = get_user_by_id(target_user_id)  # Für aktuelle Daten im Template
     if not refreshed_target_user:
         flash("Zielbenutzer konnte nicht erneut geladen werden.", "error")
-        return redirect(BASE_URL + url_for('admin_dashboard'))
+        return redirect(BASE_URL + url_for("admin_dashboard"))
 
-    return render_template('web_admin_user_modification.html',
-                           user=refreshed_target_user,
-                           nfc_tokens=nfc_tokens,
-                           transactions=transactions,
-                           saldo=saldo,
-                           admin_user=admin_user,
-                           version=app.config.get('version', 'unbekannt'))
+    return render_template(
+        "web_admin_user_modification.html",
+        user=refreshed_target_user,
+        nfc_tokens=nfc_tokens,
+        transactions=transactions,
+        saldo=saldo,
+        admin_user=admin_user,
+        version=app.config.get("version", "unbekannt"),
+    )
 
 
-@app.route('/logout')
+@app.route("/logout")
 def logout():
     """
     Meldet den Benutzer ab, indem die Benutzer-ID aus der Session entfernt wird.
@@ -2563,10 +2640,10 @@ def logout():
         werkzeug.wrappers.response.Response: Eine Weiterleitung zur Login-Seite.
     """
 
-    session.pop('user_id', None)
+    session.pop("user_id", None)
     flash("Erfolgreich abgemeldet.", "success")
-    return redirect(BASE_URL + url_for('login'))
+    return redirect(BASE_URL + url_for("login"))
 
 
-if __name__ == '__main__':
-    app.run(host=config.gui_config['host'], port=config.gui_config['port'], debug=config.gui_config['flask_debug_mode'])
+if __name__ == "__main__":
+    app.run(host=config.gui_config["host"], port=config.gui_config["port"], debug=config.gui_config["flask_debug_mode"])

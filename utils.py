@@ -1,15 +1,16 @@
-
-import secrets
 import binascii
 import logging
+import secrets
 
 logger = logging.getLogger(__name__)
+
 
 def generate_api_key_string(length=32):
     """
     Generiert einen sicheren, zufälligen API-Key-String.
     """
     return secrets.token_hex(length)
+
 
 def hex_to_binary(hex_string):
     """
@@ -32,5 +33,7 @@ def hex_to_binary(hex_string):
         logger.error("Fehler bei der Hexadezimal-Konvertierung: Ungültiger Hexadezimalstring '%s'", hex_string)
         return None
     except TypeError:
-        logger.error("Fehler bei der Hexadezimal-Konvertierung: Ungültiger Typ für Hexadezimalstring: %s", type(hex_string))
+        logger.error(
+            "Fehler bei der Hexadezimal-Konvertierung: Ungültiger Typ für Hexadezimalstring: %s", type(hex_string)
+        )
         return None
