@@ -2,8 +2,8 @@
 
 # Logging zuerst aktivieren
 import functools
+import importlib.metadata as importlib_metadata
 import io
-import json
 import logging
 import os
 import random
@@ -12,7 +12,6 @@ import string
 import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-import importlib.metadata as importlib_metadata
 
 import qrcode
 import qrcode.constants

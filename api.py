@@ -3,7 +3,7 @@
 import base64
 import binascii
 import datetime
-import json
+import importlib.metadata as importlib_metadata
 import logging
 import os
 import sys
@@ -11,7 +11,6 @@ from functools import wraps
 from pathlib import Path
 from typing import Any, Literal
 
-import importlib.metadata as importlib_metadata
 from flask import Flask, jsonify, render_template, request
 from mysql.connector import Error
 

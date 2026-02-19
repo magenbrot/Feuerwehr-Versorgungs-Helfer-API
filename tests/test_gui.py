@@ -1,11 +1,7 @@
-import os
-import sys
 from unittest.mock import patch
 
 import pytest
-
-# Ensure we can import gui
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from PIL import Image
 
 import gui
 
@@ -46,7 +42,6 @@ def test_qr_code_with_login(client_gui):
 
     # Mock erzeuge_qr_code to return a dummy image
     with patch("gui.erzeuge_qr_code") as mock_qr:
-        from PIL import Image
 
         mock_qr.return_value = Image.new("RGB", (10, 10))
 
