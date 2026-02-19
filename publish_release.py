@@ -1,15 +1,15 @@
 """
-Increments the version number in manifest.json and performs Git/GitHub actions.
+Increments the version number in pyproject.toml and performs Git/GitHub actions.
 """
 
 import datetime
-import json
 import os
+import re
 import subprocess
 import sys
 
 # --- Configuration ---
-FILE_PATH = "manifest.json"
+FILE_PATH = "pyproject.toml"
 REPO_NAME = "magenbrot/Feuerwehr-Versorgungs-Helfer-API"
 MAIN_BRANCH = "main"
 
@@ -46,25 +46,32 @@ def run_command(command, description):
         print(f"   Stdout:\n{result.stdout.strip()}")
 
 
-def update_manifest():
+def update_pyproject_toml():
     """
-    Reads the manifest, calculates the new version, and writes it back.
+    Reads pyproject.toml, calculates the new version, and writes it back using regex.
     """
     if not os.path.exists(FILE_PATH):
         print(f"Error: {FILE_PATH} not found.")
         sys.exit(1)
 
     with open(FILE_PATH, encoding="utf-8") as file:
-        data = json.load(file)
+        content = file.read()
 
-    old_version = data.get("version", "0.0.0")
+    # Regex to find version = "..."
+    version_match = re.search(r'^version\s*=\s*"([^"]+)"', content, re.MULTILINE)
+    if not version_match:
+        print("Error: Could not find version in pyproject.toml")
+        sys.exit(1)
+
+    old_version = version_match.group(1)
     new_version = get_new_version(old_version)
 
     print(f"Old version: {old_version} -> New version: {new_version}")
 
-    data["version"] = new_version
+    new_content = content.replace(f'version = "{old_version}"', f'version = "{new_version}"')
+
     with open(FILE_PATH, "w", encoding="utf-8") as file:
-        json.dump(data, file, indent=2)
+        file.write(new_content)
 
     return new_version
 
@@ -74,7 +81,7 @@ def main():
     Main orchestration of the version update process.
     """
     try:
-        new_version = update_manifest()
+        new_version = update_pyproject_toml()
         tag_name = new_version
 
         commands = [

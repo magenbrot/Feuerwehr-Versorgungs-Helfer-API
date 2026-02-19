@@ -11,6 +11,7 @@ from functools import wraps
 from pathlib import Path
 from typing import Any, Literal
 
+import importlib.metadata as importlib_metadata
 from flask import Flask, jsonify, render_template, request
 from mysql.connector import Error
 
@@ -64,12 +65,19 @@ if os.environ.get("TESTING") != "True":
         logger.info("Kritischer Fehler beim Starten der Datenbankverbindung: %s", e)
         sys.exit(1)
 
-# Lade das Manifest mit Author- und Versionsinfos
+# Version laden
 try:
-    with open("manifest.json", encoding="utf-8") as manifest:
-        app.config.update(json.load(manifest))
-except FileNotFoundError:
-    app.config.update(version="N/A", author="N/A")
+    version = importlib_metadata.version("feuerwehr-versorgungs-helfer-api")
+    app.config.update(version=version)
+except importlib_metadata.PackageNotFoundError:
+    # Fallback für lokale Entwicklung, wenn Paket nicht installiert ist
+    try:
+        import tomllib
+        with open("pyproject.toml", "rb") as f:
+            data = tomllib.load(f)
+            app.config.update(version=data["project"]["version"])
+    except (FileNotFoundError, ImportError, KeyError):
+        app.config.update(version="Unknown (Dev)")
 
 logger.info("Feuerwehr-Versorgungs-Helfer API (Version %s) wurde gestartet", app.config.get("version"))
 

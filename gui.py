@@ -12,6 +12,7 @@ import string
 import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+import importlib.metadata as importlib_metadata
 
 import qrcode
 import qrcode.constants
@@ -89,12 +90,19 @@ if os.environ.get("TESTING") != "True":
 # Starte den Health-Check-Thread, nachdem der Pool initialisiert wurde
 # db_utils.DatabaseConnectionPool.start_health_check_thread()
 
-# Lade das Manifest mit Author- und Versionsinfos
+# Version laden
 try:
-    with open("manifest.json", encoding="utf-8") as manifest:
-        app.config.update(json.load(manifest))
-except FileNotFoundError:
-    app.config.update(version="N/A", author="N/A")
+    version = importlib_metadata.version("feuerwehr-versorgungs-helfer-api")
+    app.config.update(version=version)
+except importlib_metadata.PackageNotFoundError:
+    # Fallback für lokale Entwicklung
+    try:
+        import tomllib
+        with open("pyproject.toml", "rb") as f:
+            data = tomllib.load(f)
+            app.config.update(version=data["project"]["version"])
+    except (FileNotFoundError, ImportError, KeyError):
+        app.config.update(version="Unknown (Dev)")
 
 logger.info("Feuerwehr-Versorgungs-Helfer GUI (Version %s) wurde gestartet", app.config.get("version"))
 
