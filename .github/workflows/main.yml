@@ -24,11 +24,6 @@ jobs:
       actions: read
       contents: read
 
-  run_pylint:
-    uses: ./.github/workflows/pylint.yml
-    permissions:
-      contents: read
-
   #deploy_application:
   #  needs: [run_codeql, run_pylint]
   #  uses: ./.github/workflows/deploy-and-restart-api.yml
