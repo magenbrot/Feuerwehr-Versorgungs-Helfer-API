@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Union, Tuple, Literal, Dict, Optional, Any
 from flask import Flask, jsonify, request, render_template
 from mysql.connector import Error
+import os
 import config
 import db_utils
 import email_sender
@@ -52,11 +53,12 @@ except ValueError:
     sys.exit(1)
 
 # Initialisiere den Datenbank-Pool einmal beim Start der Anwendung # pylint: disable=R0801
-try:
-    db_utils.DatabaseConnectionPool.initialize_pool(config.db_config)
-except Error as e:
-    logger.info("Kritischer Fehler beim Starten der Datenbankverbindung: %s", e)
-    sys.exit(1)
+if os.environ.get('TESTING') != 'True':
+    try:
+        db_utils.DatabaseConnectionPool.initialize_pool(config.db_config)
+    except Error as e:
+        logger.info("Kritischer Fehler beim Starten der Datenbankverbindung: %s", e)
+        sys.exit(1)
 
 # Lade das Manifest mit Author- und Versionsinfos
 try:

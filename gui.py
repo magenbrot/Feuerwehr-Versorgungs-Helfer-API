@@ -70,11 +70,12 @@ except ValueError:
     sys.exit(1)
 
 # Initialisiere den Datenbank-Pool einmal beim Start der Anwendung # pylint: disable=R0801
-try:
-    db_utils.DatabaseConnectionPool.initialize_pool(config.db_config)
-except Error:
-    logger.critical("Fehler beim Starten der Datenbankverbindung.")
-    sys.exit(1)
+if os.environ.get('TESTING') != 'True':
+    try:
+        db_utils.DatabaseConnectionPool.initialize_pool(config.db_config)
+    except Error:
+        logger.critical("Fehler beim Starten der Datenbankverbindung.")
+        sys.exit(1)
 
 # Starte den Health-Check-Thread, nachdem der Pool initialisiert wurde
 #db_utils.DatabaseConnectionPool.start_health_check_thread()

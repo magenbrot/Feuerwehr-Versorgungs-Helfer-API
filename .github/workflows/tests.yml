@@ -13,6 +13,23 @@ jobs:
       matrix:
         python-version: ["3.11"]
 
+    env:
+      MYSQL_HOST: 127.0.0.1
+      MYSQL_PORT: 3306
+      MYSQL_USER: test_user
+      MYSQL_PASSWORD: test_password
+      MYSQL_DB: test_db
+      SMTP_HOST: localhost
+      SMTP_PORT: 25
+      SMTP_USER: test_sender
+      SMTP_PASSWORD: test_password
+      SMTP_SENDER: test@example.com
+      APP_SECRET: test_secret_key
+      API_DEBUG: True
+      GUI_DEBUG: True
+      TESTING: True
+
+
     steps:
     - uses: actions/checkout@v4
 
