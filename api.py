@@ -636,14 +636,15 @@ def nfc_transaction(api_user_id_auth: int, api_username_auth: str):
     """
 
     daten = request.get_json()
+    if not daten or "token" not in daten or "beschreibung" not in daten:
+        return jsonify({"error": "Ungültige Anfrage. Token und Beschreibung sind erforderlich."}), 400
+
     logger.info(
         "NFC-Transaktion Anfrage zu Token '%s' von API-Benutzer: ID %s - %s.",
         daten["token"],
         api_user_id_auth,
         api_username_auth,
     )
-    if not daten or "token" not in daten or "beschreibung" not in daten:
-        return jsonify({"error": "Ungültige Anfrage. Token und Beschreibung sind erforderlich."}), 400
 
     benutzer_info = finde_benutzer_zu_nfc_token(daten["token"])
     if not benutzer_info:

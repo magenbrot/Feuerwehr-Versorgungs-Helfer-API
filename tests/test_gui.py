@@ -17,23 +17,15 @@ def client_gui():
 def test_login_page_loads(client_gui):
     response = client_gui.get("/")
     assert response.status_code == 200
-    # Check if we are redirected to login or see login page elements
-    # Since the root route is not defined in the outline I saw (it was truncated),
-    # I assume there is a mechanic to redirect to login.
-    # Looking at gui.py:
-    # It has @app.route('/login', methods=['GET', 'POST']) but we didn't see the root route.
-    # Let's try /login directly.
-    response = client_gui.get("/login")
-    # If login template exists it should render 200.
-    # If we get 500/404 we know something is wrong.
-    assert response.status_code in [200, 302]
+    assert b"Login" in response.data or b"Anmelden" in response.data
 
 
 def test_qr_code_requires_login(client_gui):
     response = client_gui.get("/qr_code?usercode=123&aktion=a")
-    # Should redirect to login because no session
+    # Should redirect to login (root) because no session
     assert response.status_code == 302
-    assert "/login" in response.headers["Location"]
+    # Redirects to login page which is at root "/"
+    assert response.headers["Location"].endswith("/")
 
 
 def test_qr_code_with_login(client_gui):
