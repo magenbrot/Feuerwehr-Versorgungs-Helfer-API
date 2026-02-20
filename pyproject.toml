@@ -1,6 +1,6 @@
 [project]
 name = "feuerwehr-versorgungs-helfer-api"
-version = "2026.02.01"
+version = "2026.02.02"
 description = "Backend API for Feuerwehr Versorgungs Helfer"
 authors = [
     {name = "OVTEC", email = "oliver@voelker.me"},
