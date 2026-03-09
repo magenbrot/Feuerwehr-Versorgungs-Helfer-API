@@ -31,7 +31,7 @@ jobs:
       # --- Metadata for API ---
       - name: Extract metadata for API
         id: meta_api
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: |
             magenbrot/fvh-api
@@ -40,7 +40,7 @@ jobs:
       # --- Metadata for GUI ---
       - name: Extract metadata for GUI
         id: meta_gui
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: |
             magenbrot/fvh-gui
