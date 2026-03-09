@@ -48,7 +48,7 @@ jobs:
 
       # --- Build and Push API ---
       - name: Build and push API image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           target: api
@@ -58,7 +58,7 @@ jobs:
 
       # --- Build and Push GUI ---
       - name: Build and push GUI image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           target: gui
