@@ -653,7 +653,7 @@ def nfc_transaction(api_user_id_auth: int, api_username_auth: str):
     if benutzer_info.get("is_locked") == 1:
         return jsonify(
             {
-                "error": f"Hallo {benutzer_info['vorname']}, leider ist dein Benutzer gesperrt. Bitte wende dich an einen Verantwortlichen!"
+                "error": f"Grüße {benutzer_info['vorname']}, leider ist dein Benutzer gesperrt. Bitte wende dich an einen Verantwortlichen!"
             }
         ), 403
 
@@ -800,7 +800,7 @@ def person_transaktion_erstellen(api_user_id_auth: int, api_username_auth: str, 
     if user_info.get("is_locked") == 1:
         return jsonify(
             {
-                "message": f"Hallo {user_info['vorname']}, leider ist dein Benutzer gesperrt. "
+                "message": f"Grüße {user_info['vorname']}, leider ist dein Benutzer gesperrt. "
                 "Bitte melde dich bei einem Verantwortlichen.",
                 "action": "locked",
             }
