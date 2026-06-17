@@ -1,15 +1,95 @@
-<html><head><style>body {font-family: sans-serif;} .svg-icon { width: 28px; height: 28px; fill: #2db8ca;}</style></head>
+<html>
+<head>
+    <style>
+        body {
+            font-family: sans-serif;
+            color: #333333;
+            line-height: 1.5;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            border: 1px solid #dddddd;
+            border-radius: 8px;
+            background-color: #fcfcfc;
+        }
+        .header {
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        .header h2 {
+            color: #007bff;
+            margin: 0;
+            font-size: 20px;
+        }
+        .details-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            background-color: #ffffff;
+        }
+        .details-table th, .details-table td {
+            border: 1px solid #dddddd;
+            padding: 10px;
+            text-align: left;
+        }
+        .details-table th {
+            background-color: #f2f2f2;
+            width: 35%;
+        }
+        .svg-icon {
+            width: 28px;
+            height: 28px;
+            fill: #2db8ca;
+            margin-right: 10px;
+        }
+        .footer {
+            margin-top: 30px;
+            border-top: 1px solid #dddddd;
+            padding-top: 15px;
+        }
+    </style>
+</head>
 <body>
-    <h3>Hallo {{ vorname }},</h3>
-    <p>wir hoffen, es geht dir gut!</p>
-    <p>Kurze Info von uns:<br>
-        Am {{ datum }} um {{ uhrzeit }} Uhr wurde eine Transaktion "{{ beschreibung_transaktion }}" über den Betrag von {{ saldo_aenderung }} € gebucht.<br>
-        Dein Kontostand für Getränke und Essen ist aktuell bei {{ neuer_saldo }} €.</p>
-    <p>Viele Grüße<br>
-    Dein Team von der Abteilung Versorgung</p>
-    {% if logo_exists_fuer_template %}
-    <p><img src="cid:logo" alt="Logo Feuerwehr-Versorgungs-Helfer"></p>
-    {% endif %}
-    {% include 'email_include_footer.html' %}
+    <div class="container">
+        <div class="header">
+            <h2>🛒 Neue Transaktion gebucht</h2>
+        </div>
+        <p>Hallo {{ vorname }},</p>
+        <p>wir hoffen, es geht dir gut!</p>
+        <p>Es wurde eben eine neue Transaktion für dein Konto erfasst:</p>
+        
+        <table class="details-table">
+            <tr>
+                <th>Zeitpunkt</th>
+                <td>{{ datum }} um {{ uhrzeit }} Uhr</td>
+            </tr>
+            <tr>
+                <th>Beschreibung</th>
+                <td>{{ beschreibung_transaktion }}</td>
+            </tr>
+            <tr>
+                <th>Betrag</th>
+                <td><strong>{{ saldo_aenderung }} €</strong></td>
+            </tr>
+            <tr>
+                <th>Neuer Kontostand</th>
+                <td><strong>{{ neuer_saldo }} €</strong></td>
+            </tr>
+        </table>
+        
+        <p>Viele Grüße<br>
+        Dein Team von der Abteilung Versorgung</p>
+        
+        {% if logo_exists_fuer_template %}
+        <p><img src="cid:logo" alt="Logo Feuerwehr-Versorgungs-Helfer"></p>
+        {% endif %}
+        
+        <div class="footer">
+            {% include 'email_include_footer.html' %}
+        </div>
+    </div>
 </body>
 </html>

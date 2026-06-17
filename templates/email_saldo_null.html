@@ -1,17 +1,75 @@
-<html><head><style>body {font-family: sans-serif;} .svg-icon { width: 28px; height: 28px; fill: #2db8ca;}</style></head>
+<html>
+<head>
+    <style>
+        body {
+            font-family: sans-serif;
+            color: #333333;
+            line-height: 1.5;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            border: 1px solid #dddddd;
+            border-radius: 8px;
+            background-color: #fcfcfc;
+        }
+        .header {
+            border-bottom: 2px solid #ff4444;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        .header h2 {
+            color: #ff4444;
+            margin: 0;
+            font-size: 20px;
+        }
+        .info-box {
+            background-color: #ffebe6;
+            border-left: 4px solid #ff4444;
+            padding: 10px 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .svg-icon {
+            width: 28px;
+            height: 28px;
+            fill: #2db8ca;
+            margin-right: 10px;
+        }
+        .footer {
+            margin-top: 30px;
+            border-top: 1px solid #dddddd;
+            padding-top: 15px;
+        }
+    </style>
+</head>
 <body>
-    <h3>Hallo {{ vorname }},</h3>
-    <p>wir hoffen, es geht dir gut!</p>
-    <p>Du wolltest von uns informiert werden, sobald dein Kontostand 0 € erreicht. Das ist jetzt der Fall.<br>
-    <p>Viele Grüße<br>
-    Dein Team von der Abteilung Versorgung</p>
-    {% if logo_exists_fuer_template %}
-    <p><img src="cid:logo" alt="Logo Feuerwehr-Versorgungs-Helfer"></p>
-    {% endif %}
-    <p>PS: Wusstest du, dass du uns auch eine Einzugsermächtigung erteilen kannst?<br>
-    So können wir das Guthaben auch einfach und bequem von deinem Konto abbuchen!</p>
-    {% include 'email_include_footer.html' %}
+    <div class="container">
+        <div class="header">
+            <h2>⚠️ Kontostand 0 € erreicht</h2>
+        </div>
+        <p>Hallo {{ vorname }},</p>
+        <p>wir hoffen, es geht dir gut!</p>
+        
+        <div class="info-box">
+            Du wolltest von uns benachrichtigt werden, sobald dein Kontostand <strong>0 €</strong> erreicht. Dies ist jetzt der Fall.
+        </div>
+        
+        <p>Bitte denk daran, dein Konto bei Gelegenheit aufzuladen.</p>
+        
+        <p><strong>PS:</strong> Wusstest du, dass du uns auch eine Einzugsermächtigung erteilen kannst? So können wir das Guthaben ganz einfach und bequem von deinem Konto abbuchen!</p>
+        
+        <p>Viele Grüße<br>
+        Dein Team von der Abteilung Versorgung</p>
+        
+        {% if logo_exists_fuer_template %}
+        <p><img src="cid:logo" alt="Logo Feuerwehr-Versorgungs-Helfer"></p>
+        {% endif %}
+        
+        <div class="footer">
+            {% include 'email_include_footer.html' %}
+        </div>
+    </div>
 </body>
 </html>
-
-

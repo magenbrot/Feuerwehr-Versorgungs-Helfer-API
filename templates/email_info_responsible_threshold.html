@@ -1,14 +1,61 @@
-<html><head><style>body {font-family: sans-serif;} .svg-icon { width: 28px; height: 28px; fill: #2db8ca;}</style></head>
+<html>
+<head>
+    <style>
+        body {
+            font-family: sans-serif;
+            color: #333333;
+            line-height: 1.5;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            border: 1px solid #dddddd;
+            border-radius: 8px;
+            background-color: #fcfcfc;
+        }
+        .header {
+            border-bottom: 2px solid #ff9900;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        .header h2 {
+            color: #ff9900;
+            margin: 0;
+            font-size: 20px;
+        }
+        .svg-icon {
+            width: 28px;
+            height: 28px;
+            fill: #2db8ca;
+            margin-right: 10px;
+        }
+        .footer {
+            margin-top: 30px;
+            border-top: 1px solid #dddddd;
+            padding-top: 15px;
+        }
+    </style>
+</head>
 <body>
-    <h3>Hallo Person mit Verantwortung,</h3>
-    <p>ich hoffe, es geht dir gut!</p>
-    <p>Kurze Info von mir: {{ vorname }} {{ nachname }} hat eben das Benachrichtigungslimit von {{ infomail_responsible_threshold }} € (oder weniger) für sein Saldo erreicht.</p>
-    <p>Bitte erinnere ihn bei Gelegenheit daran sein Guthaben wieder aufzufüllen.</p>
-    <p>Danke dir und viele Grüße<br>
-    Dein {{ app_name }}</p>
-    {% if logo_exists_fuer_template %}
-    <p><img src="cid:logo" alt="Logo Feuerwehr-Versorgungs-Helfer"></p>
-    {% endif %}
-    {% include 'email_include_footer.html' %}
+    <div class="container">
+        <div class="header">
+            <h2>⚠️ Saldowarnung (Verantwortliche)</h2>
+        </div>
+        <p>Hallo Person mit Verantwortung,</p>
+        <p>kurze Information: <strong>{{ vorname }} {{ nachname }}</strong> hat eben das Benachrichtigungslimit von <strong>{{ infomail_responsible_threshold }} €</strong> (oder weniger) für sein Guthaben erreicht.</p>
+        <p>Bitte erinnere ihn bei Gelegenheit daran, sein Guthaben wieder aufzufüllen.</p>
+        
+        <p>Danke dir und viele Grüße<br>
+        Dein {{ app_name }}</p>
+        
+        {% if logo_exists_fuer_template %}
+        <p><img src="cid:logo" alt="Logo Feuerwehr-Versorgungs-Helfer"></p>
+        {% endif %}
+        
+        <div class="footer">
+            {% include 'email_include_footer.html' %}
+        </div>
+    </div>
 </body>
 </html>
