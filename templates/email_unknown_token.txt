@@ -1,0 +1,13 @@
+Hallo Person mit Verantwortung,
+
+am Terminal wurde ein NFC-Token aufgelegt, der keinem Benutzer zugeordnet ist. Hier sind die Details:
+
+- Token-UID (Hex): {{ token_hex }}
+- Token-UID (Base64): {{ token_base64 }}
+- Zeitpunkt: {{ zeitpunkt }}
+- Gerät / Terminal: {{ terminal }}
+
+Falls es sich um einen neuen Benutzer handelt, kannst du diesen Token im Administrations-Interface registrieren.
+
+Viele Grüße
+Dein {{ app_name }}

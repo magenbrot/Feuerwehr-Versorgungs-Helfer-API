@@ -656,6 +656,28 @@ def nfc_transaction(api_user_id_auth: int, api_username_auth: str):
 
     benutzer_info = finde_benutzer_zu_nfc_token(daten["token"])
     if not benutzer_info:
+        try:
+            token_bytes = base64.b64decode(daten["token"])
+            token_hex = token_bytes.hex().upper()
+        except Exception:
+            token_hex = "Fehler beim Dekodieren"
+
+        email_params = {
+            "empfaenger_email": config.api_config["responsible_email"],
+            "betreff": "Unbekannter NFC-Token gescannt",
+            "template_name_html": "email_unknown_token.html",
+            "template_name_text": "email_unknown_token.txt",
+            "template_context": {
+                "token_hex": token_hex,
+                "token_base64": daten["token"],
+                "zeitpunkt": datetime.datetime.now().strftime("%d.%m.%Y %H:%M:%S"),
+                "terminal": daten.get("beschreibung", "Unbekannt"),
+                "app_name": config.app_name,
+            },
+            "logo_dateipfad": str(Path("static/logo/logo-80x109.png")),
+        }
+        prepare_and_send_email(email_params, config.smtp_config)
+
         return jsonify({"error": f"Kein Benutzer mit dem Token {daten['token']} gefunden."}), 404
 
     if benutzer_info.get("is_locked") == 1:
