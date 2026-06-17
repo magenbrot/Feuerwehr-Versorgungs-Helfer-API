@@ -7,6 +7,7 @@ import importlib.metadata as importlib_metadata
 import logging
 import os
 import sys
+import threading
 from functools import wraps
 from pathlib import Path
 from typing import Any, Literal
@@ -83,7 +84,7 @@ logger.info("Feuerwehr-Versorgungs-Helfer API (Version %s) wurde gestartet", app
 
 def prepare_and_send_email(email_params: dict, smtp_cfg: dict) -> bool:
     """
-    Bereitet eine E-Mail mit Flasks render_template vor und versendet sie.
+    Bereitet eine E-Mail mit Flasks render_template vor und versendet sie im Hintergrund.
     Die Argumente für die E-Mail-Details sind in einem Dictionary zusammengefasst.
 
     Args:
@@ -98,7 +99,7 @@ def prepare_and_send_email(email_params: dict, smtp_cfg: dict) -> bool:
         smtp_cfg: SMTP-Konfigurationsdictionary.
 
     Returns:
-        bool: True bei Erfolg, sonst False.
+        bool: True, wenn der Hintergrund-Thread gestartet wurde, sonst False.
     """
 
     empfaenger_email = email_params.get("empfaenger_email")
@@ -120,35 +121,42 @@ def prepare_and_send_email(email_params: dict, smtp_cfg: dict) -> bool:
     assert template_name_html is not None
     assert template_name_text is not None
 
-    logo_exists = False
-    if logo_dateipfad_str:
-        logo_path_obj = Path(logo_dateipfad_str)
-        if logo_path_obj.is_file():
-            logo_exists = True
-        else:
-            logger.warning("Logo-Datei nicht gefunden unter: %s", logo_dateipfad_str)
+    def _bg_send():
+        logo_exists = False
+        if logo_dateipfad_str:
+            logo_path_obj = Path(logo_dateipfad_str)
+            if logo_path_obj.is_file():
+                logo_exists = True
+            else:
+                logger.warning("Logo-Datei nicht gefunden unter: %s", logo_dateipfad_str)
 
-    try:
-        template_context_final = template_context.copy()
-        template_context_final["logo_exists_fuer_template"] = logo_exists
+        try:
+            template_context_final = template_context.copy()
+            template_context_final["logo_exists_fuer_template"] = logo_exists
 
-        with app.app_context():
-            final_html_body = render_template(template_name_html, **template_context_final)
-            final_text_body = render_template(template_name_text, **template_context_final)
+            with app.app_context():
+                final_html_body = render_template(template_name_html, **template_context_final)
+                final_text_body = render_template(template_name_text, **template_context_final)
 
-    except Exception as e:  # pylint: disable=W0718
-        logger.error("Fehler beim Rendern der E-Mail-Templates für '%s': %s", template_name_html, e, exc_info=True)
-        return False
+            email_content_dict = {
+                "html": final_html_body,
+                "text": final_text_body,
+                "logo_pfad": logo_dateipfad_str if logo_exists else None,
+            }
 
-    email_content_dict = {
-        "html": final_html_body,
-        "text": final_text_body,
-        "logo_pfad": logo_dateipfad_str if logo_exists else None,
-    }
+            success = email_sender.sende_formatierte_email(
+                empfaenger_email=empfaenger_email, betreff=betreff, content=email_content_dict, smtp_cfg=smtp_cfg
+            )
+            if success:
+                logger.info("E-Mail an %s erfolgreich im Hintergrund gesendet.", empfaenger_email)
+            else:
+                logger.error("Fehler beim Senden der E-Mail an %s im Hintergrund.", empfaenger_email)
 
-    return email_sender.sende_formatierte_email(
-        empfaenger_email=empfaenger_email, betreff=betreff, content=email_content_dict, smtp_cfg=smtp_cfg
-    )
+        except Exception as e:  # pylint: disable=W0718
+            logger.error("Fehler beim Vorbereiten/Senden der E-Mail im Hintergrund: %s", e, exc_info=True)
+
+    threading.Thread(target=_bg_send, daemon=True).start()
+    return True
 
 
 # --- Hilfsfunktionen für Benachrichtigungssystem ---
