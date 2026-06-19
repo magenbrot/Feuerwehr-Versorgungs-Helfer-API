@@ -2034,7 +2034,7 @@ def user_info_pdf():
     pdf.cell(10, 8, "")  # Spacer
     pdf.cell(100, 8, "Aktueller Kontostand (Saldo):")
     pdf.set_x(150)
-    saldo_unit = "\\u20ac" if has_dejavu else "EUR"
+    saldo_unit = "€" if has_dejavu else "EUR"
     pdf.cell(40, 8, f"{saldo:.2f} {saldo_unit}", align="R", ln=1)
     pdf.set_font(font_name, size=10)
     pdf.ln(6)
@@ -2092,7 +2092,7 @@ def user_info_pdf():
     return send_file(
         io.BytesIO(pdf_bytes),
         mimetype="application/pdf",
-        as_attachment=True,
+        as_attachment=False,
         download_name=f"Transaktionen_{user['vorname']}_{user['nachname']}.pdf",
     )
 
