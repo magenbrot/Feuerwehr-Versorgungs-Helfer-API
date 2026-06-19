@@ -3,16 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sammelbuchung ausführen</title>
+    <title>Sammelbuchung - {{ app_name }}</title>
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo/logo-120x164-alpha.png') }}">
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-    <h2>Sammelbuchung durchführen</h2>
-
-    <div class="admin-link">
-        <a href="{{ url_for('admin_dashboard') }}">Zurück zum Admin Dashboard</a>
-    </div>
+    <header style="width: 100%; max-width: 1200px; margin: 0 auto 20px auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 15px; border-bottom: 2px solid var(--card-border); padding-bottom: 15px;">
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <img src="{{ url_for('static', filename='logo/logo-1024x1024-alpha.png') }}" alt="App Logo" style="max-width: 50px; height: auto; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));">
+            <h2 style="text-align: left; margin: 0; font-size: 1.6rem;">Sammelbuchung durchführen</h2>
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <a href="{{ url_for('admin_dashboard') }}" class="styled-link" style="background-color: var(--bg-color); border: 1.5px solid var(--card-border); color: var(--text-primary) !important; box-shadow: none;">Admin-Dashboard</a>
+            <a href="{{ url_for('logout') }}" class="styled-link" style="background-color: var(--primary); color: white !important; box-shadow: 0 2px 4px rgba(220, 38, 38, 0.15);">Abmelden</a>
+        </div>
+    </header>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
@@ -24,52 +29,58 @@
         {% endif %}
     {% endwith %}
 
-    <form method="post" action="{{ url_for('admin_bulk_change') }}" class="form-layout-full-width">
-
-        <div class="container">
-
-            <div class="column left-column">
-                <h3>Benutzer auswählen</h3>
-                <table class="zebra-table">
-                    <thead>
-                        <tr>
-                            <th><input type="checkbox" id="select-all" title="Alle auswählen/abwählen"></th>
-                            <th>Name</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for u in users %}
-                        <tr>
-                            <td><input type="checkbox" name="selected_users" value="{{ u.id }}"></td>
-                            <td>{{ u.nachname }}, {{ u.vorname }}</td>
-                        </tr>
-                        {% else %}
-                        <tr>
-                            <td colspan="3">Keine Benutzer gefunden.</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-
-            <div class="column right-column">
-                <div class="form-section">
-                    <h3>Transaktionsdetails</h3>
-                    <div class="form-group">
-                        <label for="saldo_aenderung">Saldoänderung (negativer Wert für Abbuchung):</label>
-                        <input type="number" id="saldo_aenderung" name="saldo_aenderung" required value="{{ form_data.saldo_aenderung if form_data }}">
-                    </div>
-                    <div class="form-group">
-                        <label for="beschreibung">Beschreibung der Transaktion:</label>
-                        <input type="text" id="beschreibung" name="beschreibung" required value="{{ form_data.beschreibung if form_data }}">
-                    </div>
-                    <button type="submit" class="button">Sammelbuchung jetzt erstellen</button>
+    <main style="width: 100%; max-width: 1200px; margin: 0 auto;">
+        <form method="post" action="{{ url_for('admin_bulk_change') }}" style="border: none; padding: 0; box-shadow: none; background: transparent; margin: 0;">
+            <div class="container">
+                <div class="column left-column">
+                    <section class="form-section">
+                        <h3>Benutzer auswählen</h3>
+                        <p style="font-size: 0.9rem; margin-bottom: 15px;">Wähle die Benutzer aus, für die die Buchung gelten soll.</p>
+                        
+                        <div class="table-responsive">
+                            <table class="zebra-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 40px; text-align: center;"><input type="checkbox" id="select-all" title="Alle auswählen/abwählen"></th>
+                                        <th>Name</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for u in users %}
+                                    <tr>
+                                        <td style="text-align: center;"><input type="checkbox" name="selected_users" value="{{ u.id }}"></td>
+                                        <td style="font-weight: 500; color: var(--text-primary);">{{ u.nachname }}, {{ u.vorname }}</td>
+                                    </tr>
+                                    {% else %}
+                                    <tr>
+                                        <td colspan="2" style="text-align: center; padding: 20px; font-style: italic;">Keine Benutzer gefunden.</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
                 </div>
-                {% include 'web_include_info_block.html' %}
-            </div>
 
-        </div>
-    </form>
+                <div class="column right-column">
+                    <section class="form-section">
+                        <h3>Transaktionsdetails</h3>
+                        <div style="margin-bottom: 15px;">
+                            <label for="saldo_aenderung">Saldoänderung in € (z.B. -3.00 für Abbuchung):</label>
+                            <input type="number" step="0.01" id="saldo_aenderung" name="saldo_aenderung" required value="{{ form_data.saldo_aenderung if form_data else '-3.00' }}">
+                        </div>
+                        <div style="margin-bottom: 20px;">
+                            <label for="beschreibung">Beschreibung der Transaktion:</label>
+                            <input type="text" id="beschreibung" name="beschreibung" required value="{{ form_data.beschreibung if form_data else '' }}" placeholder="z.B. Essen zum Dienst">
+                        </div>
+                        <button type="submit">Sammelbuchung jetzt erstellen</button>
+                    </section>
+                    
+                    {% include 'web_include_info_block.html' %}
+                </div>
+            </div>
+        </form>
+    </main>
 
     <script>
         // JavaScript, um die "Alle auswählen"-Checkbox funktional zu machen
@@ -81,10 +92,6 @@
         });
     </script>
 
-    <div class="admin-link">
-        <a href="{{ url_for('user_info') }}">Zur eigenen Benutzeransicht</a> |
-        <a href="{{ url_for('logout') }}">Abmelden</a>
-    </div>
     {% include 'web_include_footer.html' %}
 </body>
 </html>

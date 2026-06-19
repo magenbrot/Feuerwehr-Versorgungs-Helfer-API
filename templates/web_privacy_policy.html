@@ -3,18 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Datenschutzerklärung</title>
+    <title>Datenschutzerklärung - {{ app_name }}</title>
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo/logo-120x164-alpha.png') }}">
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-    <div class="privacy-policy-container">
+    <main class="privacy-policy-container">
         <h2>Datenschutzerklärung</h2>
-        <h3>zur Nutzung des Cleveren Hilfssystems zur Rückverfolgung von Internverpflegung und Strichlisten CHRIS</h3>
-        <p>Der Feuerwehrverein Werdau e.V. erhebt und verarbeitet im Rahmen der internen Getränke- und Verpflegungsabrechnung personenbezogene Daten der Mitglieder der Freiwilligen Feuerwehr Werdau und des Feuerwehrvereins Werdau e.V. auf Grundlage von Art. 6 Abs. 1 lit. b und f DSGVO.</p>
+        <h3 style="text-align: center; font-size: 1.1rem; color: var(--text-secondary); margin-top: 0; margin-bottom: 30px; font-weight: 500;">
+            zur Nutzung des Cleveren Hilfssystems zur Rückverfolgung von Internverpflegung und Strichlisten (CHRIS)
+        </h3>
+        
+        <p>Der Feuerwehrverein Werdau e.V. erhebt und verarbeitet im Rahmen der internen Getränke- und Verpflegungsabrechnung personenbezogene Daten der Mitglieder der Freiwilligen Feuerwehr Werdau und des Feuerwehrverein Werdau e.V. auf Grundlage von Art. 6 Abs. 1 lit. b und f DSGVO.</p>
 
         <h3>1. Verantwortlicher</h3>
-        <p>Feuerwehrverein Werdau e.V.<br>Sankt-Florian-Straße 1<br>08412 Werdau<br>E-Mail: <a href="mailto:wda.ffw.verein@gmx.de">wda.ffw.verein@gmx.de</a></p>
+        <p>
+            Feuerwehrverein Werdau e.V.<br>
+            Sankt-Florian-Straße 1<br>
+            08412 Werdau<br>
+            E-Mail: <a href="mailto:wda.ffw.verein@gmx.de">wda.ffw.verein@gmx.de</a>
+        </p>
 
         <h3>2. Verarbeitete Daten</h3>
         <ul>
@@ -30,7 +38,7 @@
         <p>Für die Nutzung freiwilliger Funktionen werden bei der Registrierung gesonderte Einwilligungen abgefragt.</p>
 
         <h3>3. Zweck der Verarbeitung</h3>
-        <p>Das System dient der Verwaltung der Getränke- und Verpflegungsabrechnung sowohl für den Feuerwehrverein Werdau e.V. als auch für die Ortsfeuerwehr Werdau der Freiwillige Feuerwehr Werdau. Es umfasst die Buchung, Abrechnung, Anzeige von Guthaben und freiwillige Funktionen wie Benachrichtigungen und statistische Auswertungen.</p>
+        <p>Das System dient der Verwaltung der Getränke- und Verpflegungsabrechnung sowohl für den Feuerwehrverein Werdau e.V. als auch für die Ortsfeuerwehr Werdau der Freiwilligen Feuerwehr Werdau. Es umfasst die Buchung, Abrechnung, Anzeige von Guthaben und freiwillige Funktionen wie Benachrichtigungen und statistische Auswertungen.</p>
 
         <h3>4. Weitergabe der Daten</h3>
         <p>Es erfolgt keine Weitergabe an Dritte. Zugriff haben ausschließlich berechtigte Personen im Feuerwehrverein (z.B. Vorstand, Abteilung Verpflegung).</p>
@@ -47,7 +55,7 @@
             <li>Widerspruch</li>
             <li>Datenübertragbarkeit</li>
         </ul>
-        <p>Einwilligungen (z.B. E-Mail, NFC, Statistik) können jederzeit widerrufen werden.<br />
+        <p>Einwilligungen (z.B. E-Mail, NFC, Statistik) können jederzeit widerrufen werden.<br>
         Der Widerruf kann per E-Mail an <a href="mailto:wda.ffw.verein@gmx.de">wda.ffw.verein@gmx.de</a> erfolgen.</p>
 
         <h3>7. Rechtsgrundlage</h3>
@@ -60,7 +68,11 @@
         <h3>9. Änderungen der Datenschutzerklärung</h3>
         <p>Änderungen werden per E-Mail sowie systemintern bekannt gegeben. Gültig ist stets die im System veröffentlichte aktuelle Version.</p>
 
-        <p><i>Stand: Juni 2025</i></p>
-    </div>
+        <p style="margin-top: 30px; font-style: italic; font-size: 0.9rem; color: var(--text-secondary);">Stand: Juni 2025</p>
+        
+        <div style="margin-top: 30px; text-align: center; border-top: 1px solid var(--card-border); padding-top: 20px;">
+            <a href="#" onclick="window.close(); return false;" class="styled-link" style="background-color: var(--bg-color); border: 1.5px solid var(--card-border); color: var(--text-primary) !important; box-shadow: none;">Fenster schließen</a>
+        </div>
+    </main>
 </body>
 </html>

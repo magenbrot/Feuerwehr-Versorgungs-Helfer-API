@@ -3,12 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Benutzerinformationen</title>
+    <title>Benutzerinformationen - {{ app_name }}</title>
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo/logo-120x164-alpha.png') }}">
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-    <h2>Willkommen bei {{ app_name }}, {{ user.vorname }}!</h2>
+    <header style="width: 100%; max-width: 1200px; margin: 0 auto 20px auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 15px; border-bottom: 2px solid var(--card-border); padding-bottom: 15px;">
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <img src="{{ url_for('static', filename='logo/logo-1024x1024-alpha.png') }}" alt="App Logo" style="max-width: 50px; height: auto; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));">
+            <h2 style="text-align: left; margin: 0; font-size: 1.6rem;">Hallo, {{ user.vorname }}!</h2>
+        </div>
+        <div style="display: flex; gap: 10px;">
+            {% if user.is_admin %}
+                <a href="{{ url_for('admin_dashboard') }}" class="styled-link" style="background-color: var(--primary); color: white !important; box-shadow: 0 2px 4px rgba(220, 38, 38, 0.15);">Zum Admin-Dashboard</a>
+            {% endif %}
+            <a href="{{ url_for('logout') }}" class="styled-link" style="background-color: var(--bg-color); border: 1.5px solid var(--card-border); color: var(--text-primary) !important; box-shadow: none;">Abmelden</a>
+        </div>
+    </header>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
@@ -21,87 +32,119 @@
     {% endwith %}
 
     {% if user.is_locked %}
-    <h4 class="hinweis">Du bist momentan gesperrt! Bitte melde dich bei der Abteilung Verpflegung!</h4>
+        <div class="hinweis">Du bist momentan gesperrt! Bitte melde dich bei der Abteilung Verpflegung!</div>
     {% endif %}
 
-    <div class="container">
+    <main class="container">
         <div class="column left-column">
-            <p>Dein Benutzer-Code ist: <strong>{{ user.code }}</strong></p>
-            {% if user.email %}
-            <p>Deine Emailadresse ist: <strong>{{ user.email }}</strong></p>
-            {% else %}
-            <p>Du hast noch keine Emailadresse hinterlegt.</p>
-            {% endif %}
-            <h3>Saldo: {{ saldo }} €</h3>
-            <h3>Deine Transaktionen:</h3>
-            {% if transactions %}
-            <table class="zebra-table">
-                <thead>
-                    <tr>
-                        <th>Beschreibung</th>
-                        <th>Soll / Haben</th>
-                        <th>Zeitpunkt</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for transaction in transactions %}
-                    <tr>
-                        <td>{{ transaction.beschreibung }}</td>
-                        <td>{{ transaction.saldo_aenderung }} €</td>
-                        <td>{{ transaction.timestamp }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-            {% else %}
-            <p>Noch keine Transaktionen vorhanden.</p>
-            {% endif %}
-            <h3>Deine registrierten NFC-Token:</h3>
-            {% if nfc_tokens %}
-            <table class="zebra-table">
-                <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th>Daten</th>
-                        <th>zuletzt verwendet</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for nfc_token in nfc_tokens %}
-                    <tr>
-                        <td>{{ nfc_token.token_name }}</td>
-                        <td>{{ nfc_token.token_daten.hex() }}</td>
-                        <td>{{ nfc_token.last_used }}
-                            {% if nfc_token.last_used_days_ago == 0 %}
-                            (heute)
-                            {% else %}
-                            (vor {{ nfc_token.last_used_days_ago }} Tagen)
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-            {% else %}
-            <p>Noch keine NFC-Token hinterlegt.</p>
-            {% endif %}
-            <div class="qr-code-section">
-                <h3>Deine QR-Codes:</h3>
-                <img class="qr-code-image" src="{{ url_for('generate_qr', usercode=user.code, aktion="a") }}" alt="QR-Code Transaktion buchen">
-                <img class="qr-code-image" src="{{ url_for('generate_qr', usercode=user.code, aktion="k") }}" alt="QR-Code Kontostand abfragen">
-                <p>Lege dir die beiden Bilder am besten auf deinem Handy ab.</p>
-            </div>
+            <section class="form-section">
+                <h3>Mein Profil</h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-top: 15px;">
+                    <div>
+                        <span style="display: block; font-size: 0.85rem; text-transform: uppercase; color: var(--text-secondary); font-weight: 600;">Benutzer-Code</span>
+                        <strong style="font-size: 1.2rem; font-family: 'Outfit', sans-serif; color: var(--text-primary);">{{ user.code }}</strong>
+                    </div>
+                    <div>
+                        <span style="display: block; font-size: 0.85rem; text-transform: uppercase; color: var(--text-secondary); font-weight: 600;">E-Mail-Adresse</span>
+                        <strong style="font-size: 1.1rem; color: var(--text-primary);">{{ user.email if user.email else 'Nicht hinterlegt' }}</strong>
+                    </div>
+                </div>
+                
+                <h3 style="margin-top: 2rem;">Aktueller Kontostand</h3>
+                <div class="saldo-display">{{ "%.2f"|format(saldo) }} €</div>
+            </section>
+
+            <section class="form-section">
+                <h3>Deine Transaktionen</h3>
+                {% if transactions %}
+                <div class="table-responsive">
+                    <table class="zebra-table">
+                        <thead>
+                            <tr>
+                                <th>Beschreibung</th>
+                                <th>Soll / Haben</th>
+                                <th>Zeitpunkt</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for transaction in transactions %}
+                            <tr>
+                                <td>{{ transaction.beschreibung }}</td>
+                                <td style="font-weight: 600; color: {{ 'var(--success)' if transaction.saldo_aenderung >= 0 else 'var(--danger)' }};">
+                                    {{ "+" if transaction.saldo_aenderung > 0 else "" }}{{ "%.2f"|format(transaction.saldo_aenderung) }} €
+                                </td>
+                                <td style="color: var(--text-secondary); font-size: 0.9rem;">{{ transaction.timestamp }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                    <p style="text-align: center; padding: 20px; font-style: italic;">Noch keine Transaktionen vorhanden.</p>
+                {% endif %}
+            </section>
+
+            <section class="form-section">
+                <h3>Deine registrierten NFC-Token</h3>
+                {% if nfc_tokens %}
+                <div class="table-responsive">
+                    <table class="zebra-table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>UID (Hex)</th>
+                                <th>Zuletzt verwendet</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for nfc_token in nfc_tokens %}
+                            <tr>
+                                <td style="font-weight: 600;">{{ nfc_token.token_name }}</td>
+                                <td style="font-family: monospace; font-size: 0.9rem; letter-spacing: 0.05em; color: var(--text-secondary);">{{ nfc_token.token_daten.hex() }}</td>
+                                <td style="font-size: 0.9rem; color: var(--text-secondary);">
+                                    {{ nfc_token.last_used }}
+                                    {% if nfc_token.last_used_days_ago == 0 %}
+                                    <span style="color: var(--success); font-weight: 600; margin-left: 4px;">(heute)</span>
+                                    {% else %}
+                                    <span style="font-size: 0.85rem;">(vor {{ nfc_token.last_used_days_ago }} Tagen)</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                    <p style="text-align: center; padding: 20px; font-style: italic;">Noch keine NFC-Transponder hinterlegt.</p>
+                {% endif %}
+            </section>
+
+            <section class="qr-code-section">
+                <h3>Deine QR-Codes zur Schnellbuchung</h3>
+                <p style="text-align: center; margin-bottom: 20px; font-size: 0.95rem;">Klicke auf einen QR-Code, um ihn zur besseren Scannbarkeit am Handy zu vergrößern.</p>
+                <div class="qr-code-container">
+                    <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+                        <img class="qr-code-image" src="{{ url_for('generate_qr', usercode=user.code, aktion="a") }}" alt="QR-Code Transaktion buchen" style="cursor: pointer;" onclick="zoomQr(this.src, 'Transaktion buchen')">
+                        <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-primary);">Transaktion buchen</span>
+                    </div>
+                    <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+                        <img class="qr-code-image" src="{{ url_for('generate_qr', usercode=user.code, aktion="k") }}" alt="QR-Code Kontostand abfragen" style="cursor: pointer;" onclick="zoomQr(this.src, 'Kontostand abfragen')">
+                        <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-primary);">Kontostand abfragen</span>
+                    </div>
+                </div>
+            </section>
         </div>
+
         <div class="column right-column">
             {% if user.email %}
-            <div class="form-section" style="margin-top: 20px;">
-                <h4>E-Mail-Benachrichtigungen verwalten:</h4>
-                <form method="POST" name="update_notification_settings">
-                    <label for="update_notification_settings">Wir schicken dir eine E-Mail</label>
+            <div class="form-section">
+                <h4>E-Mail-Benachrichtigungen</h4>
+                <p style="font-size: 0.85rem; margin-bottom: 15px;">Wann möchtest du per E-Mail benachrichtigt werden?</p>
+                <form method="POST" name="update_notification_settings" style="border: none; padding: 0; box-shadow: none; background: transparent; margin: 0; gap: 12px;">
                     <input type="hidden" name="update_notification_settings" value="true">
                     {% if all_notification_types %}
                         {% for n_type in all_notification_types %}
-                        <div class="checkbox-group" style="margin-bottom: 10px;">
+                        <div class="checkbox-group">
                             <label for="notification_type_{{ n_type.id }}">
                                 <input type="checkbox" id="notification_type_{{ n_type.id }}" name="notification_type_{{ n_type.id }}" value="{{ n_type.id }}"
                                 {% if user_notification_settings.get(n_type.id) %}checked{% endif %}>
@@ -110,30 +153,47 @@
                         </div>
                         {% endfor %}
                     {% else %}
-                        <p>Keine Benachrichtigungsoptionen verfügbar.</p>
+                        <p style="font-size: 0.9rem; font-style: italic;">Keine Benachrichtigungsoptionen verfügbar.</p>
                     {% endif %}
                     {% if all_notification_types %}
-                    <button type="submit" style="margin-top: 10px;">Benachrichtigungen speichern</button>
+                    <button type="submit" style="margin-top: 10px;">Speichern</button>
                     {% endif %}
                 </form>
             </div>
+            
             <div class="form-section">
-                <h4>Infomail-Guthaben:</h4>
-                Schick mir eine Email wenn mein Guthaben unter diesen Betrag fällt.
-                <form method="POST" class="inline-form-transaction">
-                    <input type="number" id="infomail_user_threshold" name="infomail_user_threshold" title="Ab diesem Saldo bekommst du eine Email." value="{{ user.infomail_user_threshold if user.infomail_user_threshold else 0 }}" required class="form-control" style="width: 100px; padding: 8px; margin-top: 5px;">
+                <h4>Infomail-Grenze</h4>
+                <p style="font-size: 0.85rem; margin-bottom: 12px;">Erhalte eine E-Mail, wenn dein Guthaben unter diesen Betrag fällt.</p>
+                <form method="POST" class="inline-form-transaction" style="border: none; padding: 0; box-shadow: none; background: transparent; margin: 0;">
+                    <div>
+                        <input type="number" id="infomail_user_threshold" name="infomail_user_threshold" title="Ab diesem Saldo bekommst du eine E-Mail." value="{{ user.infomail_user_threshold if user.infomail_user_threshold else 0 }}" required style="width: 100px;">
+                    </div>
                     <button type="submit" name="update_infomail_user_threshold">Speichern</button>
                 </form>
             </div>
             {% else %}
-            <div class="form-section">
-                <h4>Benachrichtigungen</h4>
-                Hinterlege eine E-Mail-Adresse, um deine Benachrichtigungen zu verwalten.
+            <div class="form-section" style="background-color: var(--warning-bg); border-color: var(--warning-border);">
+                <h4 style="color: var(--warning);">Benachrichtigungen</h4>
+                <p style="font-size: 0.85rem; margin: 0; color: var(--warning);">Hinterlege eine E-Mail-Adresse, um Benachrichtigungen bei neuen Buchungen und niedrigem Guthaben zu erhalten.</p>
             </div>
             {% endif %}
+
             <div class="form-section">
-                <h4>Passwort ändern:</h4>
-                <form method="POST" name="change_password" class="password-form"> <input type="hidden" name="change_password" value="true">
+                <h4>E-Mail-Adresse ändern</h4>
+                <form method="POST" name="change_email" style="border: none; padding: 0; box-shadow: none; background: transparent; margin: 0;">
+                    <input type="hidden" name="change_email" value="true">
+                    <div style="margin-bottom: 10px;">
+                        <label for="new_email">Neue E-Mail-Adresse:</label>
+                        <input type="email" id="new_email" name="new_email" value="{{ user.email if user.email else '' }}">
+                    </div>
+                    <button type="submit">Ändern</button>
+                </form>
+            </div>
+
+            <div class="form-section">
+                <h4>Passwort ändern</h4>
+                <form method="POST" name="change_password" style="border: none; padding: 0; box-shadow: none; background: transparent; margin: 0; gap: 12px;">
+                    <input type="hidden" name="change_password" value="true">
                     <div>
                         <label for="current_password">Aktuelles Passwort:</label>
                         <input type="password" id="current_password" name="current_password" required>
@@ -146,28 +206,37 @@
                         <label for="confirm_new_password">Neues Passwort bestätigen:</label>
                         <input type="password" id="confirm_new_password" name="confirm_new_password" required>
                     </div>
-                    <button type="submit">Passwort ändern</button>
+                    <button type="submit" style="margin-top: 5px;">Passwort aktualisieren</button>
                 </form>
             </div>
-            <div class="form-section" style="margin-top: 20px;">
-                <h4>Emailadresse ändern:</h4>
-                <form method="POST" name="change_email">
-                    <input type="hidden" name="change_email" value="true">
-                    <div>
-                        <label for="new_email">Neue Emailadresse:</label>
-                        <input type="email" id="new_email" name="new_email" value="{{ user.email if user.email else '' }}">
-                    </div>
-                    <button type="submit">Emailadresse ändern</button>
-                </form>
-            </div>
+
             {% include 'web_include_info_block.html' %}
         </div>
+    </main>
+
+    <div id="qr-zoom-overlay" class="qr-overlay" onclick="closeQrZoom()">
+        <img id="qr-zoom-img" src="" alt="Vergrößerter QR-Code">
+        <p id="qr-zoom-text"></p>
     </div>
-    <div class="admin-link" style="margin-top: 20px;"> {% if user.is_admin %}
-        <a href="{{ url_for('admin_dashboard') }}">Zum Admin-Dashboard</a> |
-        {% endif %}
-        <a href="{{ url_for('logout') }}">Abmelden</a>
-    </div>
+
+    <script>
+        function zoomQr(src, title) {
+            const overlay = document.getElementById('qr-zoom-overlay');
+            const img = document.getElementById('qr-zoom-img');
+            const text = document.getElementById('qr-zoom-text');
+            
+            img.src = src;
+            text.textContent = title;
+            overlay.style.display = 'flex';
+            document.body.style.overflow = 'hidden'; // Scrollen im Hintergrund verhindern
+        }
+
+        function closeQrZoom() {
+            document.getElementById('qr-zoom-overlay').style.display = 'none';
+            document.body.style.overflow = ''; // Scrollen wieder aktivieren
+        }
+    </script>
+
     {% include 'web_include_footer.html' %}
 </body>
 </html>
