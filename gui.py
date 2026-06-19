@@ -2014,7 +2014,10 @@ def user_info_pdf():
     pdf.set_font(font_name, style="B", size=12)
     pdf.cell(100, 8, "Transaktionsbericht", ln=1)
     pdf.set_font(font_name, size=10)
-    pdf.cell(100, 6, f"Benutzer: {user['vorname']} {user['nachname']}", ln=1)
+    user_name = f"{user['vorname']} {user['nachname']}"
+    if not has_dejavu:
+        user_name = user_name.encode("latin-1", "replace").decode("latin-1")
+    pdf.cell(100, 6, f"Benutzer: {user_name}", ln=1)
     pdf.cell(100, 6, f"Benutzer-Code: {user['code']}", ln=1)
     pdf.cell(100, 6, f"Erstellt am: {datetime.now().strftime('%d.%m.%Y um %H:%M Uhr')}", ln=1)
     pdf.ln(5)
