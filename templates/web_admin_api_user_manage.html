@@ -3,16 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>API-Benutzer Verwaltung - Admin</title>
+    <title>API-Benutzer Verwaltung - {{ app_name }}</title>
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo/logo-120x164-alpha.png') }}">
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-    <h2>API-Benutzer Verwaltung</h2>
-
-    <div class="admin-link">
-        <a href="{{ url_for('admin_dashboard') }}">Zurück zum Admin Dashboard</a>
-    </div>
+    <header style="width: 100%; max-width: 1200px; margin: 0 auto 20px auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 15px; border-bottom: 2px solid var(--card-border); padding-bottom: 15px;">
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <img src="{{ url_for('static', filename='logo/logo-1024x1024-alpha.png') }}" alt="App Logo" style="max-width: 50px; height: auto; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));">
+            <h2 style="text-align: left; margin: 0; font-size: 1.6rem;">API-Benutzer Verwaltung</h2>
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <a href="{{ url_for('admin_dashboard') }}" class="styled-link" style="background-color: var(--bg-color); border: 1.5px solid var(--card-border); color: var(--text-primary) !important; box-shadow: none;">Admin-Dashboard</a>
+            <a href="{{ url_for('user_info') }}" class="styled-link" style="background-color: var(--bg-color); border: 1.5px solid var(--card-border); color: var(--text-primary) !important; box-shadow: none;">Eigene Ansicht</a>
+            <a href="{{ url_for('logout') }}" class="styled-link" style="background-color: var(--primary); color: white !important; box-shadow: 0 2px 4px rgba(220, 38, 38, 0.15);">Abmelden</a>
+        </div>
+    </header>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
@@ -24,52 +30,56 @@
         {% endif %}
     {% endwith %}
 
-    <div class="container">
+    <main class="container">
         <div class="column left-column">
-            <h3>Vorhandene API-Benutzer</h3>
-            {% if api_users %}
-                <table class="zebra-table">
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Username</th>
-                            <th>Aktionen</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for api_u in api_users %}
-                        <tr>
-                            <td>{{ api_u.id }}</td>
-                            <td><a href="{{ url_for('admin_api_user_detail', api_user_id_route=api_u.id) }}">{{ api_u.username }}</a></td>
-                            <td>
-                                <form method="POST" action="{{ url_for('admin_delete_api_user', api_user_id_route=api_u.id) }}" class="compact-delete-form" onsubmit="return confirm('Möchtest du diesen API-User wirklich löschen?');">
-                                    <button type="submit" name="delete_api_user_button" class="red-button">Löschen</button> </form>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            {% else %}
-                <p>Keine API-Benutzer gefunden.</p>
-            {% endif %}
+            <section class="form-section">
+                <h3>Vorhandene API-Benutzer</h3>
+                {% if api_users %}
+                <div class="table-responsive">
+                    <table class="zebra-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 80px;">ID</th>
+                                <th>API-Benutzername</th>
+                                <th style="width: 120px; text-align: center;">Aktionen</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for api_u in api_users %}
+                            <tr>
+                                <td style="font-family: monospace; color: var(--text-secondary);">#{{ api_u.id }}</td>
+                                <td><a href="{{ url_for('admin_api_user_detail', api_user_id_route=api_u.id) }}" style="font-weight: 600;">{{ api_u.username }}</a></td>
+                                <td style="text-align: center;">
+                                    <form method="POST" action="{{ url_for('admin_delete_api_user', api_user_id_route=api_u.id) }}" class="compact-delete-form" onsubmit="return confirm('Möchtest du diesen API-User und alle zugehörigen Keys wirklich löschen?');" style="border: none; background-color: transparent; padding: 0; box-shadow: none; margin: 0;">
+                                        <button type="submit" name="delete_api_user_button" class="red-button">Löschen</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                    <p style="text-align: center; padding: 20px; font-style: italic;">Keine API-Benutzer gefunden.</p>
+                {% endif %}
+            </section>
         </div>
+
         <div class="column right-column">
             <div class="form-section">
                 <h4>Neuen API-Benutzer hinzufügen</h4>
-                <form method="POST" action="{{ url_for('admin_api_user_manage') }}">
-                    <div class="form-group"> <label for="username">API-Benutzername:*</label>
-                        <input type="text" id="username" name="username" required>
+                <form method="POST" action="{{ url_for('admin_api_user_manage') }}" style="border: none; padding: 0; box-shadow: none; background: transparent; margin: 0; gap: 15px;">
+                    <div>
+                        <label for="username">API-Benutzername:*</label>
+                        <input type="text" id="username" name="username" placeholder="z.B. Terminal_Kueche" required autocomplete="off">
                     </div>
-                    <button type="submit" class="button">API-Benutzer erstellen</button>
+                    <button type="submit">API-Benutzer erstellen</button>
                 </form>
             </div>
             {% include 'web_include_info_block.html' %}
         </div>
-    </div>
-    <div class="admin-link">
-        <a href="{{ url_for('user_info') }}">Zur eigenen Benutzeransicht</a> |
-        <a href="{{ url_for('logout') }}">Abmelden</a>
-    </div>
+    </main>
+
     {% include 'web_include_footer.html' %}
 </body>
 </html>

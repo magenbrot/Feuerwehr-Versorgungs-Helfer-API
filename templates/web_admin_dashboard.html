@@ -3,12 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Dashboard</title>
+    <title>Admin Dashboard - {{ app_name }}</title>
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo/logo-120x164-alpha.png') }}">
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-    <h2>Willkommen, {{ user.vorname }} {{ user.nachname }}!</h2>
+    <header style="width: 100%; max-width: 1200px; margin: 0 auto 20px auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 15px; border-bottom: 2px solid var(--card-border); padding-bottom: 15px;">
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <img src="{{ url_for('static', filename='logo/logo-1024x1024-alpha.png') }}" alt="App Logo" style="max-width: 50px; height: auto; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));">
+            <h2 style="text-align: left; margin: 0; font-size: 1.6rem;">Admin-Bereich: {{ user.vorname }} {{ user.nachname }}</h2>
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <a href="{{ url_for('user_info') }}" class="styled-link" style="background-color: var(--bg-color); border: 1.5px solid var(--card-border); color: var(--text-primary) !important; box-shadow: none;">Zur eigenen Benutzeransicht</a>
+            <a href="{{ url_for('logout') }}" class="styled-link" style="background-color: var(--primary); color: white !important; box-shadow: 0 2px 4px rgba(220, 38, 38, 0.15);">Abmelden</a>
+        </div>
+    </header>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
@@ -20,117 +29,136 @@
       {% endif %}
     {% endwith %}
 
-    <div class="container">
+    <main class="container">
         <div class="column left-column">
-            <h3>Benutzerverwaltung</h3>
-            <div class="admin-link">
-                <a href="{{ url_for('admin_bulk_change') }}">Sammelbuchung</a> |
-                <a href="{{ url_for('add_user') }}">Neuen regulären Benutzer hinzufügen</a> |
-                <a href="{{ url_for('admin_api_user_manage') }}">API-Benutzer verwalten</a>
-            </div>
+            <section class="form-section">
+                <h3>Benutzerverwaltung</h3>
+                <div style="display: flex; flex-wrap: wrap; gap: 10px; margin: 15px 0 5px 0;">
+                    <a href="{{ url_for('admin_bulk_change') }}" class="styled-link" style="background-color: var(--bg-color); border: 1.5px solid var(--card-border); color: var(--text-primary) !important; box-shadow: none;">Sammelbuchung durchführen</a>
+                    <a href="{{ url_for('add_user') }}" class="styled-link" style="background-color: var(--bg-color); border: 1.5px solid var(--card-border); color: var(--text-primary) !important; box-shadow: none;">Neuen Benutzer hinzufügen</a>
+                    <a href="{{ url_for('admin_api_user_manage') }}" class="styled-link" style="background-color: var(--bg-color); border: 1.5px solid var(--card-border); color: var(--text-primary) !important; box-shadow: none;">API-Benutzer verwalten</a>
+                </div>
+            </section>
 
-            <h3>Übersicht der {{ app_name }}-Benutzer</h3>
-            {% if users %}
-            <table class="zebra-table">
-                <thead>
-                    <tr>
-                        <th>Code</th>
-                        <th>Name</th>
-                        <th>Email</th>
-                        <th>Kommentar</th>
-                        <th>Saldo</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for u in users %}
-                    <tr>
-                        <td><a href="{{ url_for('admin_user_modification', target_user_id=u.id) }}">{{ u.code }}</a></td>
-                        {% if u.is_locked %}
-                        <td style="color:red;">{{ u.nachname }}, {{ u.vorname }}</td>
-                        {% elif u.is_admin %}
-                        <td style="color:rgb(16, 152, 6);">{{ u.nachname }}, {{ u.vorname }}</td>
-                        {% else %}
-                        <td>{{ u.nachname }}, {{ u.vorname }}</td>
-                        {% endif %}
-                        <td>{{ u.email if u.email is not none else '' }}</td>
-                        <td>{{ u.kommentar if u.kommentar is not none else '' }}</td>
-                        <td>{{ saldo_by_user.get(u.id, 0) }} €</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-            <p>Es sind {{ users | length }} Benutzer vorhanden. Diese verfügen insgesamt über ein Guthaben von {{ user_saldo_all }} €.</p>
-            {% else %}
-            <p>Keine Benutzer vorhanden.</p>
-            {% endif %}
+            <section class="form-section">
+                <h3>Übersicht der {{ app_name }}-Benutzer</h3>
+                {% if users %}
+                <div class="table-responsive">
+                    <table class="zebra-table">
+                        <thead>
+                            <tr>
+                                <th>Code</th>
+                                <th>Name</th>
+                                <th>E-Mail</th>
+                                <th>Kommentar</th>
+                                <th>Saldo</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for u in users %}
+                            <tr>
+                                <td><a href="{{ url_for('admin_user_modification', target_user_id=u.id) }}" style="font-family: monospace; font-size: inherit; font-weight: 600; letter-spacing: 0.05em;">{{ u.code }}</a></td>
+                                <td>
+                                    {% if u.is_locked %}
+                                        <span class="user-status-locked" title="Benutzer gesperrt">{{ u.nachname }}, {{ u.vorname }}</span>
+                                        <span style="display: inline-block; font-size: 0.75rem; font-weight: 700; background-color: var(--danger-bg); color: var(--danger); padding: 2px 6px; border-radius: 4px; margin-left: 6px; text-transform: uppercase;">gesperrt</span>
+                                    {% elif u.is_admin %}
+                                        <span class="user-status-admin" title="Administrator">{{ u.nachname }}, {{ u.vorname }}</span>
+                                        <span style="display: inline-block; font-size: 0.75rem; font-weight: 700; background-color: var(--success-bg); color: var(--success); padding: 2px 6px; border-radius: 4px; margin-left: 6px; text-transform: uppercase;">Admin</span>
+                                    {% else %}
+                                        <span>{{ u.nachname }}, {{ u.vorname }}</span>
+                                    {% endif %}
+                                </td>
+                                <td style="font-size: 0.9rem;">{{ u.email if u.email is not none else '' }}</td>
+                                <td style="font-size: 0.9rem; color: var(--text-secondary); max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ u.kommentar if u.kommentar is not none else '' }}</td>
+                                <td style="font-weight: 600; color: {{ 'var(--success)' if saldo_by_user.get(u.id, 0) >= 0 else 'var(--danger)' }};">
+                                    {{ "%.2f"|format(saldo_by_user.get(u.id, 0)) }} €
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div style="margin-top: 15px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; font-size: 0.95rem; color: var(--text-secondary);">
+                    <span>Benutzeranzahl: <strong>{{ users | length }}</strong></span>
+                    <span>Gesamtguthaben: <strong style="color: var(--primary); font-size: 1.1rem;">{{ "%.2f"|format(user_saldo_all) }} €</strong></span>
+                </div>
+                {% else %}
+                    <p style="text-align: center; padding: 20px; font-style: italic;">Keine Benutzer vorhanden.</p>
+                {% endif %}
+            </section>
 
-            <h4>Neueste Transaktionen (letzte 10)</h4>
-            {% if recent_transactions %}
-            <table class="zebra-table recent-transactions">
-                <thead>
-                    <tr>
-                        <th class="timestamp">Zeitpunkt</th>
-                        <th>Benutzer</th>
-                        <th>Beschreibung</th>
-                        <th>Betrag</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for t in recent_transactions[:10] %}
-                    <tr>
-                        <td class="timestamp">{{ t.timestamp_display if t.timestamp_display is defined else (t.timestamp if t.timestamp is defined else '') }}</td>
-                        <td>
-                            {% if t.nachname or t.vorname %}
-                                {{ t.nachname }}{% if t.vorname %}, {{ t.vorname }}{% endif %}
-                            {% elif t.user is defined and (t.user.nachname or t.user.vorname) %}
-                                {{ t.user.nachname }}{% if t.user.vorname %}, {{ t.user.vorname }}{% endif %}
-                            {% elif t.user_name is defined %}
-                                {{ t.user_name }}
-                            {% else %}
-                                -
-                            {% endif %}
-                        </td>
-                        <td>{{ t.beschreibung if t.beschreibung is not none else '' }}</td>
-                        <td>{% if t.saldo_aenderung is defined %}{{ t.saldo_aenderung }} €{% elif t.amount is defined %}{{ t.amount }} €{% else %}{% endif %}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-            {% else %}
-            <p>Keine Transaktionen vorhanden oder sie konnten nicht geladen werden.</p>
-            {% endif %}
+            <section class="form-section">
+                <h3>Neueste Transaktionen (letzte 10)</h3>
+                {% if recent_transactions %}
+                <div class="table-responsive">
+                    <table class="zebra-table recent-transactions">
+                        <thead>
+                            <tr>
+                                <th class="timestamp">Zeitpunkt</th>
+                                <th>Benutzer</th>
+                                <th>Beschreibung</th>
+                                <th>Betrag</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for t in recent_transactions[:10] %}
+                            <tr>
+                                <td class="timestamp">{{ t.timestamp_display if t.timestamp_display is defined else (t.timestamp if t.timestamp is defined else '') }}</td>
+                                <td style="font-weight: 500;">
+                                    {% if t.nachname or t.vorname %}
+                                        {{ t.nachname }}{% if t.vorname %}, {{ t.vorname }}{% endif %}
+                                    {% elif t.user is defined and (t.user.nachname or t.user.vorname) %}
+                                        {{ t.user.nachname }}{% if t.user.vorname %}, {{ t.user.vorname }}{% endif %}
+                                    {% elif t.user_name is defined %}
+                                        {{ t.user_name }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                                <td>{{ t.beschreibung if t.beschreibung is not none else '' }}</td>
+                                <td style="font-weight: 600; color: {{ 'var(--success)' if (t.saldo_aenderung if t.saldo_aenderung is defined else (t.amount if t.amount is defined else 0)) >= 0 else 'var(--danger)' }};">
+                                    {% set amount = t.saldo_aenderung if t.saldo_aenderung is defined else (t.amount if t.amount is defined else 0) %}
+                                    {{ "+" if amount > 0 else "" }}{{ "%.2f"|format(amount) }} €
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                    <p style="text-align: center; padding: 20px; font-style: italic;">Keine Transaktionen vorhanden.</p>
+                {% endif %}
+            </section>
         </div>
 
         <div class="column right-column">
-            <div class="form-section" style="margin-top: 20px;">
-                <h4>Systemeinstellungen</h4>
-                <form method="POST" action="{{ url_for('admin_dashboard') }}">
+            <section class="form-section">
+                <h3>Systemeinstellungen</h3>
+                <form method="POST" action="{{ url_for('admin_dashboard') }}" style="border: none; padding: 0; box-shadow: none; background: transparent; margin: 0; gap: 15px;">
                     <input type="hidden" name="update_system_settings" value="true">
                     {% if system_settings %}
                         {% for key, setting_data in system_settings.items() %}
-                        <div class="form-group" style="margin-bottom: 15px;">
+                        <div>
                             <label for="{{ key }}">{{ setting_data.beschreibung or key.replace('_', ' ')|title }}:</label>
                             {% if key == 'TRANSACTION_SALDO_CHANGE' %}
-                            <input type="number" id="{{ key }}" name="{{ key }}" value="{{ setting_data.wert }}" required class="form-control" style="width: 100px; padding: 8px; margin-top: 5px;">
+                                <input type="number" step="0.01" id="{{ key }}" name="{{ key }}" value="{{ setting_data.wert }}" required>
                             {% else %}
-                            <input type="text" id="{{ key }}" name="{{ key }}" value="{{ setting_data.wert }}" required class="form-control" style="padding: 8px; margin-top: 5px;">
+                                <input type="text" id="{{ key }}" name="{{ key }}" value="{{ setting_data.wert }}" required>
                             {% endif %}
                         </div>
                         {% endfor %}
-                        <button type="submit" class="button" style="margin-top: 10px;">Systemeinstellungen speichern</button>
+                        <button type="submit" style="margin-top: 10px;">Einstellungen speichern</button>
                     {% else %}
-                        <p>Keine Systemeinstellungen zum Konfigurieren vorhanden oder sie konnten nicht geladen werden.</p>
+                        <p style="font-style: italic; font-size: 0.9rem;">Keine Systemeinstellungen zum Konfigurieren vorhanden.</p>
                     {% endif %}
                 </form>
-            </div>
+            </section>
 
             {% include 'web_include_info_block.html' %}
         </div>
-    </div>
-    <div class="admin-link">
-        <a href="{{ url_for('user_info') }}">Zur eigenen Benutzeransicht</a> |
-        <a href="{{ url_for('logout') }}">Abmelden</a>
-    </div>
+    </main>
+
     {% include 'web_include_footer.html' %}
 </body>
 </html>

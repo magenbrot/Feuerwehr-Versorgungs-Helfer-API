@@ -1,149 +1,260 @@
 <!DOCTYPE html>
 <html lang="de">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Verwaltung für {{ user.nachname }}, {{ user.vorname }}</title>
+    <title>Benutzer verwalten: {{ user.vorname }} {{ user.nachname }} - {{ app_name }}</title>
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo/logo-120x164-alpha.png') }}">
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
-<body>
-    <h2>Verwaltung für {{ user.nachname }}, {{ user.vorname }} ({{ user.code }})</h2>
-    <h3>Aktueller Saldo: {{ saldo }} €{% if user.is_locked %} (gesperrt){% endif %}{% if user.kommentar %} - {{ user.kommentar }}{% endif %}</h3>
 
-    <div class="admin-link">
-        <a href="{{ url_for('admin_dashboard') }}">Zurück zum Admin Dashboard</a>
-    </div>
+<body>
+    <header
+        style="width: 100%; max-width: 1200px; margin: 0 auto 20px auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 15px; border-bottom: 2px solid var(--card-border); padding-bottom: 15px;">
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <img src="{{ url_for('static', filename='logo/logo-1024x1024-alpha.png') }}" alt="App Logo"
+                style="max-width: 50px; height: auto; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));">
+            <h2 style="text-align: left; margin: 0; font-size: 1.6rem;">
+                Verwaltung für {{ user.nachname }}, {{ user.vorname }} ({{ user.code }})
+            </h2>
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <a href="{{ url_for('admin_dashboard') }}" class="styled-link"
+                style="background-color: var(--bg-color); border: 1.5px solid var(--card-border); color: var(--text-primary) !important; box-shadow: none;">Admin-Dashboard</a>
+            <a href="{{ url_for('logout') }}" class="styled-link"
+                style="background-color: var(--primary); color: white !important; box-shadow: 0 2px 4px rgba(220, 38, 38, 0.15);">Abmelden</a>
+        </div>
+    </header>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        <ul class="flashes">
+    {% if messages %}
+    <ul class="flashes">
         {% for category, message in messages %}
-          <li class="{{ category }}">{{ message }}</li>
+        <li class="{{ category }}">{{ message }}</li>
         {% endfor %}
-        </ul>
-      {% endif %}
+    </ul>
+    {% endif %}
     {% endwith %}
 
-    <div class="container">
+    <main class="container">
         <div class="column left-column">
-            <h3>Transaktionen:</h3>
-            {% if transactions %}
-            <table class="zebra-table">
-                <thead>
-                    <tr>
-                        <th>Beschreibung</th>
-                        <th>Saldoänderung</th>
-                        <th>Zeitpunkt</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for transaction in transactions %}
-                    <tr>
-                        <td>{{ transaction.beschreibung }}</td>
-                        <td>{{ transaction.saldo_aenderung }} €</td>
-                        <td>{{ transaction.timestamp }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-            {% else %}
-            <p>Keine Transaktionen für diesen Benutzer vorhanden.</p>
-            {% endif %}
-            {% if transactions %} <form method="POST" onsubmit="return confirm('Möchtest du wirklich ALLE Transaktionen dieses Benutzers löschen?');" style="margin-top:10px; border: none; background-color: transparent; padding: 0;">
-                <input type="hidden" name="delete_transactions" value="true">
-                <button type="submit">Alle Transaktionen löschen</button>
-            </form>
-            {% endif %}
-
-            <h3>NFC-Token:</h3>
-            {% if nfc_tokens %}
-            <table class="zebra-table">
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Name</th>
-                        <th>Daten</th>
-                        <th>zuletzt verwendet</th>
-                        <th>Aktion</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for nfc_token in nfc_tokens %}
-                    <tr>
-                        <td>{{ nfc_token.token_id }}</td>
-                        <td>{{ nfc_token.token_name }}</td>
-                        <td>{{ nfc_token.token_daten.hex() }}</td>
-                        <td>{{ nfc_token.last_used }}
-                            {% if nfc_token.last_used_days_ago == 0 %}
-                            (heute)
+            <section class="form-section">
+                <h3>Benutzer-Status</h3>
+                <div
+                    style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-top: 15px;">
+                    <div>
+                        <span
+                            style="display: block; font-size: 0.85rem; text-transform: uppercase; color: var(--text-secondary); font-weight: 600;">Aktueller
+                            Kontostand</span>
+                        <div class="saldo-display" style="margin: 5px 0 0 0; font-size: 1.8rem;">{{ "%.2f"|format(saldo)
+                            }} €</div>
+                    </div>
+                    <div>
+                        <span
+                            style="display: block; font-size: 0.85rem; text-transform: uppercase; color: var(--text-secondary); font-weight: 600;">Status</span>
+                        <div style="margin-top: 8px;">
+                            {% if user.is_locked %}
+                            <span
+                                style="display: inline-block; font-size: 0.85rem; font-weight: 700; background-color: var(--danger-bg); color: var(--danger); padding: 4px 10px; border-radius: 6px; text-transform: uppercase;">gesperrt</span>
+                            {% elif user.is_admin %}
+                            <span
+                                style="display: inline-block; font-size: 0.85rem; font-weight: 700; background-color: var(--success-bg); color: var(--success); padding: 4px 10px; border-radius: 6px; text-transform: uppercase;">Admin</span>
                             {% else %}
-                            (vor {{ nfc_token.last_used_days_ago }} Tagen)
+                            <span
+                                style="display: inline-block; font-size: 0.85rem; font-weight: 700; background-color: var(--bg-color); border: 1.5px solid var(--card-border); color: var(--text-secondary); padding: 4px 10px; border-radius: 6px; text-transform: uppercase;">regulärer
+                                user</span>
                             {% endif %}
-                        </td>
-                        <td>
-                            <form method="POST" class="compact-delete-form" onsubmit="return confirm('Möchtest du diesen Token wirklich löschen?');">
-                                <input type="hidden" name="nfc_token_id" value="{{ nfc_token.token_id}}">
-                                <button type="submit" name="delete_user_nfc_token" class="red-button">Löschen</button>
-                            </form>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-            {% else %}
-            <p>Noch keine NFC-Token hinterlegt.</p>
-            {% endif %}
+                        </div>
+                    </div>
+                    {% if user.kommentar %}
+                    <div style="grid-column: 1 / -1;">
+                        <span
+                            style="display: block; font-size: 0.85rem; text-transform: uppercase; color: var(--text-secondary); font-weight: 600;">Kommentar</span>
+                        <p style="margin: 5px 0 0 0; color: var(--text-primary); font-weight: 500;">{{ user.kommentar }}
+                        </p>
+                    </div>
+                    {% endif %}
+                </div>
+            </section>
+
+            <section class="form-section">
+                <h3>Transaktionsverlauf</h3>
+                {% if transactions %}
+                <div class="table-responsive">
+                    <table class="zebra-table">
+                        <thead>
+                            <tr>
+                                <th>Beschreibung</th>
+                                <th>Saldoänderung</th>
+                                <th>Zeitpunkt</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for transaction in transactions %}
+                            <tr>
+                                <td style="font-weight: 500;">{{ transaction.beschreibung }}</td>
+                                <td
+                                    style="font-weight: 600; color: {{ 'var(--success)' if transaction.saldo_aenderung >= 0 else 'var(--danger)' }};">
+                                    {{ "+" if transaction.saldo_aenderung > 0 else "" }}{{
+                                    "%.2f"|format(transaction.saldo_aenderung) }} €
+                                </td>
+                                <td style="color: var(--text-secondary); font-size: 0.9rem;">{{ transaction.timestamp }}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div style="margin-top: 15px;">
+                    <form method="POST"
+                        onsubmit="return confirm('Möchtest du wirklich ALLE Transaktionen dieses Benutzers löschen?');"
+                        style="border: none; background-color: transparent; padding: 0; box-shadow: none; margin: 0;">
+                        <input type="hidden" name="delete_transactions" value="true">
+                        <button type="submit" class="red-button" style="width: auto;">Alle Transaktionen
+                            löschen</button>
+                    </form>
+                </div>
+                {% else %}
+                <p style="text-align: center; padding: 20px; font-style: italic;">Keine Transaktionen für diesen
+                    Benutzer vorhanden.</p>
+                {% endif %}
+            </section>
+
+            <section class="form-section">
+                <h3>NFC-Token</h3>
+                {% if nfc_tokens %}
+                <div class="table-responsive">
+                    <table class="zebra-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Name</th>
+                                <th>UID (Hex)</th>
+                                <th>Zuletzt verwendet</th>
+                                <th>Aktion</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for nfc_token in nfc_tokens %}
+                            <tr>
+                                <td style="font-size: 0.85rem; color: var(--text-secondary);">{{ nfc_token.token_id }}
+                                </td>
+                                <td style="font-weight: 600;">{{ nfc_token.token_name }}</td>
+                                <td
+                                    style="font-family: monospace; font-size: 0.9rem; letter-spacing: 0.05em; color: var(--text-secondary);">
+                                    {{ nfc_token.token_daten.hex() }}</td>
+                                <td style="font-size: 0.9rem; color: var(--text-secondary);">
+                                    {{ nfc_token.last_used }}
+                                    {% if nfc_token.last_used_days_ago == 0 %}
+                                    <span style="color: var(--success); font-weight: 600;">(heute)</span>
+                                    {% else %}
+                                    <span>(vor {{ nfc_token.last_used_days_ago }} Tagen)</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <form method="POST" class="compact-delete-form"
+                                        onsubmit="return confirm('Möchtest du diesen Token wirklich löschen?');"
+                                        style="border: none; background-color: transparent; padding: 0; box-shadow: none; margin: 0;">
+                                        <input type="hidden" name="nfc_token_id" value="{{ nfc_token.token_id}}">
+                                        <button type="submit" name="delete_user_nfc_token"
+                                            class="red-button">Löschen</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p style="text-align: center; padding: 20px; font-style: italic;">Noch keine NFC-Token hinterlegt.</p>
+                {% endif %}
+            </section>
         </div>
+
         <div class="column right-column">
             <div class="form-section">
-                <h4>Neue Transaktion hinzufügen:</h4>
-                <form method="POST" class="inline-form-transaction">
-                    <label for="beschreibung">Beschreibung:</label>
-                    <input type="text2column" id="beschreibung" name="beschreibung" value="Guthaben eingezahlt" required>
-                    <label for="saldo_aenderung">Änderung:</label>
-                    <input type="number2column" id="saldo_aenderung" name="saldo_aenderung" value="0" required>
-                    <button type="submit" name="add_transaction">Hinzufügen</button>
+                <h4>Transaktion hinzufügen</h4>
+                <form method="POST"
+                    style="border: none; padding: 0; box-shadow: none; background: transparent; margin: 0; gap: 12px;">
+                    <div>
+                        <label for="beschreibung">Beschreibung:</label>
+                        <input type="text" id="beschreibung" name="beschreibung" value="Guthaben eingezahlt" required>
+                    </div>
+                    <div>
+                        <label for="saldo_aenderung">Änderung in € (z.B. 10.00 oder -2.50):</label>
+                        <input type="number" step="0.01" id="saldo_aenderung" name="saldo_aenderung" value="0.00"
+                            required>
+                    </div>
+                    <button type="submit" name="add_transaction">Transaktion buchen</button>
                 </form>
             </div>
+
             <div class="form-section">
-                <h4>Infomail-Schwelle:</h4>
-                Infomail an die Verantwortlichen senden, wenn diese Schwelle erreicht wurde.
-                <form method="POST" class="inline-form-transaction">
-                    <input type="number2column" id="infomail_responsible_threshold" name="infomail_responsible_threshold" title="Ab diesem Saldo werden die Verantwortlichen informiert." value="{{ user.infomail_responsible_threshold if user.infomail_responsible_threshold else 0 }}">
+                <h4>Infomail-Schwelle (Verantwortliche)</h4>
+                <p style="font-size: 0.85rem; margin-bottom: 12px;">Infomail an die Verantwortlichen senden, wenn das
+                    Guthaben diese Schwelle erreicht.</p>
+                <form method="POST" class="inline-form-transaction"
+                    style="border: none; padding: 0; box-shadow: none; background: transparent; margin: 0;">
+                    <div>
+                        <input type="number" step="0.01" id="infomail_responsible_threshold"
+                            name="infomail_responsible_threshold"
+                            value="{{ user.infomail_responsible_threshold if user.infomail_responsible_threshold else 0 }}">
+                    </div>
                     <button type="submit" name="update_infomail_responsible_threshold">Speichern</button>
                 </form>
             </div>
+
             <div class="form-section">
-                <h4>neuen NFC-Token hinzufügen:</h4>
-                <form method="POST" class="inline-form-transaction">
-                    <label for="nfc_token_name">NFC-Name:</label>
-                    <input type="text2column" id="nfc_token_name" name="nfc_token_name" title="Bitte gib deinem Token einen Namen.">
-                    <label for="nfc_token_daten">NFC-Daten:</label>
-                    <input type="text2column" id="nfc_token_daten" name="nfc_token_daten" required pattern="[0-9A-Fa-f]{2,}" title="Bitte gib eine Hexadezimalzahl mit mindestens 2 Zeichen ein.">
-                    <button type="submit" name="add_user_nfc_token">Hinzufügen</button>
+                <h4>NFC-Token hinzufügen</h4>
+                <form method="POST"
+                    style="border: none; padding: 0; box-shadow: none; background: transparent; margin: 0; gap: 12px;">
+                    <div>
+                        <label for="nfc_token_name">Name des Tokens:</label>
+                        <input type="text" id="nfc_token_name" name="nfc_token_name" placeholder="z.B. Spindschlüssel"
+                            required>
+                    </div>
+                    <div>
+                        <label for="nfc_token_daten">UID (Hexadezimal):</label>
+                        <input type="text" id="nfc_token_daten" name="nfc_token_daten" required
+                            pattern="[0-9A-Fa-f]{2,}"
+                            title="Bitte gib eine Hexadezimalzahl mit mindestens 2 Zeichen ein.">
+                    </div>
+                    <button type="submit" name="add_user_nfc_token">Token hinzufügen</button>
                 </form>
             </div>
+
             <div class="form-section">
-                <h4>Kommentar aktualisieren:</h4>
-                <form method="POST" class="inline-form-transaction">
-                    <input type="text" id="kommentar" name="kommentar" title="Bitte gib einen Kommentar ein." value="{{ user.kommentar if user.kommentar }}">
+                <h4>Kommentar bearbeiten</h4>
+                <form method="POST" class="inline-form-transaction"
+                    style="border: none; padding: 0; box-shadow: none; background: transparent; margin: 0;">
+                    <div>
+                        <input type="text" id="kommentar" name="kommentar"
+                            value="{{ user.kommentar if user.kommentar else '' }}" placeholder="Kein Kommentar">
+                    </div>
                     <button type="submit" name="update_user_comment">Speichern</button>
                 </form>
             </div>
+
             <div class="form-section">
-                <h4>Emailadresse aktualisieren:</h4>
-                <form method="POST" class="inline-form-transaction">
-                    <input type="email" id="email" name="email" title="Bitte gib die Emailadresse ein." value="{{ user.email if user.email }}">
+                <h4>E-Mail-Adresse bearbeiten</h4>
+                <form method="POST" class="inline-form-transaction"
+                    style="border: none; padding: 0; box-shadow: none; background: transparent; margin: 0;">
+                    <div>
+                        <input type="email" id="email" name="email" value="{{ user.email if user.email else '' }}"
+                            placeholder="Keine E-Mail">
+                    </div>
                     <button type="submit" name="update_user_email">Speichern</button>
                 </form>
             </div>
+
             <div class="form-section action-buttons">
-                <h4>Benutzeraktionen:</h4>
+                <h4>Benutzeraktionen</h4>
                 {% if user.is_locked %}
                 <form method="POST" onsubmit="return confirm('Möchtest du diesen Benutzer wirklich entsperren?');">
                     <input type="hidden" name="unlock_user" value="true">
-                    <button type="submit" class="red-button">Benutzer entsperren</button>
+                    <button type="submit" class="button" style="background-color: var(--success);">Benutzer
+                        entsperren</button>
                 </form>
                 {% else %}
                 <form method="POST" onsubmit="return confirm('Möchtest du diesen Benutzer wirklich sperren?');">
@@ -153,29 +264,34 @@
                 {% endif %}
 
                 {% if user.is_admin %}
-                <form method="POST" onsubmit="return confirm('Möchtest du diesen Benutzer wirklich zum normalen Benutzer degradieren?');">
+                <form method="POST"
+                    onsubmit="return confirm('Möchtest du diesen Benutzer wirklich zum normalen Benutzer degradieren?');">
                     <input type="hidden" name="demote_user" value="true">
-                    <button type="submit" class="red-button">Admin zu Benutzer degradieren</button>
+                    <button type="submit" class="red-button">Admin-Rechte entziehen</button>
                 </form>
                 {% else %}
-                <form method="POST" onsubmit="return confirm('Möchtest du diesen Benutzer wirklich zum Admin befördern?');">
+                <form method="POST"
+                    onsubmit="return confirm('Möchtest du diesen Benutzer wirklich zum Admin befördern?');">
                     <input type="hidden" name="promote_user" value="true">
-                    <button type="submit" class="red-button">Benutzer zum Admin befördern</button>
+                    <button type="submit" class="button" style="background-color: var(--success);">Zum Admin
+                        befördern</button>
                 </form>
                 {% endif %}
 
-                <form method="POST" onsubmit="return confirm('ACHTUNG: Möchtest du diesen Benutzer WIRKLICH löschen? Alle zugehörigen Daten gehen verloren!');">
+                <form method="POST"
+                    onsubmit="return confirm('ACHTUNG: Möchtest du diesen Benutzer WIRKLICH löschen? Alle zugehörigen Daten gehen verloren!');">
                     <input type="hidden" name="delete_user" value="true">
-                    <button type="submit" class="red-button">Benutzer löschen</button>
+                    <button type="submit" class="red-button"
+                        style="background-color: var(--danger); font-weight: 700; margin-top: 15px;">Benutzer endgültig
+                        löschen</button>
                 </form>
             </div>
+
             {% include 'web_include_info_block.html' %}
         </div>
-    </div>
-    <div class="admin-link">
-        <a href="{{ url_for('user_info') }}">Zur eigenen Benutzeransicht</a> |
-        <a href="{{ url_for('logout') }}">Abmelden</a>
-    </div>
+    </main>
+
     {% include 'web_include_footer.html' %}
 </body>
+
 </html>
