@@ -2028,7 +2028,8 @@ def user_info_pdf():
     pdf.cell(10, 8, "") # Spacer
     pdf.cell(100, 8, "Aktueller Kontostand (Saldo):")
     pdf.set_x(150)
-    pdf.cell(40, 8, f"{saldo:.2f} \u20ac", align="R", ln=1)
+    saldo_unit = "\\u20ac" if has_dejavu else "EUR"
+    pdf.cell(40, 8, f"{saldo:.2f} {saldo_unit}", align="R", ln=1)
     pdf.set_font(font_name, size=10)
     pdf.ln(6)
 
