@@ -91,6 +91,7 @@ if os.environ.get("TESTING") != "True":
 # Starte den Health-Check-Thread, nachdem der Pool initialisiert wurde
 # db_utils.DatabaseConnectionPool.start_health_check_thread()
 
+
 def _get_version() -> str:
     """Loads version from package metadata or falls back to pyproject.toml."""
     try:
@@ -1976,7 +1977,9 @@ def user_info_pdf():
     font_path_bold = "static/fonts/DejaVuSans-Bold.ttf"
     font_path_italic = "static/fonts/DejaVuSans-Oblique.ttf"
 
-    has_dejavu = os.path.exists(font_path_regular) and os.path.exists(font_path_bold) and os.path.exists(font_path_italic)
+    has_dejavu = (
+        os.path.exists(font_path_regular) and os.path.exists(font_path_bold) and os.path.exists(font_path_italic)
+    )
     if has_dejavu:
         pdf.add_font("DejaVu", style="", fname=font_path_regular)
         pdf.add_font("DejaVu", style="B", fname=font_path_bold)
@@ -2028,7 +2031,7 @@ def user_info_pdf():
     pdf.rect(10, pdf.get_y(), 190, 12, style="DF")
     pdf.set_font(font_name, style="B", size=11)
     pdf.set_y(pdf.get_y() + 2)
-    pdf.cell(10, 8, "") # Spacer
+    pdf.cell(10, 8, "")  # Spacer
     pdf.cell(100, 8, "Aktueller Kontostand (Saldo):")
     pdf.set_x(150)
     saldo_unit = "\\u20ac" if has_dejavu else "EUR"
@@ -2037,8 +2040,8 @@ def user_info_pdf():
     pdf.ln(6)
 
     # --- TABELLE ---
-    col_widths = [105, 35, 50] # Summe 190
-    pdf.set_fill_color(220, 38, 38) # Rote Kopfzeile
+    col_widths = [105, 35, 50]  # Summe 190
+    pdf.set_fill_color(220, 38, 38)  # Rote Kopfzeile
     pdf.set_text_color(255, 255, 255)
     pdf.set_font(font_name, style="B", size=10)
     pdf.cell(col_widths[0], 8, " Beschreibung", border=1, fill=True)
@@ -2050,7 +2053,7 @@ def user_info_pdf():
     pdf.set_text_color(15, 23, 42)
     pdf.set_font(font_name, size=9)
     fill_row = False
-    
+
     for t in transactions:
         if fill_row:
             pdf.set_fill_color(248, 250, 252)
@@ -2063,10 +2066,10 @@ def user_info_pdf():
             beschreibung = beschreibung.encode("latin-1", "replace").decode("latin-1")
         if len(beschreibung) > 55:
             beschreibung = beschreibung[:52] + "..."
-            
+
         saldo_change = t.get("saldo_aenderung", 0.0)
         sign = "+" if saldo_change > 0 else ""
-        
+
         if has_dejavu:
             amount_str = f"{sign}{saldo_change:.2f} \u20ac"
         else:
@@ -2090,7 +2093,7 @@ def user_info_pdf():
         io.BytesIO(pdf_bytes),
         mimetype="application/pdf",
         as_attachment=True,
-        download_name=f"Transaktionen_{user['vorname']}_{user['nachname']}.pdf"
+        download_name=f"Transaktionen_{user['vorname']}_{user['nachname']}.pdf",
     )
 
 

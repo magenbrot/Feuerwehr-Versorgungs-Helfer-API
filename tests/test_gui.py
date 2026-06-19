@@ -34,7 +34,6 @@ def test_qr_code_with_login(client_gui):
 
     # Mock erzeuge_qr_code to return a dummy image
     with patch("gui.erzeuge_qr_code") as mock_qr:
-
         mock_qr.return_value = Image.new("RGB", (10, 10))
 
         response = client_gui.get("/qr_code?usercode=123&aktion=a")

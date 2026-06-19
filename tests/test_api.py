@@ -58,22 +58,20 @@ def test_nfc_transaction_missing_data(client, mock_db):
 
 
 def test_nfc_transaction_unknown_token(client, mock_db):
-    with patch("api.get_user_by_api_key") as mock_get_user, \
-         patch("api.finde_benutzer_zu_nfc_token") as mock_find_user, \
-         patch("api.prepare_and_send_email") as mock_send_email:
-        
+    with (
+        patch("api.get_user_by_api_key") as mock_get_user,
+        patch("api.finde_benutzer_zu_nfc_token") as mock_find_user,
+        patch("api.prepare_and_send_email") as mock_send_email,
+    ):
         mock_get_user.return_value = (1, "testuser")
         mock_find_user.return_value = None
-        
+
         token_base64 = base64.b64encode(b"\x01\x02\x03\x04").decode("utf-8")
-        payload = {
-            "token": token_base64,
-            "beschreibung": "Test Reader"
-        }
-        
+        payload = {"token": token_base64, "beschreibung": "Test Reader"}
+
         response = client.put("/nfc-transaktion", headers={"X-API-Key": "valid-key"}, json=payload)
         assert response.status_code == 404
-        
+
         # Verify email was dispatched
         mock_send_email.assert_called_once()
         args, _ = mock_send_email.call_args

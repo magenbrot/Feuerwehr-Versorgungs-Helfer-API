@@ -66,6 +66,7 @@ if os.environ.get("TESTING") != "True":
         logger.info("Kritischer Fehler beim Starten der Datenbankverbindung: %s", e)
         sys.exit(1)
 
+
 def _get_version() -> str:
     """Loads version from package metadata or falls back to pyproject.toml."""
     try:
@@ -555,9 +556,7 @@ def health_protected_route(api_user_id: int, api_username: str):
         api_user_id,
         api_username,
     )
-    return jsonify(
-        {"message": f"Healthcheck OK! Authentifizierter API-Benutzer ID {api_user_id} ({api_username})."}
-    )
+    return jsonify({"message": f"Healthcheck OK! Authentifizierter API-Benutzer ID {api_user_id} ({api_username})."})
 
 
 @app.route("/users", methods=["GET"])
@@ -702,12 +701,16 @@ def nfc_transaction(api_user_id_auth: int, api_username_auth: str):
         (benutzer_info["id"], daten["beschreibung"], trans_saldo_aenderung),
     )
     if not success:
-        logger.error("Fehler bei NFC-Transaktion für User %s: DB-Fehler beim Insert.", benutzer_info.get("id", "Unbekannt"))
+        logger.error(
+            "Fehler bei NFC-Transaktion für User %s: DB-Fehler beim Insert.", benutzer_info.get("id", "Unbekannt")
+        )
         return jsonify({"error": "Fehler bei der Transaktionsverarbeitung."}), 500
 
     # select sum
     saldo_row = db_utils.fetch_one(
-        "SELECT SUM(saldo_aenderung) AS saldo FROM transactions WHERE user_id = %s", (benutzer_info["id"],), dictionary=True
+        "SELECT SUM(saldo_aenderung) AS saldo FROM transactions WHERE user_id = %s",
+        (benutzer_info["id"],),
+        dictionary=True,
     )
     neuer_saldo = saldo_row["saldo"] if saldo_row and saldo_row["saldo"] is not None else 0
 
@@ -903,9 +906,7 @@ def get_alle_transaktionen(api_user_id: int, api_username: str):
     """
 
     logger.info("API-Benutzer authentifiziert: ID %s - %s. Rufe alle Transaktionen ab.", api_user_id, api_username)
-    query = (
-        "SELECT t.id, u.nachname AS nachname, u.vorname AS vorname, t.beschreibung, t.timestamp FROM transactions AS t INNER JOIN users AS u ON t.user_id = u.id ORDER BY t.timestamp DESC;"
-    )
+    query = "SELECT t.id, u.nachname AS nachname, u.vorname AS vorname, t.beschreibung, t.timestamp FROM transactions AS t INNER JOIN users AS u ON t.user_id = u.id ORDER BY t.timestamp DESC;"
     transaktionen_liste = db_utils.fetch_all(query, dictionary=True)
     logger.info("Alle Transaktionen wurden ermittelt (%s Einträge).", len(transaktionen_liste))
     return jsonify(transaktionen_liste)
