@@ -1999,10 +1999,10 @@ def user_info_pdf():
         app_slogan = app_slogan.encode("latin-1", "replace").decode("latin-1")
 
     pdf.set_font(font_name, style="B", size=16)
-    pdf.cell(100, 10, app_name, ln=1)
+    pdf.cell(100, 10, app_name, new_x="LMARGIN", new_y="NEXT")
     if app_slogan:
         pdf.set_font(font_name, style="I", size=9)
-        pdf.cell(100, 5, app_slogan, ln=1)
+        pdf.cell(100, 5, app_slogan, new_x="LMARGIN", new_y="NEXT")
     pdf.ln(8)
 
     # Trennlinie
