@@ -16,7 +16,6 @@ from pathlib import Path
 
 import qrcode
 import qrcode.constants
-from fpdf import FPDF
 from flask import (  # pigar: required-packages=uWSGI
     Flask,
     flash,
@@ -27,6 +26,7 @@ from flask import (  # pigar: required-packages=uWSGI
     session,
     url_for,
 )
+from fpdf import FPDF
 from jinja2 import TemplateError
 from mysql.connector import Error
 from PIL import Image, ImageDraw, ImageFont
