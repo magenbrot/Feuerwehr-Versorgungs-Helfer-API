@@ -26,6 +26,7 @@ from flask import (  # pigar: required-packages=uWSGI
     session,
     url_for,
 )
+from fpdf import FPDF
 from jinja2 import TemplateError
 from mysql.connector import Error
 from PIL import Image, ImageDraw, ImageFont
@@ -1944,6 +1945,152 @@ def user_info():
         all_notification_types=all_notification_types_data,
         user_notification_settings=user_notification_settings_data,
         version=app.config.get("version", "unbekannt"),
+    )
+
+
+@app.route("/user_info/pdf")
+def user_info_pdf():
+    """
+    Generiert einen PDF-Bericht über alle Transaktionen des angemeldeten Benutzers und sendet ihn.
+    """
+    user_id = session.get("user_id")
+    if not user_id:
+        flash("Bitte zuerst einloggen.", "success")
+        return redirect(BASE_URL + url_for("login"))
+
+    user = get_user_by_id(user_id)
+    if not user or user.get("is_locked"):
+        session.pop("user_id", None)
+        flash("Benutzer nicht gefunden oder Konto gesperrt.", "error")
+        return redirect(BASE_URL + url_for("login"))
+
+    transactions = get_user_transactions(user_id)
+    saldo = sum(t["saldo_aenderung"] for t in transactions) if transactions else 0
+
+    # PDF generieren
+    pdf = FPDF()
+    pdf.add_page()
+
+    # Lokale Schriftarten laden (DejaVuSans für Unicode-Support)
+    font_path_regular = "static/fonts/DejaVuSans.ttf"
+    font_path_bold = "static/fonts/DejaVuSans-Bold.ttf"
+    font_path_italic = "static/fonts/DejaVuSans-Oblique.ttf"
+
+    has_dejavu = os.path.exists(font_path_regular) and os.path.exists(font_path_bold) and os.path.exists(font_path_italic)
+    if has_dejavu:
+        pdf.add_font("DejaVu", style="", fname=font_path_regular)
+        pdf.add_font("DejaVu", style="B", fname=font_path_bold)
+        pdf.add_font("DejaVu", style="I", fname=font_path_italic)
+        pdf.set_font("DejaVu", size=10)
+        font_name = "DejaVu"
+    else:
+        pdf.set_font("Helvetica", size=10)
+        font_name = "Helvetica"
+
+    # --- HEADER ---
+    logo_path = "static/logo/logo-120x164.png"
+    if os.path.exists(logo_path):
+        pdf.image(logo_path, x=176, y=8, w=14)
+
+    app_name = config.app_name or "Feuerwehr-Versorgungs-Helfer"
+    app_slogan = config.app_slogan or ""
+    if not has_dejavu:
+        app_name = app_name.encode("latin-1", "replace").decode("latin-1")
+        app_slogan = app_slogan.encode("latin-1", "replace").decode("latin-1")
+
+    pdf.set_font(font_name, style="B", size=16)
+    pdf.cell(100, 10, app_name, new_x="LMARGIN", new_y="NEXT")
+    if app_slogan:
+        pdf.set_font(font_name, style="I", size=9)
+        pdf.cell(100, 5, app_slogan, new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(8)
+
+    # Trennlinie
+    pdf.set_draw_color(220, 220, 220)
+    pdf.line(10, 31, 200, 31)
+    pdf.ln(5)
+
+    # --- INFOS ---
+    pdf.set_font(font_name, style="B", size=12)
+    pdf.cell(100, 8, "Transaktionsbericht", ln=1)
+    pdf.set_font(font_name, size=10)
+    user_name = f"{user['vorname']} {user['nachname']}"
+    if not has_dejavu:
+        user_name = user_name.encode("latin-1", "replace").decode("latin-1")
+    pdf.cell(100, 6, f"Benutzer: {user_name}", ln=1)
+    pdf.cell(100, 6, f"Benutzer-Code: {user['code']}", ln=1)
+    pdf.cell(100, 6, f"Erstellt am: {datetime.now().strftime('%d.%m.%Y um %H:%M Uhr')}", ln=1)
+    pdf.ln(5)
+
+    # --- SALDO ANZEIGE ---
+    pdf.set_fill_color(245, 247, 250)
+    pdf.set_draw_color(226, 232, 240)
+    pdf.rect(10, pdf.get_y(), 190, 12, style="DF")
+    pdf.set_font(font_name, style="B", size=11)
+    pdf.set_y(pdf.get_y() + 2)
+    pdf.cell(10, 8, "") # Spacer
+    pdf.cell(100, 8, "Aktueller Kontostand (Saldo):")
+    pdf.set_x(150)
+    saldo_unit = "\\u20ac" if has_dejavu else "EUR"
+    pdf.cell(40, 8, f"{saldo:.2f} {saldo_unit}", align="R", ln=1)
+    pdf.set_font(font_name, size=10)
+    pdf.ln(6)
+
+    # --- TABELLE ---
+    col_widths = [105, 35, 50] # Summe 190
+    pdf.set_fill_color(220, 38, 38) # Rote Kopfzeile
+    pdf.set_text_color(255, 255, 255)
+    pdf.set_font(font_name, style="B", size=10)
+    pdf.cell(col_widths[0], 8, " Beschreibung", border=1, fill=True)
+    pdf.cell(col_widths[1], 8, "Betrag ", border=1, fill=True, align="R")
+    pdf.cell(col_widths[2], 8, "Zeitpunkt ", border=1, fill=True, align="R")
+    pdf.ln()
+
+    # Tabelleneinträge
+    pdf.set_text_color(15, 23, 42)
+    pdf.set_font(font_name, size=9)
+    fill_row = False
+    
+    for t in transactions:
+        if fill_row:
+            pdf.set_fill_color(248, 250, 252)
+        else:
+            pdf.set_fill_color(255, 255, 255)
+
+        beschreibung = t.get("beschreibung", "") or ""
+        if not has_dejavu:
+            # Helvetica / latin-1 fallback
+            beschreibung = beschreibung.encode("latin-1", "replace").decode("latin-1")
+        if len(beschreibung) > 55:
+            beschreibung = beschreibung[:52] + "..."
+            
+        saldo_change = t.get("saldo_aenderung", 0.0)
+        sign = "+" if saldo_change > 0 else ""
+        
+        if has_dejavu:
+            amount_str = f"{sign}{saldo_change:.2f} \u20ac"
+        else:
+            amount_str = f"{sign}{saldo_change:.2f} EUR"
+
+        timestamp = t.get("timestamp")
+        if timestamp and hasattr(timestamp, "strftime"):
+            timestamp_str = timestamp.strftime("%d.%m.%Y %H:%M")
+        else:
+            timestamp_str = str(timestamp or "")
+
+        pdf.cell(col_widths[0], 8, f" {beschreibung}", border=1, fill=True)
+        pdf.cell(col_widths[1], 8, f"{amount_str} ", border=1, fill=True, align="R")
+        pdf.cell(col_widths[2], 8, f"{timestamp_str} ", border=1, fill=True, align="R")
+        pdf.ln()
+        fill_row = not fill_row
+
+    # Bytes an Flask zurücksenden
+    pdf_bytes = pdf.output()
+    return send_file(
+        io.BytesIO(pdf_bytes),
+        mimetype="application/pdf",
+        as_attachment=True,
+        download_name=f"Transaktionen_{user['vorname']}_{user['nachname']}.pdf"
     )
 
 
