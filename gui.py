@@ -10,6 +10,7 @@ import random
 import secrets
 import string
 import sys
+import tomllib
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -26,7 +27,7 @@ from flask import (  # pigar: required-packages=uWSGI
     url_for,
 )
 from jinja2 import TemplateError
-from mysql.connector import Error, IntegrityError
+from mysql.connector import Error
 from PIL import Image, ImageDraw, ImageFont
 from qrcode.image.pil import PilImage
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -89,19 +90,21 @@ if os.environ.get("TESTING") != "True":
 # Starte den Health-Check-Thread, nachdem der Pool initialisiert wurde
 # db_utils.DatabaseConnectionPool.start_health_check_thread()
 
-# Version laden
-try:
-    version = importlib_metadata.version("feuerwehr-versorgungs-helfer-api")
-    app.config.update(version=version)
-except importlib_metadata.PackageNotFoundError:
-    # Fallback für lokale Entwicklung
+def _get_version() -> str:
+    """Loads version from package metadata or falls back to pyproject.toml."""
     try:
-        import tomllib
-        with open("pyproject.toml", "rb") as f:
-            data = tomllib.load(f)
-            app.config.update(version=data["project"]["version"])
-    except (FileNotFoundError, ImportError, KeyError):
-        app.config.update(version="Unknown (Dev)")
+        return importlib_metadata.version("feuerwehr-versorgungs-helfer-api")
+    except importlib_metadata.PackageNotFoundError:
+        # Fallback für lokale Entwicklung
+        try:
+            with open("pyproject.toml", "rb") as f_toml:
+                data_toml = tomllib.load(f_toml)
+                return data_toml["project"]["version"]
+        except (FileNotFoundError, KeyError):
+            return "Unknown (Dev)"
+
+
+app.config.update(version=_get_version())
 
 logger.info("Feuerwehr-Versorgungs-Helfer GUI (Version %s) wurde gestartet", app.config.get("version"))
 
@@ -350,6 +353,18 @@ def update_system_setting(einstellung_schluessel, einstellung_wert):
     return success
 
 
+def check_nfc_token_exists(token_hex: str) -> bool:
+    """
+    Prüft, ob ein NFC-Token mit diesen Hex-Daten bereits existiert.
+    """
+    token_binary = utils.hex_to_binary(token_hex)
+    if not token_binary:
+        return False
+    query = "SELECT 1 FROM nfc_token WHERE token_daten = %s"
+    row = db_utils.fetch_one(query, (token_binary,))
+    return row is not None
+
+
 # NFC-Token Handling
 def add_user_nfc_token(user_id, token_name, token_hex):
     """
@@ -368,26 +383,19 @@ def add_user_nfc_token(user_id, token_name, token_hex):
     if not token_binary:
         flash("Ungültige NFC-Token Daten. Bitte überprüfe die Eingabe.", "error")
         return False
+
+    if check_nfc_token_exists(token_hex):
+        logger.warning("Versuch, einen doppelten NFC-Token hinzuzufügen: %s", token_hex)
+        flash("Dieser NFC-Token ist bereits vorhanden und kann nicht erneut hinzugefügt werden.", "error")
+        return False
+
     query = "INSERT INTO nfc_token SET user_id = %s, token_name = %s, token_daten = %s, last_used = NOW()"
-    try:
-        result = db_utils.execute_commit(query, (user_id, token_name, token_binary))
-        success = result[0] if result else False
-        if success:
-            return True
-        flash("Fehler beim Hinzufügen des NFC-Tokens.", "error")
-        return False
-    except IntegrityError as err:
-        if err.errno == 1062:
-            logger.warning("Versuch, einen doppelten NFC-Token hinzuzufügen: %s", token_hex)
-            flash("Dieser NFC-Token ist bereits vorhanden und kann nicht erneut hinzugefügt werden.", "error")
-        else:
-            logger.error("Datenbank-Integritätsfehler beim Hinzufügen des NFC-Tokens: %s", err)
-            flash(f"Ein Datenbank-Integritätsfehler ist aufgetreten: {err}", "error")
-        return False
-    except Error as err:
-        logger.error("Fehler beim Hinzufügen des NFC-Tokens: %s", err)
-        flash("Ein unerwarteter Datenbankfehler ist aufgetreten.", "error")
-        return False
+    result = db_utils.execute_commit(query, (user_id, token_name, token_binary))
+    success = result[0] if result else False
+    if success:
+        return True
+    flash("Fehler beim Hinzufügen des NFC-Tokens.", "error")
+    return False
 
 
 def delete_user_nfc_token(user_id, token_id):
@@ -628,27 +636,14 @@ def get_saldo_by_user():
               Enthält alle Benutzer, auch solche ohne Transaktionen (Wert dann 0).
     """
 
-    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
-    if cnx:
-        cursor = cnx.cursor(dictionary=True)
-        try:
-            query = """
-                SELECT u.id, SUM(t.saldo_aenderung) AS saldo
-                FROM users u
-                LEFT JOIN transactions t ON u.id = t.user_id
-                GROUP BY u.id
-            """
-            cursor.execute(query)
-            saldo_by_user = {row["id"]: row["saldo"] or 0 for row in cursor.fetchall()}
-            return saldo_by_user
-        except Error as err:
-            logger.error("Datenbankfehler beim Abrufen des Saldos pro Benutzer: %s", err)
-            return {}
-        finally:
-            if cursor:
-                cursor.close()
-            db_utils.DatabaseConnectionPool.close_connection(cnx)
-    return {}
+    query = """
+        SELECT u.id, SUM(t.saldo_aenderung) AS saldo
+        FROM users u
+        LEFT JOIN transactions t ON u.id = t.user_id
+        GROUP BY u.id
+    """
+    rows = db_utils.fetch_all(query, dictionary=True)
+    return {row["id"]: row["saldo"] or 0 for row in rows} if rows else {}
 
 
 def get_all_users():
@@ -661,26 +656,12 @@ def get_all_users():
               Gibt eine leere Liste zurück, falls ein Fehler auftritt.
     """
 
-    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
-    if cnx:
-        cursor = cnx.cursor(dictionary=True)
-        try:
-            query = """
-                SELECT id, code, nachname, vorname, email, kommentar, is_locked, is_admin
-                FROM users
-                ORDER BY nachname, vorname
-            """
-            cursor.execute(query)
-            users = cursor.fetchall()
-            return users
-        except Error as err:
-            logger.error("Datenbankfehler beim Abrufen aller Benutzer: %s", err)
-            return []
-        finally:
-            if cursor:
-                cursor.close()
-            db_utils.DatabaseConnectionPool.close_connection(cnx)
-    return []
+    query = """
+        SELECT id, code, nachname, vorname, email, kommentar, is_locked, is_admin
+        FROM users
+        ORDER BY nachname, vorname
+    """
+    return db_utils.fetch_all(query, dictionary=True)
 
 
 def get_all_api_users():
@@ -692,22 +673,8 @@ def get_all_api_users():
               (id, username). Gibt eine leere Liste zurück, falls ein Fehler auftritt.
     """
 
-    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
-    if cnx:
-        cursor = cnx.cursor(dictionary=True)
-        try:
-            query = "SELECT id, username FROM api_users ORDER BY username"
-            cursor.execute(query)
-            api_users = cursor.fetchall()
-            return api_users
-        except Error as err:
-            logger.error("Datenbankfehler beim Abrufen aller API-Benutzer: %s", err)
-            return []
-        finally:
-            if cursor:
-                cursor.close()
-            db_utils.DatabaseConnectionPool.close_connection(cnx)
-    return []
+    query = "SELECT id, username FROM api_users ORDER BY username"
+    return db_utils.fetch_all(query, dictionary=True)
 
 
 def get_api_user_by_id(api_user_id):
@@ -722,22 +689,8 @@ def get_api_user_by_id(api_user_id):
               oder None, falls kein API-Benutzer gefunden wird.
     """
 
-    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
-    if cnx:
-        cursor = cnx.cursor(dictionary=True)
-        try:
-            query = "SELECT id, username FROM api_users WHERE id = %s"
-            cursor.execute(query, (api_user_id,))
-            api_user = cursor.fetchone()
-            return api_user
-        except Error as err:
-            logger.error("Datenbankfehler beim Abrufen des API-Benutzers: %s", err)
-            return None
-        finally:
-            if cursor:
-                cursor.close()
-            db_utils.DatabaseConnectionPool.close_connection(cnx)
-    return None
+    query = "SELECT id, username FROM api_users WHERE id = %s"
+    return db_utils.fetch_one(query, (api_user_id,), dictionary=True)
 
 
 def get_api_keys_for_api_user(api_user_id):
@@ -752,22 +705,8 @@ def get_api_keys_for_api_user(api_user_id):
               (id, api_key_name, api_key). Gibt eine leere Liste zurück, falls keine Keys gefunden werden oder ein Fehler auftritt.
     """
 
-    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
-    if cnx:
-        cursor = cnx.cursor(dictionary=True)
-        try:
-            query = "SELECT id, api_key_name, api_key FROM api_keys WHERE user_id = %s ORDER BY id"
-            cursor.execute(query, (api_user_id,))
-            keys = cursor.fetchall()
-            return keys
-        except Error as err:
-            logger.error("Datenbankfehler beim Abrufen der API-Keys für API-Benutzer %s: %s", api_user_id, err)
-            return []
-        finally:
-            if cursor:
-                cursor.close()
-            db_utils.DatabaseConnectionPool.close_connection(cnx)
-    return []
+    query = "SELECT id, api_key_name, api_key FROM api_keys WHERE user_id = %s ORDER BY id"
+    return db_utils.fetch_all(query, (api_user_id,), dictionary=True)
 
 
 def get_user_transactions(user_id):
@@ -782,22 +721,8 @@ def get_user_transactions(user_id):
               (id, beschreibung, saldo_aenderung, timestamp). Gibt None zurück, falls ein Fehler auftritt.
     """
 
-    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
-    if cnx:
-        cursor = cnx.cursor(dictionary=True)
-        try:
-            query = "SELECT id, beschreibung, saldo_aenderung, timestamp FROM transactions WHERE user_id = %s ORDER BY timestamp DESC"
-            cursor.execute(query, (user_id,))
-            transactions = cursor.fetchall()
-            return transactions
-        except Error as err:
-            logger.error("Datenbankfehler beim Abrufen der Benutzertransaktionen: %s", err)
-            return None
-        finally:
-            if cursor:
-                cursor.close()
-            db_utils.DatabaseConnectionPool.close_connection(cnx)
-    return None
+    query = "SELECT id, beschreibung, saldo_aenderung, timestamp FROM transactions WHERE user_id = %s ORDER BY timestamp DESC"
+    return db_utils.fetch_all(query, (user_id,), dictionary=True)
 
 
 def add_transaction(user_id, beschreibung, saldo_aenderung):
@@ -813,24 +738,9 @@ def add_transaction(user_id, beschreibung, saldo_aenderung):
         bool: True bei Erfolg, False bei Fehler.
     """
 
-    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
-    if cnx:
-        cursor = cnx.cursor()
-        try:
-            query = "INSERT INTO transactions (user_id, beschreibung, saldo_aenderung) VALUES (%s, %s, %s)"
-            cursor.execute(query, (user_id, beschreibung, saldo_aenderung))
-            cnx.commit()
-            return True
-        except Error as err:
-            logger.error("Fehler beim Hinzufügen der Transaktion: %s", err)
-            flash(f"Datenbankfehler beim Hinzufügen der Transaktion: {err}", "error")
-            cnx.rollback()
-            return False
-        finally:
-            if cursor:
-                cursor.close()
-            db_utils.DatabaseConnectionPool.close_connection(cnx)
-    return False
+    query = "INSERT INTO transactions (user_id, beschreibung, saldo_aenderung) VALUES (%s, %s, %s)"
+    success, _ = db_utils.execute_commit(query, (user_id, beschreibung, saldo_aenderung))
+    return success
 
 
 def delete_all_transactions(user_id):
@@ -844,23 +754,9 @@ def delete_all_transactions(user_id):
         bool: True bei Erfolg, False bei Fehler.
     """
 
-    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
-    if cnx:
-        cursor = cnx.cursor()
-        try:
-            query = "DELETE FROM transactions WHERE user_id = %s"
-            cursor.execute(query, (user_id,))
-            cnx.commit()
-            return True
-        except Error as err:
-            logger.error("Fehler beim Löschen der Transaktionen: %s", err)
-            cnx.rollback()
-            return False
-        finally:
-            if cursor:
-                cursor.close()
-            db_utils.DatabaseConnectionPool.close_connection(cnx)
-    return False
+    query = "DELETE FROM transactions WHERE user_id = %s"
+    success, _ = db_utils.execute_commit(query, (user_id,))
+    return success
 
 
 def get_recent_transactions(limit=10):
@@ -874,39 +770,26 @@ def get_recent_transactions(limit=10):
         list: Liste von Dictionaries mit Feldern wie id, user_id, nachname, vorname, beschreibung, saldo_aenderung, timestamp.
     """
 
-    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
-    if cnx:
-        cursor = cnx.cursor(dictionary=True)
-        try:
-            query = (
-                "SELECT t.id, t.user_id, u.nachname AS nachname, u.vorname AS vorname, "
-                "t.beschreibung, t.saldo_aenderung, t.timestamp "
-                "FROM transactions t LEFT JOIN users u ON t.user_id = u.id "
-                "ORDER BY t.timestamp DESC LIMIT %s"
-            )
-            cursor.execute(query, (limit,))
-            rows = cursor.fetchall()
+    query = (
+        "SELECT t.id, t.user_id, u.nachname AS nachname, u.vorname AS vorname, "
+        "t.beschreibung, t.saldo_aenderung, t.timestamp "
+        "FROM transactions t LEFT JOIN users u ON t.user_id = u.id "
+        "ORDER BY t.timestamp DESC LIMIT %s"
+    )
+    rows = db_utils.fetch_all(query, (limit,), dictionary=True)
 
-            # Format timestamps for display
-            for row in rows or []:
-                ts = row.get("timestamp")
-                try:
-                    if ts:
-                        row["timestamp_display"] = ts.strftime("%d.%m.%Y %H:%M")
-                    else:
-                        row["timestamp_display"] = ""
-                except (AttributeError, ValueError):
-                    # Fallback: use str()
-                    row["timestamp_display"] = str(ts) if ts is not None else ""
-            return rows if rows else []
-        except Error as err:
-            logger.error("Datenbankfehler beim Abrufen der neuesten Transaktionen: %s", err)
-            return []
-        finally:
-            if cursor:
-                cursor.close()
-            db_utils.DatabaseConnectionPool.close_connection(cnx)
-    return []
+    # Format timestamps for display
+    for row in rows or []:
+        ts = row.get("timestamp")
+        try:
+            if ts:
+                row["timestamp_display"] = ts.strftime("%d.%m.%Y %H:%M")
+            else:
+                row["timestamp_display"] = ""
+        except (AttributeError, ValueError):
+            # Fallback: use str()
+            row["timestamp_display"] = str(ts) if ts is not None else ""
+    return rows if rows else []
 
 
 def update_password(user_id, new_password_hash):
@@ -921,23 +804,9 @@ def update_password(user_id, new_password_hash):
         bool: True bei Erfolg, False bei Fehler.
     """
 
-    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
-    if cnx:
-        cursor = cnx.cursor()
-        try:
-            query = "UPDATE users SET password = %s WHERE id = %s"
-            cursor.execute(query, (new_password_hash, user_id))
-            cnx.commit()
-            return True
-        except Error as err:
-            logger.error("Fehler beim Aktualisieren des Passworts: %s", err)
-            cnx.rollback()
-            return False
-        finally:
-            if cursor:
-                cursor.close()
-            db_utils.DatabaseConnectionPool.close_connection(cnx)
-    return False
+    query = "UPDATE users SET password = %s WHERE id = %s"
+    success, _ = db_utils.execute_commit(query, (new_password_hash, user_id))
+    return success
 
 
 def add_regular_user_db(user_data):
@@ -961,48 +830,27 @@ def add_regular_user_db(user_data):
         bool: True bei Erfolg, False bei Fehler (z.B. Datenbankfehler, doppelter Code).
     """
 
-    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
-    if cnx:
-        cursor = cnx.cursor()
-        hashed_password = generate_password_hash(user_data["password"])
-        try:
-            query = """
-                INSERT INTO users (code, nachname, vorname, password, email, kommentar, acc_duties, acc_privacy_policy, is_locked, is_admin)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """
-            cursor.execute(
-                query,
-                (
-                    user_data["code"],
-                    user_data["nachname"],
-                    user_data["vorname"],
-                    hashed_password,
-                    user_data.get("email") or None,
-                    user_data.get("kommentar") or None,
-                    1 if user_data.get("acc_duties") else 0,
-                    1 if user_data.get("acc_privacy_policy") else 0,
-                    1 if user_data.get("is_locked") else 0,
-                    1 if user_data.get("is_admin") else 0,
-                ),
-            )
-            cnx.commit()
-            return True
-        except IntegrityError:
-            flash(
-                f"Die Emailadresse '{user_data['email']}' existiert bereits oder ein anderes eindeutiges Feld ist doppelt.",
-                "error",
-            )
-            cnx.rollback()
-            return False
-        except Error as err:
-            logger.error("Fehler beim Hinzufügen des regulären Benutzers: %s", err)
-            flash("Datenbankfehler beim Hinzufügen des Benutzers.", "error")
-            cnx.rollback()
-            return False
-        finally:
-            cursor.close()
-            db_utils.DatabaseConnectionPool.close_connection(cnx)
-    return False
+    hashed_password = generate_password_hash(user_data["password"])
+    query = """
+        INSERT INTO users (code, nachname, vorname, password, email, kommentar, acc_duties, acc_privacy_policy, is_locked, is_admin)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    """
+    params = (
+        user_data["code"],
+        user_data["nachname"],
+        user_data["vorname"],
+        hashed_password,
+        user_data.get("email") or None,
+        user_data.get("kommentar") or None,
+        1 if user_data.get("acc_duties") else 0,
+        1 if user_data.get("acc_privacy_policy") else 0,
+        1 if user_data.get("is_locked") else 0,
+        1 if user_data.get("is_admin") else 0,
+    )
+    success, _ = db_utils.execute_commit(query, params)
+    if not success:
+        flash("Datenbankfehler beim Hinzufügen des Benutzers.", "error")
+    return success
 
 
 def get_user_by_email(email):
@@ -1016,21 +864,8 @@ def get_user_by_email(email):
         dict: Ein Dictionary mit Benutzerdaten oder None.
     """
 
-    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
-    if cnx:
-        cursor = cnx.cursor(dictionary=True)
-        try:
-            query = "SELECT id, code, nachname, vorname, email, is_locked FROM users WHERE email = %s"
-            cursor.execute(query, (email,))
-            return cursor.fetchone()
-        except Error as err:
-            logger.error("Datenbankfehler bei der Suche nach E-Mail: %s", err)
-            return None
-        finally:
-            if cursor:
-                cursor.close()
-            db_utils.DatabaseConnectionPool.close_connection(cnx)
-    return None
+    query = "SELECT id, code, nachname, vorname, email, is_locked FROM users WHERE email = %s"
+    return db_utils.fetch_one(query, (email,), dictionary=True)
 
 
 def store_reset_token(user_id, token):
@@ -1045,26 +880,13 @@ def store_reset_token(user_id, token):
         bool: True bei Erfolg, False bei Fehler.
     """
 
-    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
-    if not cnx:
-        return False
-    cursor = cnx.cursor()
-    try:
-        # Alte Tokens für diesen Benutzer löschen, um Missbrauch zu vermeiden
-        cursor.execute("DELETE FROM password_reset_tokens WHERE user_id = %s", (user_id,))
-        # Neuen Token mit 1 Stunde Gültigkeit einfügen
-        expires_at = datetime.now(UTC) + timedelta(hours=1)
-        query = "INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES (%s, %s, %s)"
-        cursor.execute(query, (user_id, token, expires_at))
-        cnx.commit()
-        return True
-    except Error as err:
-        logger.error("Fehler beim Speichern des Reset-Tokens: %s", err)
-        cnx.rollback()
-        return False
-    finally:
-        cursor.close()
-        db_utils.DatabaseConnectionPool.close_connection(cnx)
+    # Alte Tokens für diesen Benutzer löschen, um Missbrauch zu vermeiden
+    db_utils.execute_commit("DELETE FROM password_reset_tokens WHERE user_id = %s", (user_id,))
+    # Neuen Token mit 1 Stunde Gültigkeit einfügen
+    expires_at = datetime.now(UTC) + timedelta(hours=1)
+    query = "INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES (%s, %s, %s)"
+    success, _ = db_utils.execute_commit(query, (user_id, token, expires_at))
+    return success
 
 
 def get_user_by_reset_token(token):
@@ -1078,24 +900,12 @@ def get_user_by_reset_token(token):
         dict: Benutzerdaten, wenn der Token gültig und nicht abgelaufen ist, sonst None.
     """
 
-    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
-    if not cnx:
-        return None
-    cursor = cnx.cursor(dictionary=True)
-    try:
-        query = """
-            SELECT u.* FROM users u
-            JOIN password_reset_tokens prt ON u.id = prt.user_id
-            WHERE prt.token = %s AND prt.expires_at > %s
-        """
-        cursor.execute(query, (token, datetime.now(UTC)))
-        return cursor.fetchone()
-    except Error as err:
-        logger.error("Fehler beim Validieren des Reset-Tokens: %s", err)
-        return None
-    finally:
-        cursor.close()
-        db_utils.DatabaseConnectionPool.close_connection(cnx)
+    query = """
+        SELECT u.* FROM users u
+        JOIN password_reset_tokens prt ON u.id = prt.user_id
+        WHERE prt.token = %s AND prt.expires_at > %s
+    """
+    return db_utils.fetch_one(query, (token, datetime.now(UTC)), dictionary=True)
 
 
 def delete_reset_token(token):
@@ -1106,25 +916,9 @@ def delete_reset_token(token):
         token (str): Der zu löschende Token.
     """
 
-    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
-    if not cnx:
-        logger.error("Konnte keine DB-Verbindung für delete_reset_token herstellen.")
-        return False
-    cursor = None
-    try:
-        cursor = cnx.cursor()
-        query = "DELETE FROM password_reset_tokens WHERE token = %s"
-        cursor.execute(query, (token,))
-        cnx.commit()
-        return True
-    except db_utils.Error as err:
-        logger.error("Fehler beim Löschen des Reset-Tokens: %s", err)
-        cnx.rollback()
-        return False
-    finally:
-        if cursor is not None:
-            cursor.close()
-        db_utils.DatabaseConnectionPool.close_connection(cnx)
+    query = "DELETE FROM password_reset_tokens WHERE token = %s"
+    success, _ = db_utils.execute_commit(query, (token,))
+    return success
 
 
 # --- E-Mail Hilfsfunktion: Template-Rendering und Versand ---
@@ -1324,23 +1118,12 @@ def add_api_user_db(username):
     Returns:
         int or None: Die ID des neu erstellten API-Benutzers bei Erfolg, sonst None.
     """
-    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
-    if cnx:
-        cursor = cnx.cursor()
-        try:
-            query = "INSERT INTO api_users (username) VALUES (%s)"
-            cursor.execute(query, (username,))
-            cnx.commit()
-            new_id = cursor.lastrowid
-            return new_id
-        except db_utils.Error as err:
-            logger.error("Fehler beim Hinzufügen des API-Benutzers: %s", err)
-            flash("Datenbankfehler beim Hinzufügen des API-Benutzers.", "error")
-            cnx.rollback()
-            return None
-        finally:
-            cursor.close()
-            db_utils.DatabaseConnectionPool.close_connection(cnx)
+
+    query = "INSERT INTO api_users (username) VALUES (%s)"
+    success, lastrowid = db_utils.execute_commit(query, (username,))
+    if success:
+        return lastrowid
+    flash("Datenbankfehler beim Hinzufügen des API-Benutzers.", "error")
     return None
 
 
@@ -1356,23 +1139,12 @@ def add_api_key_for_user_db(api_user_id, api_key_name_string, api_key_string):
     Returns:
         bool: True bei Erfolg, False bei Fehler.
     """
-    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
-    if cnx:
-        cursor = cnx.cursor()
-        try:
-            query = "INSERT INTO api_keys (user_id, api_key_name, api_key) VALUES (%s, %s, %s)"
-            cursor.execute(query, (api_user_id, api_key_name_string, api_key_string))
-            cnx.commit()
-            return True
-        except db_utils.Error as err:
-            logger.error("Fehler beim Hinzufügen des API-Keys: %s", err)
-            flash("Datenbankfehler beim Hinzufügen des API-Keys.", "error")
-            cnx.rollback()
-            return False
-        finally:
-            cursor.close()
-            db_utils.DatabaseConnectionPool.close_connection(cnx)
-    return False
+
+    query = "INSERT INTO api_keys (user_id, api_key_name, api_key) VALUES (%s, %s, %s)"
+    success, _ = db_utils.execute_commit(query, (api_user_id, api_key_name_string, api_key_string))
+    if not success:
+        flash("Datenbankfehler beim Hinzufügen des API-Keys.", "error")
+    return success
 
 
 def delete_api_key_db(api_key_id):
@@ -1385,23 +1157,12 @@ def delete_api_key_db(api_key_id):
     Returns:
         bool: True bei Erfolg, False bei Fehler.
     """
-    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
-    if cnx:
-        cursor = cnx.cursor()
-        try:
-            query = "DELETE FROM api_keys WHERE id = %s"
-            cursor.execute(query, (api_key_id,))
-            cnx.commit()
-            return True
-        except db_utils.Error as err:
-            logger.error("Fehler beim Löschen des API-Keys: %s", err)
-            flash("Datenbankfehler beim Löschen des API-Keys.", "error")
-            cnx.rollback()
-            return False
-        finally:
-            cursor.close()
-            db_utils.DatabaseConnectionPool.close_connection(cnx)
-    return False
+
+    query = "DELETE FROM api_keys WHERE id = %s"
+    success, _ = db_utils.execute_commit(query, (api_key_id,))
+    if not success:
+        flash("Datenbankfehler beim Löschen des API-Keys.", "error")
+    return success
 
 
 def delete_api_user_and_keys_db(api_user_id):
@@ -1414,27 +1175,14 @@ def delete_api_user_and_keys_db(api_user_id):
     Returns:
         bool: True bei Erfolg, False bei Fehler.
     """
-    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
-    if cnx:
-        cursor = cnx.cursor()
-        try:
-            # Zuerst alle API-Keys löschen (korrekte Spalte: user_id)
-            query_keys = "DELETE FROM api_keys WHERE user_id = %s"
-            cursor.execute(query_keys, (api_user_id,))
-            # Dann den API-Benutzer löschen
-            query_user = "DELETE FROM api_users WHERE id = %s"
-            cursor.execute(query_user, (api_user_id,))
-            cnx.commit()
-            return True
-        except db_utils.Error as err:
-            logger.error("Fehler beim Löschen des API-Benutzers und seiner Keys: %s", err)
-            flash("Datenbankfehler beim Löschen des API-Benutzers.", "error")
-            cnx.rollback()
-            return False
-        finally:
-            cursor.close()
-            db_utils.DatabaseConnectionPool.close_connection(cnx)
-    return False
+
+    # Zuerst alle API-Keys löschen (korrekte Spalte: user_id)
+    db_utils.execute_commit("DELETE FROM api_keys WHERE user_id = %s", (api_user_id,))
+    # Dann den API-Benutzer löschen
+    success, _ = db_utils.execute_commit("DELETE FROM api_users WHERE id = %s", (api_user_id,))
+    if not success:
+        flash("Datenbankfehler beim Löschen des API-Benutzers.", "error")
+    return success
 
 
 def _handle_delete_all_user_transactions(target_user_id):
@@ -1675,6 +1423,12 @@ def _validate_add_user_form(form_data):
     if form_data.get("code") and fetch_user(form_data.get("code")):
         flash(f"Der Code '{form_data.get('code')}' wird bereits verwendet. Bitte wähle einen anderen.", "error")
         errors = True
+    email = form_data.get("email")
+    if email:
+        email = email.strip()
+        if get_user_by_email(email):
+            flash(f"Die Emailadresse '{email}' wird bereits verwendet.", "error")
+            errors = True
     return not errors
 
 
@@ -1710,6 +1464,13 @@ def _validate_register_form(form_data):
     if fetch_user(form_data.get("code")):
         flash(f"Der Benutzercode '{form_data.get('code')}' ist bereits vergeben.", "error")
         errors = True
+
+    email = form_data.get("email")
+    if email:
+        email = email.strip()
+        if get_user_by_email(email):
+            flash(f"Die Emailadresse '{email}' wird bereits verwendet.", "error")
+            errors = True
 
     return not errors
 

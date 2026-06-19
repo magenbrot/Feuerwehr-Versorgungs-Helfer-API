@@ -1,7 +1,7 @@
 # --- BASE STAGE ---
 FROM python:3.13-slim AS base
 
-RUN groupadd --system fvh && useradd --system --gid fvh fvh
+RUN groupadd --system fvh && useradd --system --create-home --gid fvh fvh
 
 WORKDIR /app
 

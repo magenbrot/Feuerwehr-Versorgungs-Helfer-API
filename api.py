@@ -8,6 +8,7 @@ import logging
 import os
 import sys
 import threading
+import tomllib
 from functools import wraps
 from pathlib import Path
 from typing import Any, Literal
@@ -65,19 +66,21 @@ if os.environ.get("TESTING") != "True":
         logger.info("Kritischer Fehler beim Starten der Datenbankverbindung: %s", e)
         sys.exit(1)
 
-# Version laden
-try:
-    version = importlib_metadata.version("feuerwehr-versorgungs-helfer-api")
-    app.config.update(version=version)
-except importlib_metadata.PackageNotFoundError:
-    # Fallback für lokale Entwicklung, wenn Paket nicht installiert ist
+def _get_version() -> str:
+    """Loads version from package metadata or falls back to pyproject.toml."""
     try:
-        import tomllib
-        with open("pyproject.toml", "rb") as f:
-            data = tomllib.load(f)
-            app.config.update(version=data["project"]["version"])
-    except (FileNotFoundError, ImportError, KeyError):
-        app.config.update(version="Unknown (Dev)")
+        return importlib_metadata.version("feuerwehr-versorgungs-helfer-api")
+    except importlib_metadata.PackageNotFoundError:
+        # Fallback für lokale Entwicklung, wenn Paket nicht installiert ist
+        try:
+            with open("pyproject.toml", "rb") as f_toml:
+                data_toml = tomllib.load(f_toml)
+                return data_toml["project"]["version"]
+        except (FileNotFoundError, KeyError):
+            return "Unknown (Dev)"
+
+
+app.config.update(version=_get_version())
 
 logger.info("Feuerwehr-Versorgungs-Helfer API (Version %s) wurde gestartet", app.config.get("version"))
 
@@ -393,23 +396,9 @@ def get_user_by_api_key(api_key_value: str) -> tuple[int, str] | None:
         Optional[tuple[int, str]]: Ein Tupel mit (user_id, username) oder None.
     """
 
-    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
-    if not cnx:
-        return None
-    try:
-        with cnx.cursor() as cursor:  # Kein dictionary=True nötig, da Indizes verwendet werden
-            cursor.execute(
-                "SELECT u.id, u.username FROM api_users u JOIN api_keys ak ON u.id = ak.user_id WHERE ak.api_key = %s",
-                (api_key_value,),
-            )
-            user = cursor.fetchone()
-            return (user[0], user[1]) if user else None
-    except Error as err:
-        logger.error("Fehler beim Abrufen des Benutzers anhand des API-Schlüssels: %s.", err)
-        return None
-    finally:
-        if cnx:
-            db_utils.DatabaseConnectionPool.close_connection(cnx)
+    query = "SELECT u.id, u.username FROM api_users u JOIN api_keys ak ON u.id = ak.user_id WHERE ak.api_key = %s"
+    user = db_utils.fetch_one(query, (api_key_value,), dictionary=False)
+    return (user[0], user[1]) if user else None
 
 
 def api_key_required(f):
@@ -436,6 +425,7 @@ def api_key_required(f):
             return jsonify({"message": "Ungültiger API-Schlüssel!"}), 401
 
         # user_data[0] ist user_id, user_data[1] ist username
+        # pylint: disable=unsubscriptable-object
         return f(user_data[0], user_data[1], *args, **kwargs)
 
     return decorated
@@ -454,41 +444,29 @@ def finde_benutzer_zu_nfc_token(token_base64: str) -> dict | None:
                         oder None, falls kein Benutzer gefunden wird.
     """
 
-    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
-    if not cnx:
-        return None
     try:
-        with cnx.cursor(dictionary=True) as cursor:
-            try:
-                token_bytes = base64.b64decode(token_base64)
-            except binascii.Error:
-                logger.error("Ungültiger Base64-String in finde_benutzer_zu_nfc_token: %s", token_base64)
-                return None
-
-            query = """
-                SELECT u.id AS id, u.nachname AS nachname, u.vorname AS vorname, u.email AS email, u.is_locked AS is_locked, t.token_id as token_id
-                FROM nfc_token AS t
-                INNER JOIN users AS u ON t.user_id = u.id
-                WHERE t.token_daten = %s
-            """
-            cursor.execute(query, (token_bytes,))
-            user = cursor.fetchone()
-            if user:
-                logger.info(
-                    "Benutzer via NFC gefunden: ID %s - %s %s (TokenID: %s, Email: %s)",
-                    user["id"],
-                    user["vorname"],
-                    user["nachname"],
-                    user["token_id"],
-                    user.get("email"),
-                )
-            return user
-    except Error as err:
-        logger.error("DB-Fehler in finde_benutzer_zu_nfc_token: %s", err)
+        token_bytes = base64.b64decode(token_base64)
+    except binascii.Error:
+        logger.error("Ungültiger Base64-String in finde_benutzer_zu_nfc_token: %s", token_base64)
         return None
-    finally:
-        if cnx:
-            db_utils.DatabaseConnectionPool.close_connection(cnx)
+
+    query = """
+        SELECT u.id AS id, u.nachname AS nachname, u.vorname AS vorname, u.email AS email, u.is_locked AS is_locked, t.token_id as token_id
+        FROM nfc_token AS t
+        INNER JOIN users AS u ON t.user_id = u.id
+        WHERE t.token_daten = %s
+    """
+    user = db_utils.fetch_one(query, (token_bytes,), dictionary=True)
+    if user:
+        logger.info(
+            "Benutzer via NFC gefunden: ID %s - %s %s (TokenID: %s, Email: %s)",
+            user["id"],
+            user["vorname"],
+            user["nachname"],
+            user["token_id"],
+            user.get("email"),
+        )
+    return user
 
 
 def _send_new_transaction_email(user_details: dict[str, Any], transaction_details: dict[str, Any]):
@@ -567,29 +545,19 @@ def health_protected_route(api_user_id: int, api_username: str):
     """
 
     logger.debug("API-Benutzer authentifiziert: ID %s - %s", api_user_id, api_username)
-    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
-    if not cnx:
+    row = db_utils.fetch_one("SELECT 1", dictionary=False)
+    if row is None:
         logger.error("Datenbankverbindung fehlgeschlagen im Healthcheck.")
         return jsonify({"error": "Datenbankverbindung fehlgeschlagen."}), 500
 
-    try:
-        with cnx.cursor() as cursor:
-            cursor.execute("SELECT 1")
-            cursor.fetchone()
-        logger.debug(
-            "Datenbankverbindung erfolgreich für Healthcheck. Authentifizierter API-Benutzer: ID %s - %s",
-            api_user_id,
-            api_username,
-        )
-        return jsonify(
-            {"message": f"Healthcheck OK! Authentifizierter API-Benutzer ID {api_user_id} ({api_username})."}
-        )
-    except Error as err:
-        logger.error("Datenbankfehler während Healthcheck: %s", err)
-        return jsonify({"error": "Datenbankfehler während Healthcheck."}), 500
-    finally:
-        if cnx:
-            db_utils.DatabaseConnectionPool.close_connection(cnx)
+    logger.debug(
+        "Datenbankverbindung erfolgreich für Healthcheck. Authentifizierter API-Benutzer: ID %s - %s",
+        api_user_id,
+        api_username,
+    )
+    return jsonify(
+        {"message": f"Healthcheck OK! Authentifizierter API-Benutzer ID {api_user_id} ({api_username})."}
+    )
 
 
 @app.route("/users", methods=["GET"])
@@ -610,23 +578,10 @@ def get_all_users(api_user_id: int, api_username: str):
     """
 
     logger.info("API-Benutzer authentifiziert: ID %s - %s. Rufe alle Benutzer ab.", api_user_id, api_username)
-    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
-    if not cnx:
-        return jsonify({"error": "Datenbankverbindung fehlgeschlagen."}), 500
-
-    try:
-        with cnx.cursor(dictionary=True) as cursor:
-            query = "SELECT code, nachname, vorname FROM users ORDER BY nachname, vorname;"
-            cursor.execute(query)
-            users_list = cursor.fetchall()
-        logger.info("%s Benutzer erfolgreich aus der Datenbank abgerufen.", len(users_list))
-        return jsonify(users_list), 200
-    except Error as err:
-        logger.error("Fehler beim Abrufen aller Benutzer aus der Datenbank: %s", err)
-        return jsonify({"error": "Ein interner Fehler ist aufgetreten."}), 500
-    finally:
-        if cnx:
-            db_utils.DatabaseConnectionPool.close_connection(cnx)
+    query = "SELECT code, nachname, vorname FROM users ORDER BY nachname, vorname;"
+    users_list = db_utils.fetch_all(query, dictionary=True)
+    logger.info("%s Benutzer erfolgreich aus der Datenbank abgerufen.", len(users_list))
+    return jsonify(users_list), 200
 
 
 @app.route("/nfc-transaktion", methods=["PUT"])
@@ -659,7 +614,7 @@ def nfc_transaction(api_user_id_auth: int, api_username_auth: str):
         try:
             token_bytes = base64.b64decode(daten["token"])
             token_hex = token_bytes.hex().upper()
-        except Exception:
+        except (binascii.Error, ValueError, TypeError):
             token_hex = "Fehler beim Dekodieren"
 
         email_params = {
@@ -687,119 +642,107 @@ def nfc_transaction(api_user_id_auth: int, api_username_auth: str):
             }
         ), 403
 
-    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
-    if not cnx:
-        return jsonify({"error": "Datenbankverbindung fehlgeschlagen."}), 500
-
-    neuer_saldo = 0
-    try:
-        with cnx.cursor(dictionary=True) as cursor:
-            cursor.execute(
-                "UPDATE nfc_token SET last_used = NOW() WHERE token_id = %s", (int(benutzer_info["token_id"]),)
-            )
-
-            trans_saldo_aenderung_str = get_system_setting("TRANSACTION_SALDO_CHANGE")
-            if trans_saldo_aenderung_str is None:
-                logger.info(
-                    "TRANSACTION_SALDO_CHANGE nicht konfiguriert, keine Saldo-Änderung für User %s.",
-                    benutzer_info["id"],
-                )
-                return jsonify(
-                    {
-                        "error": f"TRANSACTION_SALDO_CHANGE nicht konfiguriert, keine Saldo-Änderung für User {benutzer_info['id']} möglich."
-                    }
-                ), 400
-
-            try:
-                trans_saldo_aenderung = int(trans_saldo_aenderung_str)
-            except ValueError:
-                logger.error(
-                    "Ungültiger Wert für TRANSACTION_SALDO_CHANGE ('%s') in system_einstellungen.",
-                    trans_saldo_aenderung_str,
-                )
-                return jsonify(
-                    {
-                        "error": f"Ungültiger Wert für TRANSACTION_SALDO_CHANGE ('{trans_saldo_aenderung_str}') in system_einstellungen."
-                    }
-                ), 400
-
-            saldo_pruefung = _aktuellen_saldo_pruefen(benutzer_info["id"], trans_saldo_aenderung)
-            if isinstance(saldo_pruefung, tuple):
-                logger.warning(
-                    "Transaktion für User %s blockiert, da das Guthaben von %s nicht ausreichend ist",
-                    benutzer_info["id"],
-                    saldo_pruefung[1],
-                )
-                return jsonify(
-                    {
-                        "message": f"Hey {benutzer_info['vorname']}, dein Guthaben beträgt {saldo_pruefung[1]} € und "
-                        "unterschreitet das Limit. Bitte lade dein Konto wieder auf.",
-                        "action": "block",
-                    }
-                ), 200
-            if saldo_pruefung is False:
-                logger.error("Fehler bei der Saldoprüfung für Benutzer %s. Aktion blockiert.", benutzer_info["id"])
-                return jsonify(
-                    {
-                        "message": f"Hey {benutzer_info['vorname']}, es gab ein technisches Problem bei der Überprüfung deines Saldos. "
-                        "Bitte versuche es später erneut oder kontaktiere einen Verantwortlichen.",
-                        "action": "error",
-                    }
-                ), 200
-
-            cursor.execute(
-                "INSERT INTO transactions (user_id, beschreibung, saldo_aenderung) VALUES (%s, %s, %s)",
-                (benutzer_info["id"], daten["beschreibung"], trans_saldo_aenderung),
-            )
-            cnx.commit()
-            cursor.execute(
-                "SELECT SUM(saldo_aenderung) AS saldo FROM transactions WHERE user_id = %s", (benutzer_info["id"],)
-            )
-
-            saldo_row = cursor.fetchone()
-            neuer_saldo = saldo_row["saldo"] if saldo_row and saldo_row["saldo"] is not None else 0
-            logger.info(
-                "Transaktion für %s (ID: %s), '%s', Saldo: %s = %s erfolgreich erstellt.",
-                benutzer_info["vorname"],
-                benutzer_info["id"],
-                daten["beschreibung"],
-                trans_saldo_aenderung,
-                neuer_saldo,
-            )
-
-        # Außerhalb des 'with cursor' Blocks, da DB Operationen darin abgeschlossen sein sollten.
-        if benutzer_info.get("email") and get_user_notification_preference(benutzer_info["id"], "NEUE_TRANSAKTION"):
-            jetzt = datetime.datetime.now()
-            user_details_for_email = {
-                "email": benutzer_info["email"],
-                "vorname": benutzer_info.get("vorname", ""),
-                "id": benutzer_info["id"],
-            }
-            transaction_details_for_email = {
-                "beschreibung": daten["beschreibung"],
-                "saldo_aenderung": trans_saldo_aenderung,
-                "neuer_saldo": neuer_saldo,
-                "datum": jetzt.strftime("%d.%m.%Y"),
-                "uhrzeit": jetzt.strftime("%H:%M"),
-            }
-            _send_new_transaction_email(user_details_for_email, transaction_details_for_email)
-        aktuellen_saldo_pruefen_und_benachrichtigen(benutzer_info["id"])
-
+    trans_saldo_aenderung_str = get_system_setting("TRANSACTION_SALDO_CHANGE")
+    if trans_saldo_aenderung_str is None:
+        logger.info(
+            "TRANSACTION_SALDO_CHANGE nicht konfiguriert, keine Saldo-Änderung für User %s.",
+            benutzer_info["id"],
+        )
         return jsonify(
             {
-                "message": f"Prost {benutzer_info['vorname']}! Dein aktueller Kontostand beträgt: {neuer_saldo} €.",
-                "saldo": neuer_saldo,
+                "error": f"TRANSACTION_SALDO_CHANGE nicht konfiguriert, keine Saldo-Änderung für User {benutzer_info['id']} möglich."
+            }
+        ), 400
+
+    try:
+        trans_saldo_aenderung = int(trans_saldo_aenderung_str)
+    except ValueError:
+        logger.error(
+            "Ungültiger Wert für TRANSACTION_SALDO_CHANGE ('%s') in system_einstellungen.",
+            trans_saldo_aenderung_str,
+        )
+        return jsonify(
+            {
+                "error": f"Ungültiger Wert für TRANSACTION_SALDO_CHANGE ('{trans_saldo_aenderung_str}') in system_einstellungen."
+            }
+        ), 400
+
+    saldo_pruefung = _aktuellen_saldo_pruefen(benutzer_info["id"], trans_saldo_aenderung)
+    if isinstance(saldo_pruefung, tuple):
+        logger.warning(
+            "Transaktion für User %s blockiert, da das Guthaben von %s nicht ausreichend ist",
+            benutzer_info["id"],
+            saldo_pruefung[1],
+        )
+        return jsonify(
+            {
+                "message": f"Hey {benutzer_info['vorname']}, dein Guthaben beträgt {saldo_pruefung[1]} € und "
+                "unterschreitet das Limit. Bitte lade dein Konto wieder auf.",
+                "action": "block",
+            }
+        ), 200
+    if saldo_pruefung is False:
+        logger.error("Fehler bei der Saldoprüfung für Benutzer %s. Aktion blockiert.", benutzer_info["id"])
+        return jsonify(
+            {
+                "message": f"Hey {benutzer_info['vorname']}, es gab ein technisches Problem bei der Überprüfung deines Saldos. "
+                "Bitte versuche es später erneut oder kontaktiere einen Verantwortlichen.",
+                "action": "error",
             }
         ), 200
 
-    except Error as err:
-        if cnx.is_connected():  # Nur rollback wenn Verbindung noch besteht
-            cnx.rollback()
-        logger.error("Fehler bei NFC-Transaktion für User %s: %s", benutzer_info.get("id", "Unbekannt"), err)
+    # update nfc_token set last_used
+    db_utils.execute_commit(
+        "UPDATE nfc_token SET last_used = NOW() WHERE token_id = %s", (int(benutzer_info["token_id"]),)
+    )
+
+    # insert transaction
+    success, _ = db_utils.execute_commit(
+        "INSERT INTO transactions (user_id, beschreibung, saldo_aenderung) VALUES (%s, %s, %s)",
+        (benutzer_info["id"], daten["beschreibung"], trans_saldo_aenderung),
+    )
+    if not success:
+        logger.error("Fehler bei NFC-Transaktion für User %s: DB-Fehler beim Insert.", benutzer_info.get("id", "Unbekannt"))
         return jsonify({"error": "Fehler bei der Transaktionsverarbeitung."}), 500
-    finally:
-        if cnx:
-            db_utils.DatabaseConnectionPool.close_connection(cnx)
+
+    # select sum
+    saldo_row = db_utils.fetch_one(
+        "SELECT SUM(saldo_aenderung) AS saldo FROM transactions WHERE user_id = %s", (benutzer_info["id"],), dictionary=True
+    )
+    neuer_saldo = saldo_row["saldo"] if saldo_row and saldo_row["saldo"] is not None else 0
+
+    logger.info(
+        "Transaktion für %s (ID: %s), '%s', Saldo: %s = %s erfolgreich erstellt.",
+        benutzer_info["vorname"],
+        benutzer_info["id"],
+        daten["beschreibung"],
+        trans_saldo_aenderung,
+        neuer_saldo,
+    )
+
+    if benutzer_info.get("email") and get_user_notification_preference(benutzer_info["id"], "NEUE_TRANSAKTION"):
+        jetzt = datetime.datetime.now()
+        user_details_for_email = {
+            "email": benutzer_info["email"],
+            "vorname": benutzer_info.get("vorname", ""),
+            "id": benutzer_info["id"],
+        }
+        transaction_details_for_email = {
+            "beschreibung": daten["beschreibung"],
+            "saldo_aenderung": trans_saldo_aenderung,
+            "neuer_saldo": neuer_saldo,
+            "datum": jetzt.strftime("%d.%m.%Y"),
+            "uhrzeit": jetzt.strftime("%H:%M"),
+        }
+        _send_new_transaction_email(user_details_for_email, transaction_details_for_email)
+    aktuellen_saldo_pruefen_und_benachrichtigen(benutzer_info["id"])
+
+    return jsonify(
+        {
+            "message": f"Prost {benutzer_info['vorname']}! Dein aktueller Kontostand beträgt: {neuer_saldo} €.",
+            "saldo": neuer_saldo,
+        }
+    ), 200
 
 
 @app.route("/person/<string:code>/transaktion", methods=["PUT"])
@@ -857,92 +800,52 @@ def person_transaktion_erstellen(api_user_id_auth: int, api_username_auth: str, 
             }
         ), 400
 
-    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
-    if not cnx:
-        return jsonify({"error": "Datenbankverbindung fehlgeschlagen."}), 500
-
-    saldo_pruefung = _aktuellen_saldo_pruefen(user_info["id"], trans_saldo_aenderung)
-    if isinstance(saldo_pruefung, tuple):
-        logger.warning(
-            "Transaktion für User %s blockiert, da das Guthaben von %s nicht ausreichend ist (Limit %s)",
-            user_info["id"],
-            saldo_pruefung[1],
-            saldo_pruefung[2],
-        )
-        return jsonify(
-            {
-                "message": f"Hey {user_info['vorname']}, dein Guthaben beträgt {saldo_pruefung[2]} € und "
-                "unterschreitet das Limit. Bitte lade dein Konto wieder auf.",
-                "action": "block",
-            }
-        ), 200
-    if saldo_pruefung is False:
-        logger.error("Fehler bei der Saldoprüfung für Benutzer %s. Aktion blockiert.", user_info["id"])
-        return jsonify(
-            {
-                "message": f"Hey {user_info['vorname']}, es gab ein technisches Problem bei der Überprüfung deines Saldos. "
-                "Bitte versuche es später erneut oder kontaktiere einen Verantwortlichen.",
-                "action": "error",
-            }
-        ), 200
-
-    neuer_saldo = 0
-    try:
-        with cnx.cursor(dictionary=True) as cursor:
-            cursor.execute(
-                "INSERT INTO transactions (user_id, beschreibung, saldo_aenderung) VALUES (%s, %s, %s)",
-                (user_info["id"], daten["beschreibung"], trans_saldo_aenderung),
-            )
-            cnx.commit()
-            logger.info(
-                "Transaktion für %s (ID: %s, Code: %s), '%s', Saldo: %s erfolgreich erstellt.",
-                user_info["vorname"],
-                user_info["id"],
-                code,
-                daten["beschreibung"],
-                trans_saldo_aenderung,
-            )
-
-            cursor.execute(
-                "SELECT SUM(saldo_aenderung) AS saldo FROM transactions WHERE user_id = %s", (user_info["id"],)
-            )
-            saldo_row = cursor.fetchone()
-            neuer_saldo = saldo_row["saldo"] if saldo_row and saldo_row["saldo"] is not None else 0
-
-        # Außerhalb des 'with cursor' Blocks
-        if user_info.get("email") and get_user_notification_preference(user_info["id"], "NEUE_TRANSAKTION"):
-            jetzt = datetime.datetime.now()
-            user_details_for_email = {
-                "email": user_info["email"],
-                "vorname": user_info.get("vorname", ""),
-                "id": user_info["id"],
-            }
-            transaction_details_for_email = {
-                "beschreibung": daten["beschreibung"],
-                "saldo_aenderung": trans_saldo_aenderung,
-                "neuer_saldo": neuer_saldo,
-                "datum": jetzt.strftime("%d.%m.%Y"),
-                "uhrzeit": jetzt.strftime("%H:%M"),
-            }
-            _send_new_transaction_email(user_details_for_email, transaction_details_for_email)
-        aktuellen_saldo_pruefen_und_benachrichtigen(user_info["id"])
-
-        return jsonify(
-            {
-                "message": f"Prost {user_info['vorname']}! Dein aktueller Kontostand beträgt: {neuer_saldo} €.",
-                "saldo": neuer_saldo,
-                "vorname": user_info["vorname"],
-            }
-        ), 200
-
-    except Error as err:
-        if cnx.is_connected():
-            cnx.rollback()
-        logger.error("Fehler bei Transaktion für Code %s: %s", code, err)
+    success, _ = db_utils.execute_commit(
+        "INSERT INTO transactions (user_id, beschreibung, saldo_aenderung) VALUES (%s, %s, %s)",
+        (user_info["id"], daten["beschreibung"], trans_saldo_aenderung),
+    )
+    if not success:
+        logger.error("Fehler bei Transaktion für Code %s: DB-Fehler beim Insert.", code)
         return jsonify({"error": "Fehler beim Erstellen der Transaktion."}), 500
-    finally:
-        if cnx:
-            db_utils.DatabaseConnectionPool.close_connection(cnx)
+
+    logger.info(
+        "Transaktion für %s (ID: %s, Code: %s), '%s', Saldo: %s erfolgreich erstellt.",
+        user_info["vorname"],
+        user_info["id"],
+        code,
+        daten["beschreibung"],
+        trans_saldo_aenderung,
+    )
+
+    saldo_row = db_utils.fetch_one(
+        "SELECT SUM(saldo_aenderung) AS saldo FROM transactions WHERE user_id = %s", (user_info["id"],), dictionary=True
+    )
+    neuer_saldo = saldo_row["saldo"] if saldo_row and saldo_row["saldo"] is not None else 0
+
+    if user_info.get("email") and get_user_notification_preference(user_info["id"], "NEUE_TRANSAKTION"):
+        jetzt = datetime.datetime.now()
+        user_details_for_email = {
+            "email": user_info["email"],
+            "vorname": user_info.get("vorname", ""),
+            "id": user_info["id"],
+        }
+        transaction_details_for_email = {
+            "beschreibung": daten["beschreibung"],
+            "saldo_aenderung": trans_saldo_aenderung,
+            "neuer_saldo": neuer_saldo,
+            "datum": jetzt.strftime("%d.%m.%Y"),
+            "uhrzeit": jetzt.strftime("%H:%M"),
+        }
+        _send_new_transaction_email(user_details_for_email, transaction_details_for_email)
+    aktuellen_saldo_pruefen_und_benachrichtigen(user_info["id"])
+
+    return jsonify(
+        {
+            "message": f"Prost {user_info['vorname']}! Dein aktueller Kontostand beträgt: {neuer_saldo} €.",
+            "saldo": neuer_saldo,
+            "vorname": user_info["vorname"],
+        }
+    ), 200
 
 
 def get_user_details_by_code(code_val: str) -> dict | None:
@@ -956,20 +859,8 @@ def get_user_details_by_code(code_val: str) -> dict | None:
         Optional[dict]: Ein Dictionary mit {'id': int, 'vorname': str, 'email': str, 'is_locked': int} oder None.
     """
 
-    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
-    if not cnx:
-        logger.error("DB-Verbindungsfehler in get_user_details_by_code für Code %s", code_val)
-        return None
-    try:
-        with cnx.cursor(dictionary=True) as cursor:
-            cursor.execute("SELECT id, vorname, email, is_locked FROM users WHERE code = %s", (code_val,))
-            return cursor.fetchone()
-    except Error as err:
-        logger.error("DB-Fehler in get_user_details_by_code für Code %s: %s", code_val, err)
-        return None
-    finally:
-        if cnx:
-            db_utils.DatabaseConnectionPool.close_connection(cnx)
+    query = "SELECT id, vorname, email, is_locked FROM users WHERE code = %s"
+    return db_utils.fetch_one(query, (code_val,), dictionary=True)
 
 
 @app.route("/saldo-alle", methods=["GET"])
@@ -987,24 +878,13 @@ def get_alle_summe(api_user_id: int, api_username: str):
     """
 
     logger.info("API-Benutzer authentifiziert: ID %s - %s. Rufe Saldo aller Personen ab.", api_user_id, api_username)
-    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
-    if not cnx:
-        return jsonify({"error": "Datenbankverbindung fehlgeschlagen."}), 500
-    try:
-        with cnx.cursor(dictionary=True) as cursor:
-            cursor.execute(
-                "SELECT u.id, u.nachname AS nachname, u.vorname AS vorname, SUM(t.saldo_aenderung) AS saldo "
-                "FROM users AS u LEFT JOIN transactions AS t ON u.id = t.user_id GROUP BY u.id, u.nachname, u.vorname ORDER BY saldo DESC, u.nachname, u.vorname;"
-            )
-            personen_saldo = cursor.fetchall()
-        logger.info("Saldo aller Personen wurde ermittelt (%s Einträge).", len(personen_saldo))
-        return jsonify(personen_saldo)
-    except Error as err:
-        logger.error("Fehler beim Lesen der Saldo-Daten: %s", err)
-        return jsonify({"error": "Fehler beim Lesen der Daten."}), 500
-    finally:
-        if cnx:
-            db_utils.DatabaseConnectionPool.close_connection(cnx)
+    query = (
+        "SELECT u.id, u.nachname AS nachname, u.vorname AS vorname, SUM(t.saldo_aenderung) AS saldo "
+        "FROM users AS u LEFT JOIN transactions AS t ON u.id = t.user_id GROUP BY u.id, u.nachname, u.vorname ORDER BY saldo DESC, u.nachname, u.vorname;"
+    )
+    personen_saldo = db_utils.fetch_all(query, dictionary=True)
+    logger.info("Saldo aller Personen wurde ermittelt (%s Einträge).", len(personen_saldo))
+    return jsonify(personen_saldo)
 
 
 @app.route("/transaktionen", methods=["GET"])
@@ -1023,23 +903,12 @@ def get_alle_transaktionen(api_user_id: int, api_username: str):
     """
 
     logger.info("API-Benutzer authentifiziert: ID %s - %s. Rufe alle Transaktionen ab.", api_user_id, api_username)
-    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
-    if not cnx:
-        return jsonify({"error": "Datenbankverbindung fehlgeschlagen."}), 500
-    try:
-        with cnx.cursor(dictionary=True) as cursor:
-            cursor.execute(
-                "SELECT t.id, u.nachname AS nachname, u.vorname AS vorname, t.beschreibung, t.timestamp FROM transactions AS t INNER JOIN users AS u ON t.user_id = u.id ORDER BY t.timestamp DESC;"
-            )
-            transaktionen_liste = cursor.fetchall()
-        logger.info("Alle Transaktionen wurden ermittelt (%s Einträge).", len(transaktionen_liste))
-        return jsonify(transaktionen_liste)
-    except Error as err:
-        logger.error("Fehler beim Lesen der Transaktionsdaten: %s", err)
-        return jsonify({"error": "Fehler beim Lesen der Daten."}), 500
-    finally:
-        if cnx:
-            db_utils.DatabaseConnectionPool.close_connection(cnx)
+    query = (
+        "SELECT t.id, u.nachname AS nachname, u.vorname AS vorname, t.beschreibung, t.timestamp FROM transactions AS t INNER JOIN users AS u ON t.user_id = u.id ORDER BY t.timestamp DESC;"
+    )
+    transaktionen_liste = db_utils.fetch_all(query, dictionary=True)
+    logger.info("Alle Transaktionen wurden ermittelt (%s Einträge).", len(transaktionen_liste))
+    return jsonify(transaktionen_liste)
 
 
 @app.route("/transaktionen", methods=["DELETE"])
@@ -1057,24 +926,12 @@ def reset_transaktionen(api_user_id: int, api_username: str):
     """
 
     logger.info("API-Benutzer authentifiziert: ID %s - %s. Lösche alle Transaktionen.", api_user_id, api_username)
-    cnx = db_utils.DatabaseConnectionPool.get_connection(config.db_config)
-    if not cnx:
-        return jsonify({"error": "Datenbankverbindung fehlgeschlagen."}), 500
-    try:
-        with cnx.cursor() as cursor:
-            sql = "TRUNCATE TABLE transactions;"
-            cursor.execute(sql)
-            cnx.commit()
+    sql = "TRUNCATE TABLE transactions;"
+    success, _ = db_utils.execute_commit(sql)
+    if success:
         logger.info("Alle Transaktionen wurden gelöscht.")
         return jsonify({"message": "Alle Transaktionen wurden gelöscht."}), 200
-    except Error as err:
-        if cnx.is_connected():
-            cnx.rollback()
-        logger.error("Fehler beim Leeren der Tabelle transactions: %s", err)
-        return jsonify({"error": "Fehler beim Leeren der Tabelle transactions."}), 500
-    finally:
-        if cnx:
-            db_utils.DatabaseConnectionPool.close_connection(cnx)
+    return jsonify({"error": "Fehler beim Leeren der Tabelle transactions."}), 500
 
 
 @app.route("/person", methods=["POST"])

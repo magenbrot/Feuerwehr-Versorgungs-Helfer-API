@@ -48,7 +48,7 @@ services:
 
   fvh-phpmyadmin:
     # Access via http://localhost:8080
-    image: phpmyadmin/phpmyadmin:5.2.3
+    image: phpmyadmin/phpmyadmin
     container_name: fvh-phpmyadmin
     depends_on:
       fvh-db:
