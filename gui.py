@@ -2061,6 +2061,8 @@ def user_info_pdf():
         if not has_dejavu:
             # Helvetica / latin-1 fallback
             beschreibung = beschreibung.encode("latin-1", "replace").decode("latin-1")
+        if len(beschreibung) > 55:
+            beschreibung = beschreibung[:52] + "..."
             
         saldo_change = t.get("saldo_aenderung", 0.0)
         sign = "+" if saldo_change > 0 else ""
