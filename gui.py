@@ -2072,7 +2072,11 @@ def user_info_pdf():
         else:
             amount_str = f"{sign}{saldo_change:.2f} EUR"
 
-        timestamp_str = str(t.get("timestamp", ""))
+        timestamp = t.get("timestamp")
+        if timestamp and hasattr(timestamp, "strftime"):
+            timestamp_str = timestamp.strftime("%d.%m.%Y %H:%M")
+        else:
+            timestamp_str = str(timestamp or "")
 
         pdf.cell(col_widths[0], 8, f" {beschreibung}", border=1, fill=True)
         pdf.cell(col_widths[1], 8, f"{amount_str} ", border=1, fill=True, align="R")
