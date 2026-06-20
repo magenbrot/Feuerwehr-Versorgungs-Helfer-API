@@ -47,7 +47,7 @@ Reguläre (nicht-administrative) Benutzer können nach dem Login:
 
 Die API dient als Schnittstelle für die Client-Anwendung und bietet unter anderem folgende Funktionalitäten (Authentifizierung via API-Key erforderlich):
 
-* **NFC-Transaktion**: Nimmt Base64-kodierte NFC-Token-Daten entgegen, identifiziert den zugehörigen Benutzer und verbucht eine Standard-Abbuchung (z.B. -1 Guthabenpunkt). Aktualisiert den "last_used" Zeitstempel des Tokens.
+* **NFC-Transaktion**: Nimmt Base64-kodierte NFC-Token-Daten entgegen, identifiziert den zugehörigen Benutzer und verbucht eine Standard-Abbuchung (z.B. -1 Guthabenpunkt). Aktualisiert den "last_used" Zeitstempel des Tokens. Wird ein nicht registrierter Token gescannt, antwortet die API mit dem HTTP-Status 404 und benachrichtigt die Administratoren per E-Mail (sofern SMTP konfiguriert ist).
 * **Saldo-Abfragen**: Abrufen des Gesamtsaldos aller Benutzer oder des Saldos spezifischer Benutzer.
 * **Transaktionslisten**: Abrufen von Transaktionslisten.
 * **Benutzerdaten-Abfragen**: Überprüfen der Existenz eines Benutzers anhand seines Codes und Abrufen von Benutzerdetails.
@@ -87,7 +87,7 @@ Dies ist der einfachste Weg, um das komplette System inklusive Datenbank in Betr
 
 3. **Umgebungsvariablen**:
     * Kopiere die Vorlage: `cp .env.dist .env`.
-    * Passe die Zugangsdaten an. Achte darauf, dass `DB_HOST=fvh-db` gesetzt ist, wenn du die interne Docker-DB nutzt.
+    * Passe die Zugangsdaten an. Achte darauf, dass `MYSQL_HOST=fvh-db` gesetzt ist, wenn du die interne Docker-DB nutzt (siehe Details im Abschnitt [Konfiguration](#konfiguration) unten).
 
 4. **Container starten**:
 
@@ -142,6 +142,50 @@ Für Umgebungen ohne Docker können die Dienste via systemd verwaltet werden:
     systemctl daemon-reload
     systemctl enable --now fvh-api.service fvh-gui.service
     ```
+
+---
+
+## Konfiguration ⚙️
+
+Die Anwendung wird über Umgebungsvariablen (in der `.env`-Datei oder direkt in der System-/Docker-Umgebung) konfiguriert. Eine Vorlage findest du unter `.env.dist`.
+
+### Datenbank (MySQL)
+| Variable | Beschreibung | Standardwert |
+|---|---|---|
+| `MYSQL_HOST` | Hostname oder IP-Adresse des MySQL-Servers. Bei Docker-Nutzung: `fvh-db` | `fvh-db` |
+| `MYSQL_PORT` | Port des MySQL-Servers | `3306` |
+| `MYSQL_ROOT_PASSWORD` | Root-Passwort der MySQL-Datenbank | |
+| `MYSQL_USER` | Benutzername für die Datenbankverbindung | `fvh` |
+| `MYSQL_PASSWORD` | Passwort des Datenbankbenutzers | |
+| `MYSQL_DB` | Name der MySQL-Datenbank | `fvh` |
+| `MYSQL_POOL_SIZE` | Größe des Verbindungspools zur Datenbank | `10` |
+
+### E-Mail- & Benachrichtigungseinstellungen (SMTP)
+*Diese Einstellungen sind wichtig, damit die API E-Mails an die Administratoren senden kann (z. B. wenn ein nicht registrierter NFC-Token gescannt wird).*
+| Variable | Beschreibung | Standardwert |
+|---|---|---|
+| `SMTP_HOST` | Postausgangsserver (SMTP-Server) | |
+| `SMTP_PORT` | Port des SMTP-Servers (z. B. `587` für TLS) | `587` |
+| `SMTP_USER` | Benutzername für den SMTP-Server | |
+| `SMTP_PASSWORD` | Passwort des SMTP-Benutzers | |
+| `SMTP_SENDER` | E-Mail-Adresse des Absenders | |
+| `RESPONSIBLE_EMAIL` | E-Mail-Adresse des Administrators (Empfänger von Benachrichtigungen) | |
+
+### App-Einstellungen (GUI & API)
+| Variable | Beschreibung | Standardwert |
+|---|---|---|
+| `APP_NAME` | Name der Anwendung (wird in der GUI angezeigt) | `FVH` |
+| `APP_SLOGAN` | Optionaler Slogan, der in der GUI angezeigt wird | |
+| `APP_SECRET` | Ein sicherer, zufälliger String für Flask-Session-Verschlüsselung | |
+| `STATIC_URL_PREFIX` | Optionales Prefix für statische Web-Assets | |
+
+### Debugging & Logging
+| Variable | Beschreibung | Standardwert |
+|---|---|---|
+| `API_DEBUG` | Aktiviert den Flask Debug-Modus für die API | `False` |
+| `API_LOG_LEVEL` | Log-Level der API (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`) | `INFO` |
+| `GUI_DEBUG` | Aktiviert den Flask Debug-Modus für die GUI | `False` |
+| `GUI_LOG_LEVEL` | Log-Level der GUI (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`) | `INFO` |
 
 ---
 
