@@ -57,7 +57,7 @@ def test_handle_add_user_transaction_formatting():
         patch("gui.get_user_notification_preference") as mock_pref,
         patch("gui.get_saldo_for_user") as mock_get_saldo,
         patch("gui._send_manual_transaction_email") as mock_send_email,
-        patch("gui.flash") as mock_flash
+        patch("gui.flash"),
     ):
         mock_add_trans.return_value = True
         mock_pref.return_value = True
