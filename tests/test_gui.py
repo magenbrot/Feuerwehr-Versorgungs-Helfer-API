@@ -42,15 +42,8 @@ def test_qr_code_with_login(client_gui):
 
 
 def test_handle_add_user_transaction_formatting():
-    target_user = {
-        "id": 42,
-        "vorname": "Testolli",
-        "email": "testolli@example.com"
-    }
-    form_data = {
-        "beschreibung": "Test Buchung",
-        "saldo_aenderung": "-1"
-    }
+    target_user = {"id": 42, "vorname": "Testolli", "email": "testolli@example.com"}
+    form_data = {"beschreibung": "Test Buchung", "saldo_aenderung": "-1"}
 
     with (
         patch("gui.add_transaction") as mock_add_trans,
@@ -74,4 +67,3 @@ def test_handle_add_user_transaction_formatting():
         # The crucial checks: should NOT contain the duplicate ' €' sign
         assert args[2] == "-1"
         assert args[3] == "7"
-
