@@ -39,11 +39,11 @@
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
                 <div>
                     <label for="password">Passwort (mind. 8 Zeichen):*</label>
-                    <input type="password" id="password" name="password" required autocomplete="new-password">
+                    <input type="password" id="password" name="password" required minlength="8" autocomplete="new-password">
                 </div>
                 <div>
                     <label for="confirm_password">Passwort bestätigen:*</label>
-                    <input type="password" id="confirm_password" name="confirm_password" required autocomplete="new-password">
+                    <input type="password" id="confirm_password" name="confirm_password" required minlength="8" autocomplete="new-password">
                 </div>
             </div>
 

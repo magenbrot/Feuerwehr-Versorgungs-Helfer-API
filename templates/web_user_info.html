@@ -241,6 +241,13 @@
             document.getElementById('qr-zoom-overlay').style.display = 'none';
             document.body.style.overflow = ''; // Scrollen wieder aktivieren
         }
+
+        // QR-Code Overlay mit Escape-Taste schließen
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                closeQrZoom();
+            }
+        });
     </script>
 
     {% include 'web_include_footer.html' %}

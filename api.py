@@ -633,7 +633,7 @@ def nfc_transaction(api_user_id_auth: int, api_username_auth: str):
         prepare_and_send_email(email_params, config.smtp_config)
 
         return jsonify(
-            {"error": "Dieser Token wurde noch nicht registriert. Die Administratoren wurden per E-Mail informiert."}
+            {"error": "Dieser Token wurde noch nicht registriert. Die Verantwortlichen wurden per E-Mail informiert."}
         ), 404
 
     if benutzer_info.get("is_locked") == 1:

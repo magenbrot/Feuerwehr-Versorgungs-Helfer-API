@@ -117,8 +117,8 @@
                                     {% endif %}
                                 </td>
                                 <td>{{ t.beschreibung if t.beschreibung is not none else '' }}</td>
-                                <td style="font-weight: 600; color: {{ 'var(--success)' if (t.saldo_aenderung if t.saldo_aenderung is defined else (t.amount if t.amount is defined else 0)) >= 0 else 'var(--danger)' }};">
-                                    {% set amount = t.saldo_aenderung if t.saldo_aenderung is defined else (t.amount if t.amount is defined else 0) %}
+                                {% set amount = t.saldo_aenderung if t.saldo_aenderung is defined else (t.amount if t.amount is defined else 0) %}
+                                <td style="font-weight: 600; color: {{ 'var(--success)' if amount >= 0 else 'var(--danger)' }};">
                                     {{ "+" if amount > 0 else "" }}{{ "%.2f"|format(amount) }} €
                                 </td>
                             </tr>
