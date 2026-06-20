@@ -632,7 +632,7 @@ def nfc_transaction(api_user_id_auth: int, api_username_auth: str):
         }
         prepare_and_send_email(email_params, config.smtp_config)
 
-        return jsonify({"error": f"Kein Benutzer mit dem Token {daten['token']} gefunden."}), 404
+        return jsonify({"error": "Dieser Token wurde noch nicht registriert. Die Administratoren wurden per E-Mail informiert."}), 404
 
     if benutzer_info.get("is_locked") == 1:
         return jsonify(
@@ -812,7 +812,7 @@ def person_transaktion_erstellen(api_user_id_auth: int, api_username_auth: str, 
         return jsonify({"error": "Fehler beim Erstellen der Transaktion."}), 500
 
     logger.info(
-        "Transaktion für %s (ID: %s, Code: %s), '%s', Saldo: %s erfolgreich erstellt.",
+        "Transaktion für %s (ID: %s, Code: %s), '%s', Saldo: %s€ erfolgreich erstellt.",
         user_info["vorname"],
         user_info["id"],
         code,
@@ -1068,7 +1068,7 @@ def get_person_by_code(api_user_id: int, api_username: str, code: str):
 
     response_data = {"nachname": person_info["nachname"], "vorname": person_info["vorname"], "saldo": aktueller_saldo}
     logger.info(
-        "Person mit Code %s gefunden: %s, %s - Saldo %s",
+        "Person mit Code %s gefunden: %s, %s - Saldo %s€",
         code,
         response_data["nachname"],
         response_data["vorname"],
