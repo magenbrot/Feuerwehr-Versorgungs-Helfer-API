@@ -39,3 +39,39 @@ def test_qr_code_with_login(client_gui):
         response = client_gui.get("/qr_code?usercode=123&aktion=a")
         assert response.status_code == 200
         assert response.mimetype == "image/png"
+
+
+def test_handle_add_user_transaction_formatting():
+    target_user = {
+        "id": 42,
+        "vorname": "Testolli",
+        "email": "testolli@example.com"
+    }
+    form_data = {
+        "beschreibung": "Test Buchung",
+        "saldo_aenderung": "-1"
+    }
+
+    with (
+        patch("gui.add_transaction") as mock_add_trans,
+        patch("gui.get_user_notification_preference") as mock_pref,
+        patch("gui.get_saldo_for_user") as mock_get_saldo,
+        patch("gui._send_manual_transaction_email") as mock_send_email,
+        patch("gui.flash") as mock_flash
+    ):
+        mock_add_trans.return_value = True
+        mock_pref.return_value = True
+        mock_get_saldo.return_value = 7
+
+        success = gui._handle_add_user_transaction(form_data, target_user)
+
+        assert success is True
+        mock_send_email.assert_called_once()
+        args, _ = mock_send_email.call_args
+        # Arguments: target_user, beschreibung, saldo_aenderung_str, new_saldo, logo_pfad
+        assert args[0] == target_user
+        assert args[1] == "Test Buchung"
+        # The crucial checks: should NOT contain the duplicate ' €' sign
+        assert args[2] == "-1"
+        assert args[3] == "7"
+

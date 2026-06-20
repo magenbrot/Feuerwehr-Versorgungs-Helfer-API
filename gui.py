@@ -1301,8 +1301,8 @@ def _handle_add_user_transaction(form_data, target_user):
         # E-Mail-Benachrichtigung, falls aktiviert und E-Mail vorhanden
         if target_user.get("email") and get_user_notification_preference(user_id, "NEUE_TRANSAKTION"):
             new_saldo = get_saldo_for_user(user_id)
-            saldo_aenderung_str_fmt = f"{saldo_aenderung:+d} €"
-            new_saldo_fmt = f"{new_saldo} €"
+            saldo_aenderung_str_fmt = f"{saldo_aenderung:+d}"
+            new_saldo_fmt = f"{new_saldo}"
             logo_pfad = config.gui_config.get("email_logo_path", "")
             _send_manual_transaction_email(target_user, beschreibung, saldo_aenderung_str_fmt, new_saldo_fmt, logo_pfad)
         flash("Transaktion erfolgreich hinzugefügt.", "success")
