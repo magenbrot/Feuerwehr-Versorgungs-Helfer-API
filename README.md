@@ -34,6 +34,13 @@ Die webbasierte GUI ermöglicht Administratoren eine umfassende Verwaltung:
   * Anlegen und Löschen von API-Benutzern, die für die authentifizierte Kommunikation mit der Client-Anwendung benötigt werden.
   * Generieren und Verwalten von API-Schlüsseln für jeden API-Benutzer.
 
+#### Impressionen (Admin)
+| Admin-Dashboard | Sammelbuchung |
+| :---: | :---: |
+| <img src="docs/screenshots/admin_dashboard.png" alt="Admin-Dashboard" width="400"> | <img src="docs/screenshots/admin_bulk_booking.png" alt="Sammelbuchung" width="400"> |
+| **API-Benutzer** | **API-Schlüssel** |
+| <img src="docs/screenshots/admin_api_users.png" alt="API-Benutzer" width="400"> | <img src="docs/screenshots/admin_api_keys.png" alt="API-Schlüssel" width="400"> |
+
 ### Benutzer-Weboberfläche (GUI) 👤
 
 Reguläre (nicht-administrative) Benutzer können nach dem Login:
@@ -42,6 +49,11 @@ Reguläre (nicht-administrative) Benutzer können nach dem Login:
 * Ihre Transaktionshistorie und ihr aktuelles Guthaben überprüfen.
 * Ihr Passwort ändern.
 * Ihre hinterlegten NFC-Tokens einsehen.
+
+#### Impressionen (Benutzer)
+| Benutzer-Profil & Transaktionen | NFC-Token & QR-Codes |
+| :---: | :---: |
+| <img src="docs/screenshots/user_dashboard.png" alt="Benutzer-Dashboard" width="400"> | <img src="docs/screenshots/user_nfc_qr.png" alt="NFC-Token & QR-Codes" width="400"> |
 
 ### API-Endpunkte 🔌🚀
 
