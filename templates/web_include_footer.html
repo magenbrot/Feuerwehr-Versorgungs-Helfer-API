@@ -3,4 +3,10 @@
             <a href="https://github.com/magenbrot/Feuerwehr-Versorgungs-Helfer" title="Quellcode ansehen" target="_blank" class="styled-link">{{ app_name }} Version {{ version }} (github.com)</a>
             <a href="https://github.com/sponsors/magenbrot" title="Sponsoring Link" target="_blank" class="styled-link">Unterstütze die Entwicklung</a>
         </div>
+        <div class="theme-switcher">
+            <span style="font-size: 0.85rem; color: var(--text-secondary);">Theme:</span>
+            <a href="{{ url_for('set_theme', theme_name='system') }}" class="theme-btn {% if theme == 'system' %}active{% endif %}" title="System-Standard">💻</a>
+            <a href="{{ url_for('set_theme', theme_name='light') }}" class="theme-btn {% if theme == 'light' %}active{% endif %}" title="Helles Theme">☀️</a>
+            <a href="{{ url_for('set_theme', theme_name='dark') }}" class="theme-btn {% if theme == 'dark' %}active{% endif %}" title="Dunkles Theme">🌙</a>
+        </div>
     </footer>

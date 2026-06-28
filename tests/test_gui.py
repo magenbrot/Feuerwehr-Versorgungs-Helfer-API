@@ -67,3 +67,24 @@ def test_handle_add_user_transaction_formatting():
         # The crucial checks: should NOT contain the duplicate ' €' sign
         assert args[2] == "-1"
         assert args[3] == "7"
+
+
+def test_set_theme(client_gui):
+    # Test setting theme to dark
+    response = client_gui.get("/set_theme/dark")
+    # By default, it redirects to login/user_info
+    assert response.status_code == 302
+    with client_gui.session_transaction() as sess:
+        assert sess.get("theme") == "dark"
+
+    # Test setting theme to invalid option (should not update)
+    client_gui.get("/set_theme/invalid")
+    with client_gui.session_transaction() as sess:
+        assert sess.get("theme") == "dark"
+
+    # Test referrer redirect
+    response = client_gui.get("/set_theme/light", headers={"Referer": "http://localhost/"})
+    assert response.status_code == 302
+    assert response.headers["Location"] == "http://localhost/"
+    with client_gui.session_transaction() as sess:
+        assert sess.get("theme") == "light"

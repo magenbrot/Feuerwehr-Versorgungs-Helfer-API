@@ -103,8 +103,41 @@
     --border-radius-lg: 16px;
 }
 
+:root[data-theme="light"] {
+    /* Light Mode Force */
+    --bg-color: hsl(210, 30%, 96%);
+    --card-bg: hsl(0, 0%, 100%);
+    --card-border: hsl(214, 32%, 91%);
+    --text-primary: hsl(222, 47%, 12%);
+    --text-secondary: hsl(215, 16%, 42%);
+    
+    --primary: hsl(354, 85%, 52%);
+    --primary-hover: hsl(354, 85%, 44%);
+    --primary-glow: hsla(354, 85%, 52%, 0.15);
+    
+    --accent: hsl(38, 95%, 52%);
+    --accent-hover: hsl(38, 95%, 44%);
+    --accent-text: hsl(222, 47%, 12%);
+    
+    --success: hsl(142, 70%, 40%);
+    --success-bg: hsl(142, 70%, 94%);
+    --success-border: hsl(142, 60%, 86%);
+    
+    --warning: hsl(24, 90%, 50%);
+    --warning-bg: hsl(24, 90%, 95%);
+    --warning-border: hsl(24, 80%, 88%);
+    
+    --danger: hsl(354, 85%, 52%);
+    --danger-bg: hsl(354, 85%, 95%);
+    --danger-border: hsl(354, 70%, 88%);
+    
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 12px -2px rgba(15, 23, 42, 0.06), 0 2px 6px -1px rgba(15, 23, 42, 0.03);
+    --shadow-lg: 0 16px 24px -4px rgba(15, 23, 42, 0.08), 0 6px 12px -2px rgba(15, 23, 42, 0.04);
+}
+
 @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-theme="light"]) {
         /* Dark Mode */
         --bg-color: hsl(222, 47%, 7%);
         --card-bg: hsl(222, 47%, 12%);
@@ -136,6 +169,39 @@
         --shadow-md: 0 4px 16px -2px rgba(0, 0, 0, 0.4), 0 2px 8px -1px rgba(0, 0, 0, 0.2);
         --shadow-lg: 0 20px 32px -4px rgba(0, 0, 0, 0.5), 0 8px 16px -2px rgba(0, 0, 0, 0.3);
     }
+}
+
+:root[data-theme="dark"] {
+    /* Dark Mode Force */
+    --bg-color: hsl(222, 47%, 7%);
+    --card-bg: hsl(222, 47%, 12%);
+    --card-border: hsl(217, 33%, 18%);
+    --text-primary: hsl(210, 40%, 98%);
+    --text-secondary: hsl(215, 20%, 72%);
+    
+    --primary: hsl(354, 90%, 55%);
+    --primary-hover: hsl(354, 90%, 63%);
+    --primary-glow: hsla(354, 90%, 55%, 0.25);
+    
+    --accent: hsl(38, 95%, 55%);
+    --accent-hover: hsl(38, 95%, 63%);
+    --accent-text: hsl(222, 47%, 7%);
+    
+    --success: hsl(142, 70%, 45%);
+    --success-bg: hsla(142, 70%, 45%, 0.12);
+    --success-border: hsla(142, 70%, 45%, 0.25);
+    
+    --warning: hsl(24, 95%, 55%);
+    --warning-bg: hsla(24, 95%, 55%, 0.12);
+    --warning-border: hsla(24, 95%, 55%, 0.25);
+    
+    --danger: hsl(354, 90%, 55%);
+    --danger-bg: hsla(354, 90%, 55%, 0.12);
+    --danger-border: hsla(354, 90%, 55%, 0.25);
+    
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.5);
+    --shadow-md: 0 4px 16px -2px rgba(0, 0, 0, 0.4), 0 2px 8px -1px rgba(0, 0, 0, 0.2);
+    --shadow-lg: 0 20px 32px -4px rgba(0, 0, 0, 0.5), 0 8px 16px -2px rgba(0, 0, 0, 0.3);
 }
 
 /* --- BASICS --- */
@@ -827,6 +893,44 @@ footer .styled-link {
     border: none;
     background: transparent;
     box-shadow: none;
+}
+
+/* --- THEME SWITCHER IN FOOTER --- */
+.theme-switcher {
+    margin-top: 15px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.theme-btn {
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: var(--border-radius-sm);
+    background-color: var(--card-bg);
+    border: 1.5px solid var(--card-border);
+    color: var(--text-secondary) !important;
+    transition: all var(--transition-fast);
+    cursor: pointer;
+    box-shadow: var(--shadow-sm);
+}
+
+.theme-btn:hover {
+    color: var(--text-primary) !important;
+    border-color: var(--primary);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+    text-shadow: none;
+}
+
+.theme-btn.active {
+    background-color: var(--primary-glow);
+    border-color: var(--primary);
+    color: var(--primary) !important;
+    font-weight: 700;
 }
 
 

@@ -1684,7 +1684,25 @@ def inject_global_vars():
         "app_name": config.app_name,
         "app_slogan": config.app_slogan,
         "version": app.config.get("version", "unbekannt"),
+        "theme": session.get("theme", "system"),
     }
+
+
+@app.route("/set_theme/<string:theme_name>")
+def set_theme(theme_name):
+    """
+    Speichert das gewählte Theme in der Session.
+    """
+    if theme_name in ["light", "dark", "system"]:
+        session["theme"] = theme_name
+        session.permanent = True
+        session.modified = True
+
+    # Wenn möglich, zur vorherigen Seite zurückleiten
+    ref = request.referrer
+    if ref and request.host in ref:
+        return redirect(ref)
+    return redirect(BASE_URL + url_for("user_info"))
 
 
 # --- Flask Routen ---
