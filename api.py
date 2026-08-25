@@ -15,6 +15,7 @@ from typing import Any, Literal
 
 from flask import Flask, jsonify, render_template, request
 from mysql.connector import Error
+from werkzeug.security import generate_password_hash
 
 import config
 import db_utils
@@ -972,8 +973,9 @@ def create_person(api_user_id: int, api_username: str):
     ):
         return jsonify({"error": "Vorname und Nachname dürfen nicht leer sein."}), 400
 
+    hashed_pwd = generate_password_hash(password_val) if password_val else ""
     sql = "INSERT IGNORE INTO users (code, nachname, vorname, password) VALUES (%s, %s, %s, %s)"
-    werte = (code_val, nachname_val, vorname_val, password_val)
+    werte = (code_val, nachname_val, vorname_val, hashed_pwd)
     success, _ = db_utils.execute_commit(sql, werte)
     if success:
         logger.info("Person mit Code %s erfolgreich hinzugefügt.", code_val)
