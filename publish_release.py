@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Increments the version number in pyproject.toml and performs Git/GitHub actions.
 """
