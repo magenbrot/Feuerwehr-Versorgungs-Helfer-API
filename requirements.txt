@@ -10,5 +10,5 @@ pillow==13.0.0
 python-dotenv==1.2.4
 qrcode==8.2
 Werkzeug==3.1.9
-fpdf2==2.8.9
+fpdf2==2.9.0
 
